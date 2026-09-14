@@ -1,4 +1,4 @@
-# Contrats exécutables — version 1
+# Contrats exécutables — monde version 2
 
 Ces exemples décrivent l'API Python locale. Aucun endpoint HTTP, WebSocket ou MCP n'est encore livré.
 
@@ -69,5 +69,21 @@ La pause actuelle intervient entre deux actions logiques instantanées. L'interr
 ## Stockage et observation
 
 `snapshot()` retourne le monde courant avec son `schema_version`, son `world_id`, l'avatar et les objets. `events()` expose, dans l'ordre, l'identifiant de requête, l'action, son résultat et un horodatage UTC.
+
+Le snapshot comporte aussi `data_origin` (`fixture`, `session`, `legacy`) et `revision`. La révision augmente uniquement lors d'une modification effective du monde, dans la même transaction. Les lectures, rejets, actions sans effet et retransmissions ne l'augmentent pas.
+
+`Runtime(path)` crée un monde `fixture` lorsqu'il n'existe pas ; `Runtime(path, data_origin="session")` crée explicitement une session vide. Rouvrir une base conserve son origine ; une origine explicitement différente est refusée. `require_session()` refuse les données `fixture` et `legacy`. Les commandes logiques et plans de démonstration refusent les mondes `session`, qui attendent le contrôleur du corps.
+
+## Migration explicite
+
+Ouvrir une ancienne base v1 ne la modifie pas. Pour la migrer, choisir une sauvegarde qui n'existe pas :
+
+```sh
+uv run promethee --data-dir .local/ancien-monde migrate --backup .local/sauvegardes/avant-v2.sqlite3
+```
+
+La sauvegarde SQLite est copiée et vérifiée pendant que les écritures sont exclues, avant la migration transactionnelle. Les données sans origine deviennent `legacy`, leur révision commence à zéro ; leur ID de monde, historique et plans sont préservés. Une nouvelle migration d'une base déjà à jour ne fait rien. Une sauvegarde existante n'est jamais écrasée et une version inconnue reste refusée.
+
+Les anciens plans restent exécutables dans les bases `legacy`. Ils ne deviennent pas pour autant des expériences d'agent : créer une base `session` distincte pour le futur agent.
 
 Les noms d'objets identifient des instances ; les noms d'assets identifient des capacités du catalogue. Un `world_id` unique évite de mélanger les journaux de deux mondes exportés dans le même coffre.

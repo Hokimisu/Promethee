@@ -5,7 +5,8 @@ from pathlib import Path
 
 
 def export_journal(runtime, vault):
-    world_id = runtime.snapshot()["world_id"]
+    world = runtime.snapshot()
+    world_id = world["world_id"]
     folder = Path(vault) / "Promethee" / "Observed" / world_id
     folder.mkdir(parents=True, exist_ok=True)
     count = 0
@@ -20,6 +21,7 @@ def export_journal(runtime, vault):
         text = (
             "---\n"
             "source: promethee-logical-runtime\n"
+            f"data_origin: {world['data_origin']}\n"
             f"world_id: {world_id}\n"
             f"event_id: {event['seq']}\n"
             f"request_id: {event['request_id']}\n"

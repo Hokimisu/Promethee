@@ -9,6 +9,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from promethee.catalog import INITIAL_WORLD
+from promethee.migrations import check_version, read_world
 from promethee.world import ActionError, apply, identifier
 
 
@@ -17,29 +18,43 @@ def encode(value):
 
 
 class Runtime:
-    def __init__(self, path):
+    def __init__(self, path, *, data_origin=None):
+        if data_origin not in (None, "fixture", "session"):
+            raise ValueError("New worlds must have fixture or session origin.")
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.connection() as conn:
-            conn.executescript("""
-                CREATE TABLE IF NOT EXISTS world (id INTEGER PRIMARY KEY CHECK(id=1), data TEXT);
-                CREATE TABLE IF NOT EXISTS commands (
+            conn.execute("BEGIN IMMEDIATE")
+            exists = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='world'"
+            ).fetchone()
+            if exists:
+                state = read_world(conn)
+                check_version(state)
+                if data_origin is not None and state["data_origin"] != data_origin:
+                    raise ValueError("Existing world's data origin cannot be changed.")
+                return
+            conn.execute("CREATE TABLE world (id INTEGER PRIMARY KEY CHECK(id=1), data TEXT)")
+            conn.execute("""CREATE TABLE commands (
                     seq INTEGER PRIMARY KEY AUTOINCREMENT,
                     request_id TEXT NOT NULL UNIQUE,
                     action TEXT NOT NULL,
                     result TEXT NOT NULL,
                     created_at TEXT NOT NULL
-                );
-                CREATE TABLE IF NOT EXISTS activities (id TEXT PRIMARY KEY, data TEXT NOT NULL);
-            """)
+                )""")
+            conn.execute("CREATE TABLE activities (id TEXT PRIMARY KEY, data TEXT NOT NULL)")
             conn.execute(
-                "INSERT OR IGNORE INTO world VALUES (1, ?)",
-                (encode({**INITIAL_WORLD, "world_id": uuid4().hex}),),
+                "INSERT INTO world VALUES (1, ?)",
+                (
+                    encode(
+                        {
+                            **INITIAL_WORLD,
+                            "data_origin": data_origin or "fixture",
+                            "world_id": uuid4().hex,
+                        }
+                    ),
+                ),
             )
-            state = json.loads(conn.execute("SELECT data FROM world WHERE id=1").fetchone()[0])
-            if state["schema_version"] != 1:
-                raise ValueError("Unsupported world schema version; a migration is required.")
-            conn.commit()
 
     @contextmanager
     def connection(self):
@@ -52,7 +67,22 @@ class Runtime:
 
     def snapshot(self):
         with self.connection() as conn:
-            return json.loads(conn.execute("SELECT data FROM world WHERE id=1").fetchone()[0])
+            return read_world(conn)
+
+    def require_session(self):
+        state = self.snapshot()
+        if state["data_origin"] != "session":
+            raise ActionError(
+                "Agent access requires a new session world, not fixture or legacy data."
+            )
+        return state
+
+    @staticmethod
+    def _require_logical(conn):
+        if read_world(conn)["data_origin"] == "session":
+            raise ActionError(
+                "Session worlds require the body controller; logical actions are disabled."
+            )
 
     def events(self):
         with self.connection() as conn:
@@ -71,6 +101,7 @@ class Runtime:
         ]
 
     def _execute(self, conn, request_id, action):
+        self._require_logical(conn)
         identifier(request_id)
         payload = encode(action)
         previous = conn.execute(
@@ -80,13 +111,16 @@ class Runtime:
             if previous[0] != payload:
                 raise ActionError("Request ID reused with a different action.")
             return {**json.loads(previous[1]), "replayed": True}
-        state = json.loads(conn.execute("SELECT data FROM world WHERE id=1").fetchone()[0])
+        state = read_world(conn)
+        before = copy.deepcopy(state)
         try:
             apply(state, action)
         except ActionError as exc:
             result = {"ok": False, "error": str(exc)}
         else:
-            conn.execute("UPDATE world SET data=? WHERE id=1", (encode(state),))
+            if state != before:
+                state["revision"] += 1
+                conn.execute("UPDATE world SET data=? WHERE id=1", (encode(state),))
             result = {"ok": True}
         conn.execute(
             "INSERT INTO commands(request_id, action, result, created_at) VALUES (?, ?, ?, ?)",
@@ -108,6 +142,7 @@ class Runtime:
             raise ActionError("Use an activity ID up to 40 characters and 1-100 steps.")
         with self.connection() as conn:
             conn.execute("BEGIN IMMEDIATE")
+            self._require_logical(conn)
             row = conn.execute("SELECT data FROM activities WHERE id=?", (activity_id,)).fetchone()
             if row:
                 saved = json.loads(row[0])

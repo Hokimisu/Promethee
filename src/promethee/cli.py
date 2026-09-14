@@ -5,6 +5,7 @@ from pathlib import Path
 from promethee.catalog import CATALOG
 from promethee.demo import ACTIVITY_ID, STEPS
 from promethee.journal import export_journal
+from promethee.migrations import migrate
 from promethee.runtime import Runtime
 from promethee.world import ActionError
 
@@ -23,6 +24,10 @@ def main():
     act = commands.add_parser("act", help="Execute one logical action from a UTF-8 JSON file.")
     act.add_argument("--request-id", required=True)
     act.add_argument("--file", type=Path, required=True)
+    migration = commands.add_parser(
+        "migrate", help="Migrate an old world with a new verified backup."
+    )
+    migration.add_argument("--backup", type=Path, required=True)
     journal = commands.add_parser("journal", help="Export successful actions as Markdown.")
     journal.add_argument("--vault", type=Path, default=Path(".local/vault"))
     args = parser.parse_args()
@@ -30,6 +35,10 @@ def main():
     try:
         if args.command == "catalog":
             print(json.dumps(CATALOG, ensure_ascii=False, indent=2))
+            return 0
+        if args.command == "migrate":
+            result = migrate(args.data_dir / "world.sqlite3", args.backup)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
             return 0
         action = None
         if args.command == "act":

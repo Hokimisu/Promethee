@@ -9,7 +9,9 @@ CATALOG = {
 }
 
 INITIAL_WORLD = {
-    "schema_version": 1,
+    "schema_version": 2,
+    "data_origin": "fixture",
+    "revision": 0,
     "avatar": {"position": [0.0, 0.0], "seated_on": None, "holding": None},
     "objects": {},
 }

@@ -46,6 +46,6 @@ Les événements d'interruption doivent parvenir à la conversation et au corps.
 
 ## Limites du socle
 
-Les positions sont sur un plan de sol de 10 × 10 mètres. La portée d'un mètre est une règle logique arbitraire pour les tests, pas une mesure anatomique. Il n'y a pas de serveur, de rendu, d'agent externe, de synchronisation vocale ou de migration automatique des données. Les bases ayant une version de monde inconnue sont refusées.
+Les positions sont sur un plan de sol de 10 × 10 mètres. La portée d'un mètre est une règle logique arbitraire pour les tests, pas une mesure anatomique. Il n'y a pas de serveur, de rendu, d'agent externe ni de synchronisation vocale. Le schéma v2 distingue l'origine des données et la révision du monde. Les migrations sont explicites, transactionnelles et précédées d'une sauvegarde vérifiée ; les versions inconnues sont refusées.
 
 Une activité échouée conserve son erreur et son curseur ; elle n'est pas relancée automatiquement. La replanification après changement du monde sera une responsabilité de l'adaptateur agent.

@@ -8,6 +8,8 @@ uv run promethee journal --vault .local/vault
 
 Le runtime écrit une note par commande logique réussie sous `Promethee/Observed/<world_id>/`. Chaque note comporte sa source, son monde, son identifiant d'événement, sa requête et son horodatage UTC. Les exports sont déterministes et ne remplacent pas un fichier existant, même modifié à la main.
 
+Les nouveaux exports contiennent aussi `data_origin`, persistée dans le monde. Une base ancienne migrée est `legacy` ; une démonstration neuve est `fixture`. Ces deux origines sont exclues de l'accès agent. Les anciennes notes sans cette indication ne sont pas réécrites ni promues automatiquement en souvenirs de session.
+
 Ce sont des observations de la fixture locale, pas des souvenirs d'un agent ayant vu ou exécuté ces gestes en 3D. Aucun modèle ne rédige de pensées intérieures. Les échecs sont consultables dans le registre du runtime.
 
 Le coffre de démonstration sert uniquement à inspecter les exports. Lors de la connexion de l'agent, utiliser un coffre distinct, sans importer ces notes, le plan de démonstration ou des préférences déduites des objets de test. Les données synthétiques de validation restent séparées des expériences vécues dans une session réelle du système.

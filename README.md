@@ -49,6 +49,7 @@ Cette commande réalise une transition instantanée, sans activité préécrite 
 | État du monde et registre d'actions SQLite | Exécutable |
 | Actions validées et identifiants de requête idempotents | Exécutable |
 | Plan sauvegardé, pause, reprise après redémarrage | Exécutable |
+| Origine des données, révisions et migration sauvegardée | Exécutable ; séparation fixture / session / legacy |
 | Catalogue logique chaise / pancarte / doudou / lit / TV | Exécutable ; les usages lit/TV sont à implémenter |
 | Journal Markdown lisible dans Obsidian | Export exécutable ; recherche mémoire à connecter |
 | Contrôles automatiques et tests de comportement | Fournis |
@@ -100,6 +101,7 @@ docs/            Vision, architecture, contrats et jalons
 - [Mémoire et organisation Obsidian](docs/memory.md)
 - [Feuille de route et critères d'acceptation](docs/roadmap.md)
 - [Plan d'implémentation pour le développeur](docs/implementation-plan.md)
+- [Avancement vérifié des tickets](docs/progress.md)
 - [Contribuer](CONTRIBUTING.md)
 - [Instructions pour les agents de développement](AGENTS.md)
 
