@@ -43,4 +43,3 @@ Lit, TV, nouveaux objets et services externes, chacun introduit avec ses usages 
 - GPU et lieu d'exécution du contrôle moteur ; accès et budget API.
 - Niveau de fidélité physique requis pour chaque interaction.
 - Premier service externe utile à connecter.
-

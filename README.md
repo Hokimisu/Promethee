@@ -90,4 +90,3 @@ docs/            Vision, architecture, contrats et jalons
 - [Instructions pour les agents de développement](AGENTS.md)
 
 Le code original du dépôt est sous [licence MIT](LICENSE). Les modèles, captures de mouvement, voix et assets externes conservent leurs propres licences ; aucun n'est redistribué ici. Promethee est un projet indépendant, sans affiliation avec OpenAI, NVIDIA ou Nous Research.
-

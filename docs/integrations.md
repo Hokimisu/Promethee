@@ -44,4 +44,3 @@ Une séquence de poses ne prouve pas une prise, un appui ou une collision physiq
 ## Assets et redistribution
 
 Le catalogue initial ne contient que des capacités logiques. Aucun fichier de modèle, rig, texture, voix ou capture de mouvement n'est livré. Pour tout ajout ultérieur, enregistrer sa source, sa licence, sa version et ses conventions d'unités/axes. La licence MIT de Promethee ne remplace pas les licences tierces.
-

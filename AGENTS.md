@@ -38,4 +38,3 @@ Pour les changements d'état, couvrir les préconditions, échecs, retransmissio
 ## Rédaction d'interface
 
 Un seul titre visible par bloc. Ajouter un texte secondaire uniquement s'il apporte une condition, une conséquence, une contrainte ou une action. Supprimer slogans, transitions décoratives et répétitions. Si retirer un texte ne change ni la compréhension ni l'action, l'omettre.
-

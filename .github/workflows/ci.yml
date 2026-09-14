@@ -32,4 +32,3 @@ jobs:
       - run: uv run promethee demo --pause-after 4
       - run: uv run promethee demo --resume
       - run: uv run promethee journal
-

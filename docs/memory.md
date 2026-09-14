@@ -37,4 +37,3 @@ Seul `Observed/` est créé par le code actuel. Les autres sections décrivent u
 Hermes possède sa mémoire et sa recherche de sessions. Le futur adaptateur devra définir quel contenu reste dans sa mémoire compacte et quelles notes sont retrouvées à la demande dans le coffre. Ne pas injecter tout le coffre à chaque tour, ni maintenir deux historiques contradictoires.
 
 Référence : [mémoire persistante de Hermes](https://hermes-agent.nousresearch.com/docs/user-guide/features/memory).
-

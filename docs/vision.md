@@ -48,4 +48,3 @@ La conscience ou l'expérience subjective ne sont pas des résultats revendiqué
 - Des mouvements qui peuvent être interrompus et ajustés au contexte.
 - Des souvenirs dont on peut retrouver la provenance et corriger le contenu.
 - Une interface sobre : un titre par bloc, des contrôles concrets, aucun texte décoratif.
-
