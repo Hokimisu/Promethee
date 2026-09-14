@@ -2,6 +2,8 @@
 
 Partir du critère d'acceptation d'un jalon dans la [feuille de route](docs/roadmap.md). Les améliorations du socle doivent rester exécutables sans GPU ni clé API.
 
+Pour la suite du développement, prendre un ticket du [plan d'implémentation](docs/implementation-plan.md), vérifier ses dépendances et livrer son résultat avec les preuves indiquées. Le premier ticket de code est T01, après la vérification T00.
+
 ```sh
 uv sync --locked
 uv run ruff check .

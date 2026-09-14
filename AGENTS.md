@@ -1,6 +1,6 @@
 # Promethee — instructions de développement
 
-Lire `README.md`, `docs/architecture.md` et le jalon concerné dans `docs/roadmap.md` avant de modifier le projet.
+Lire `README.md`, `docs/architecture.md`, le jalon concerné dans `docs/roadmap.md` et son ticket dans `docs/implementation-plan.md` avant de modifier le projet. Le plan distingue les contrats cibles des fonctions déjà livrées ; ne pas présenter ses tickets comme implémentés.
 
 ## Portée
 

@@ -64,6 +64,8 @@ Le moteur du monde décide si une action a réussi. Un prompt décrit une intent
 
 ## Développer
 
+Commencer par le [plan d'implémentation](docs/implementation-plan.md) : T00 vérifie le socle, puis T01 ajoute un pilotage manuel sans scénario. Chaque ticket indique son périmètre, ses dépendances et ses critères de validation.
+
 ```sh
 uv run ruff check .
 uv run ruff format --check .
@@ -88,6 +90,7 @@ docs/            Vision, architecture, contrats et jalons
 - [Intégrations et références officielles](docs/integrations.md)
 - [Mémoire et organisation Obsidian](docs/memory.md)
 - [Feuille de route et critères d'acceptation](docs/roadmap.md)
+- [Plan d'implémentation pour le développeur](docs/implementation-plan.md)
 - [Contribuer](CONTRIBUTING.md)
 - [Instructions pour les agents de développement](AGENTS.md)
 

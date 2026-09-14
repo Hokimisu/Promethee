@@ -28,6 +28,8 @@ ARDY est un candidat pour la génération de mouvements à partir de texte et de
 
 L'autorité du snapshot actuel doit évoluer lorsque le contrôleur arrive : une commande acceptée n'est plus une transition instantanément réussie. Ajouter alors un cycle `accepted → running → completed / failed / cancelled`, corrélé à une intention et à la version du monde. Ne pas présenter le booléen `ok` du prototype comme l'accusé de réalisation d'une action 3D.
 
+Les tickets T03–T05 du [plan d'implémentation](implementation-plan.md) précisent cette évolution, les rejets, l'état `interrupted` après perte de confirmation, les migrations et la compatibilité avec le socle logique.
+
 ## Voix et agent
 
 La piste principale est GPT-Live avec délégation vers un adaptateur Hermes/Astra. Elle conserve un agent persistant tout en permettant la conversation vocale. Une chaîne transcription → agent → synthèse reste une option de diagnostic si nécessaire. Les capacités et l'accès effectif aux modèles doivent être vérifiés avant l'intégration payante.

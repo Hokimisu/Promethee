@@ -2,6 +2,8 @@
 
 Les jalons ouvrent des capacités techniques. Leurs critères vérifient la cohérence, la fiabilité et le contrôle utilisateur, sans imposer une activité ou une personnalité à l'avatar. Les situations d'essai doivent varier ; une démonstration réussie ne suffit pas à valider un jalon.
 
+Le [plan d'implémentation](implementation-plan.md) décline ces jalons en tickets ordonnés, avec les fichiers concernés et les vérifications attendues. Pour commencer à coder, suivre T00 puis T01 ; les jalons ci-dessous conservent la vue produit.
+
 ## M0 — Continuité locale
 
 **Livré dans le socle.** Monde logique, catalogue, commandes validées, persistance, pause/reprise, export Markdown et CI.
