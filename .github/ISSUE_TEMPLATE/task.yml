@@ -1,0 +1,23 @@
+name: Travail de développement
+description: Une capacité et son critère d'acceptation.
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Résultat attendu
+      description: Quel comportement doit devenir possible ?
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Vérification
+      description: Quel essai permet de constater la réussite ?
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Périmètre et dépendances
+      description: Jalon, intégrations nécessaires et limites connues.
+
