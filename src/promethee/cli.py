@@ -4,6 +4,7 @@ from pathlib import Path
 
 from promethee.catalog import CATALOG
 from promethee.demo import ACTIVITY_ID, STEPS
+from promethee.execution import ExecutionService
 from promethee.journal import export_journal
 from promethee.migrations import migrate
 from promethee.runtime import Runtime
@@ -48,7 +49,7 @@ def main():
             result = runtime.execute(args.request_id, action)
             exit_code = 0 if result["ok"] else 1
         elif args.command == "world":
-            result = runtime.snapshot()
+            result = ExecutionService(runtime).get_world()
         elif args.command == "journal":
             result = {
                 "notes_created": export_journal(runtime, args.vault),

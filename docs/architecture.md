@@ -26,7 +26,7 @@ Lorsqu'une intention implique un objet, le runtime résout sa cible par identifi
 
 ARDY est un candidat pour la génération de mouvements à partir de texte et de contraintes. Il faudra adapter le squelette, les unités, les axes, les cadences et les points de contact. Les lèvres et le visage demanderont une animation dédiée.
 
-L'autorité du snapshot actuel doit évoluer lorsque le contrôleur arrive : une commande acceptée n'est plus une transition instantanément réussie. Ajouter alors un cycle `accepted → running → completed / failed / cancelled`, corrélé à une intention et à la version du monde. Ne pas présenter le booléen `ok` du prototype comme l'accusé de réalisation d'une action 3D.
+`execution.py` fournit désormais un cycle `accepted → running → completed / failed / cancelled`, avec rejet avant envoi et état `interrupted` après perte de confirmation. Les retours du pilote mettent le monde à jour atomiquement avec le résultat et l'événement. Le contrôleur possède un bail exclusif et chaque retour est lié à sa session. L'API est testée avec un pilote factice ; le pilote 3D reste à connecter. Le booléen `ok` conserve uniquement son sens logique.
 
 Les tickets T03–T05 du [plan d'implémentation](implementation-plan.md) précisent cette évolution, les rejets, l'état `interrupted` après perte de confirmation, les migrations et la compatibilité avec le socle logique.
 
@@ -46,6 +46,6 @@ Les événements d'interruption doivent parvenir à la conversation et au corps.
 
 ## Limites du socle
 
-Les positions sont sur un plan de sol de 10 × 10 mètres. La portée d'un mètre est une règle logique arbitraire pour les tests, pas une mesure anatomique. Il n'y a pas de serveur, de rendu, d'agent externe ni de synchronisation vocale. Le schéma v2 distingue l'origine des données et la révision du monde. Les migrations sont explicites, transactionnelles et précédées d'une sauvegarde vérifiée ; les versions inconnues sont refusées.
+Les positions sont sur un plan de sol de 10 × 10 mètres. La portée d'un mètre est une règle logique arbitraire pour les tests, pas une mesure anatomique. Il n'y a pas de serveur, de rendu, d'agent externe ni de synchronisation vocale. Le schéma v3 distingue l'origine des données, la révision du monde et la confirmation du corps, et stocke séparément les exécutions asynchrones. Les migrations sont explicites, transactionnelles et précédées d'une sauvegarde vérifiée ; les versions inconnues sont refusées.
 
 Une activité échouée conserve son erreur et son curseur ; elle n'est pas relancée automatiquement. La replanification après changement du monde sera une responsabilité de l'adaptateur agent.

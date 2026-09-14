@@ -4,7 +4,34 @@ import json
 import sqlite3
 from pathlib import Path
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
+
+
+def create_execution_tables(conn):
+    conn.execute(
+        "CREATE TABLE executions (request_id TEXT PRIMARY KEY, "
+        "status TEXT NOT NULL, data TEXT NOT NULL)"
+    )
+    conn.execute(
+        "CREATE UNIQUE INDEX one_active_execution ON executions ((1)) "
+        "WHERE status IN ('accepted','running')"
+    )
+    conn.execute(
+        "CREATE TABLE execution_events (seq INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "request_id TEXT NOT NULL, data TEXT NOT NULL)"
+    )
+    conn.execute("CREATE TABLE controller (id INTEGER PRIMARY KEY CHECK(id=1), data TEXT NOT NULL)")
+    conn.execute("INSERT INTO controller VALUES (1, ?)", (json.dumps({"session_id": None}),))
+
+
+def _upgrade(conn, world):
+    if world["schema_version"] == 1:
+        world.update(schema_version=2, data_origin="legacy", revision=0)
+    if world["schema_version"] == 2:
+        create_execution_tables(conn)
+        world.update(
+            schema_version=3, body={"status": "unconfirmed", "observed_at": None, "source": None}
+        )
 
 
 def read_world(conn):
@@ -23,7 +50,7 @@ def check_version(world):
 
 
 def migrate(path, backup):
-    """Preserve an exclusive backup before changing v1 metadata atomically."""
+    """Preserve an exclusive backup before upgrading a known schema atomically."""
     path, backup = Path(path).resolve(), Path(backup).resolve()
     # mode=rw prevents a typo from creating an empty source database.
     conn = sqlite3.connect(path.as_uri() + "?mode=rw", uri=True, timeout=10)
@@ -34,7 +61,7 @@ def migrate(path, backup):
             version = world.get("schema_version")
             if version == SCHEMA_VERSION:
                 return {"schema_version": version, "migrated": False, "backup": None}
-            if type(version) is not int or version != 1:
+            if type(version) is not int or version not in (1, 2):
                 raise ValueError(f"No migration available from schema {version!r}.")
             if path == backup:
                 raise ValueError("Backup must be a different, new file.")
@@ -54,7 +81,7 @@ def migrate(path, backup):
             finally:
                 saved.close()
                 source.close()
-            world.update(schema_version=SCHEMA_VERSION, data_origin="legacy", revision=0)
+            _upgrade(conn, world)
             conn.execute(
                 "UPDATE world SET data=? WHERE id=1",
                 (json.dumps(world, ensure_ascii=False, sort_keys=True, allow_nan=False),),

@@ -15,6 +15,7 @@ def old_database(tmp_path):
     world = copy.deepcopy(INITIAL_WORLD)
     world.pop("revision")
     world.pop("data_origin")
+    world.pop("body")
     world.update(schema_version=1, world_id="historical-world")
     world["avatar"]["position"] = [1, 0]
     steps = [
@@ -131,3 +132,22 @@ def test_unknown_schema_is_refused_without_creating_backup(old_database, tmp_pat
         Runtime(old_database)
     assert contents(old_database) == before
     assert not (tmp_path / "backup.sqlite3").exists()
+
+
+def test_v2_upgrade_preserves_origin_revision_and_adds_execution_storage(tmp_path):
+    path = tmp_path / "v2.sqlite3"
+    runtime = Runtime(path, data_origin="session")
+    with runtime.connection() as conn:
+        world = read_world(conn)
+        world.update(schema_version=2, revision=7)
+        world.pop("body")
+        conn.execute("UPDATE world SET data=?", (json.dumps(world),))
+        for table in ("executions", "execution_events", "controller"):
+            conn.execute(f"DROP TABLE {table}")
+    before = contents(path)
+    backup = tmp_path / "before-v3.sqlite3"
+    assert migrate(path, backup)["schema_version"] == 3
+    assert contents(backup) == before
+    world = Runtime(path).require_session()
+    assert world["revision"] == 7
+    assert world["body"]["status"] == "unconfirmed"

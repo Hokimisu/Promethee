@@ -9,7 +9,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from promethee.catalog import INITIAL_WORLD
-from promethee.migrations import check_version, read_world
+from promethee.migrations import check_version, create_execution_tables, read_world
 from promethee.world import ActionError, apply, identifier
 
 
@@ -43,6 +43,7 @@ class Runtime:
                     created_at TEXT NOT NULL
                 )""")
             conn.execute("CREATE TABLE activities (id TEXT PRIMARY KEY, data TEXT NOT NULL)")
+            create_execution_tables(conn)
             conn.execute(
                 "INSERT INTO world VALUES (1, ?)",
                 (
@@ -83,6 +84,14 @@ class Runtime:
             raise ActionError(
                 "Session worlds require the body controller; logical actions are disabled."
             )
+        if conn.execute(
+            "SELECT 1 FROM executions WHERE status IN ('accepted','running')"
+        ).fetchone():
+            raise ActionError("busy: a body execution is active.")
+        if json.loads(conn.execute("SELECT data FROM controller WHERE id=1").fetchone()[0])[
+            "session_id"
+        ]:
+            raise ActionError("Controller-owned worlds cannot be changed through logical actions.")
 
     def events(self):
         with self.connection() as conn:
@@ -103,6 +112,8 @@ class Runtime:
     def _execute(self, conn, request_id, action):
         self._require_logical(conn)
         identifier(request_id)
+        if conn.execute("SELECT 1 FROM executions WHERE request_id=?", (request_id,)).fetchone():
+            raise ActionError("Request ID already belongs to a body execution.")
         payload = encode(action)
         previous = conn.execute(
             "SELECT action, result FROM commands WHERE request_id=?", (request_id,)

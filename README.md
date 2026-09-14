@@ -50,6 +50,7 @@ Cette commande réalise une transition instantanée, sans activité préécrite 
 | Actions validées et identifiants de requête idempotents | Exécutable |
 | Plan sauvegardé, pause, reprise après redémarrage | Exécutable |
 | Origine des données, révisions et migration sauvegardée | Exécutable ; séparation fixture / session / legacy |
+| Suivi asynchrone, annulation et récupération du corps | API CPU et contrôleur de test ; pilote 3D encore à intégrer |
 | Catalogue logique chaise / pancarte / doudou / lit / TV | Exécutable ; les usages lit/TV sont à implémenter |
 | Journal Markdown lisible dans Obsidian | Export exécutable ; recherche mémoire à connecter |
 | Contrôles automatiques et tests de comportement | Fournis |
@@ -83,7 +84,7 @@ uv run pytest -q
 uv build
 ```
 
-Les tests couvrent la reprise dans un nouveau processus, les commandes concurrentes, le rejet des actions impossibles, les transactions interrompues et la préservation des notes modifiées.
+Les tests couvrent la reprise dans un nouveau processus, les commandes concurrentes, le rejet des actions impossibles, les transactions interrompues et la préservation des notes modifiées. Le suivi du corps distingue acceptation, progression et résultat confirmé ; les essais de panne utilisent un contrôleur explicitement factice, sans valider de mouvement 3D.
 
 ```text
 src/promethee/    Monde logique, persistance, scénario et export

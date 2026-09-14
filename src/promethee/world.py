@@ -1,9 +1,20 @@
 """Validated logical actions. A renderer/physics controller must replace instant transitions."""
 
+import copy
 import math
 import re
 
 from promethee.catalog import CATALOG
+
+ACTION_FIELDS = {
+    "spawn": {"object_id", "asset", "position"},
+    "move": {"position"},
+    "write": {"object_id", "text"},
+    "take": {"object_id"},
+    "place": {"position"},
+    "sit": {"object_id"},
+    "stand": set(),
+}
 
 
 class ActionError(ValueError):
@@ -29,15 +40,7 @@ def apply(world, action):
     if not isinstance(action, dict) or set(action) != {"kind", "args"}:
         raise ActionError("An action must contain exactly 'kind' and 'args'.")
     kind, args = action["kind"], action["args"]
-    fields = {
-        "spawn": {"object_id", "asset", "position"},
-        "move": {"position"},
-        "write": {"object_id", "text"},
-        "take": {"object_id"},
-        "place": {"position"},
-        "sit": {"object_id"},
-        "stand": set(),
-    }
+    fields = ACTION_FIELDS
     if not isinstance(kind, str) or kind not in fields:
         raise ActionError("Unknown action kind.")
     if not isinstance(args, dict) or set(args) != fields[kind]:
@@ -110,3 +113,44 @@ def apply(world, action):
         if not avatar["seated_on"]:
             raise ActionError("Avatar is already standing.")
         avatar["seated_on"] = None
+
+
+def validate_observation(observation):
+    """Validate a full floor-plane observation; never accept world metadata from a driver."""
+    if not isinstance(observation, dict) or set(observation) != {"avatar", "objects"}:
+        raise ActionError("An observation must contain exactly avatar and objects.")
+    observed = copy.deepcopy(observation)
+    avatar, objects = observed["avatar"], observed["objects"]
+    if not isinstance(avatar, dict) or set(avatar) != {"position", "holding", "seated_on"}:
+        raise ActionError("Invalid observed avatar fields.")
+    avatar["position"] = position(avatar["position"])
+    if not isinstance(objects, dict) or len(objects) > 32:
+        raise ActionError("Invalid observed objects.")
+    for object_id, obj in objects.items():
+        identifier(object_id)
+        if not isinstance(obj, dict) or not {"asset", "position"} <= set(obj) <= {
+            "asset",
+            "position",
+            "text",
+        }:
+            raise ActionError("Invalid observed object fields.")
+        if not isinstance(obj["asset"], str) or obj["asset"] not in CATALOG:
+            raise ActionError("Unknown observed asset.")
+        obj["position"] = position(obj["position"])
+        if "text" in obj and (
+            not CATALOG[obj["asset"]].get("write")
+            or not isinstance(obj["text"], str)
+            or not 1 <= len(obj["text"]) <= 500
+        ):
+            raise ActionError("Invalid observed text.")
+    for field, capability in (("holding", "movable"), ("seated_on", "sit")):
+        target = avatar[field]
+        if target is not None:
+            identifier(target)
+            if target not in objects or not CATALOG[objects[target]["asset"]].get(capability):
+                raise ActionError(f"Invalid observed {field} reference.")
+            if math.dist(avatar["position"], objects[target]["position"]) > 1e-6:
+                raise ActionError(f"Observed {field} object is detached from avatar.")
+    if avatar["holding"] is not None and avatar["holding"] == avatar["seated_on"]:
+        raise ActionError("An avatar cannot hold its occupied support.")
+    return observed
