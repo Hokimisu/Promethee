@@ -2,6 +2,14 @@
 
 Ces exemples décrivent l'API Python locale. Aucun endpoint HTTP, WebSocket ou MCP n'est encore livré.
 
+## Pilotage manuel
+
+`uv run promethee catalog` affiche les capacités logiques du catalogue sans ouvrir de base.
+`uv run promethee --data-dir .local/manual act --request-id commande-1 --file action.json`
+exécute une action JSON UTF-8 au format décrit ci-dessous, sans créer de plan.
+
+Le code de sortie vaut `0` pour une réussite, `1` pour un rejet métier et `2` pour une erreur d'entrée (fichier, JSON ou ID). Une retransmission conserve le résultat et le code de sortie de l'action enregistrée. Les erreurs de stockage restent des erreurs techniques. Un ID doit être réutilisé pour retransmettre la même demande, pas pour une nouvelle tentative après changement du monde.
+
 ## Commande
 
 ```python

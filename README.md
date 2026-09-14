@@ -33,6 +33,15 @@ Cette séquence est une fixture de vérification de la persistance. Elle ne déf
 
 Toutes les commandes fonctionnent sous PowerShell et dans un terminal Linux. Les données personnelles et les exports locaux sont ignorés par Git.
 
+Pour piloter librement ce monde logique, consulter `uv run promethee catalog`, puis écrire une action `{ "kind": "move", "args": { "position": [2, -3] } }` dans un fichier UTF-8 `action.json` :
+
+```sh
+uv run promethee --data-dir .local/manual act --request-id mouvement-1 --file action.json
+uv run promethee --data-dir .local/manual world
+```
+
+Cette commande réalise une transition instantanée, sans activité préécrite ni mouvement 3D. Voir les [contrats et codes de sortie](docs/contracts.md).
+
 ## Ce qui est livré
 
 | Élément | État |

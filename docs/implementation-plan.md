@@ -2,7 +2,7 @@
 
 Ce document s'adresse à la personne qui va coder la suite de Promethee. Il transforme les [jalons produit](roadmap.md) en tâches vérifiables. L'ordre concerne la construction du logiciel ; il ne décrit aucune vie à faire jouer à l'avatar.
 
-État de départ relu le 15 septembre 2026, au commit `81ecb25`. **Tous les tickets ci-dessous restent à réaliser.** Les fichiers à créer, signatures et commandes marqués « cible » sont des consignes d'implémentation, pas des fonctions déjà livrées.
+État de départ relu le 15 septembre 2026, au commit `81ecb25`. Consulter le [registre d'avancement](progress.md) pour les tickets implémentés et leurs vérifications. Les descriptions ci-dessous conservent leurs critères initiaux ; les fichiers à créer, signatures et commandes marqués « cible » ne sont pas une preuve de livraison.
 
 ## Commencer ici
 

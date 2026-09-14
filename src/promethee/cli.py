@@ -2,6 +2,7 @@ import argparse
 import json
 from pathlib import Path
 
+from promethee.catalog import CATALOG
 from promethee.demo import ACTIVITY_ID, STEPS
 from promethee.journal import export_journal
 from promethee.runtime import Runtime
@@ -16,12 +17,28 @@ def main():
     demo.add_argument("--pause-after", type=int, choices=range(1, len(STEPS)))
     demo.add_argument("--resume", action="store_true")
     commands.add_parser("world", help="Print the authoritative world snapshot.")
+    commands.add_parser(
+        "catalog", help="List logical assets and capabilities without changing data."
+    )
+    act = commands.add_parser("act", help="Execute one logical action from a UTF-8 JSON file.")
+    act.add_argument("--request-id", required=True)
+    act.add_argument("--file", type=Path, required=True)
     journal = commands.add_parser("journal", help="Export successful actions as Markdown.")
     journal.add_argument("--vault", type=Path, default=Path(".local/vault"))
     args = parser.parse_args()
-    runtime = Runtime(args.data_dir / "world.sqlite3")
+    exit_code = 0
     try:
-        if args.command == "world":
+        if args.command == "catalog":
+            print(json.dumps(CATALOG, ensure_ascii=False, indent=2))
+            return 0
+        action = None
+        if args.command == "act":
+            action = json.loads(args.file.read_text(encoding="utf-8"))
+        runtime = Runtime(args.data_dir / "world.sqlite3")
+        if args.command == "act":
+            result = runtime.execute(args.request_id, action)
+            exit_code = 0 if result["ok"] else 1
+        elif args.command == "world":
             result = runtime.snapshot()
         elif args.command == "journal":
             result = {
@@ -41,10 +58,10 @@ def main():
             if activity["status"] == "failed":
                 print(json.dumps(result, ensure_ascii=False, indent=2))
                 return 1
-    except (ActionError, ValueError) as exc:
+    except (ActionError, ValueError, OSError, UnicodeError) as exc:
         parser.exit(2, f"Error: {exc}\n")
     print(json.dumps(result, ensure_ascii=False, indent=2))
-    return 0
+    return exit_code
 
 
 if __name__ == "__main__":
