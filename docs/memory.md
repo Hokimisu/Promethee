@@ -10,6 +10,8 @@ Le runtime écrit une note par commande logique réussie sous `Promethee/Observe
 
 Ce sont des observations de la fixture locale, pas des souvenirs d'un agent ayant vu ou exécuté ces gestes en 3D. Aucun modèle ne rédige de pensées intérieures. Les échecs sont consultables dans le registre du runtime.
 
+Le coffre de démonstration sert uniquement à inspecter les exports. Lors de la connexion de l'agent, utiliser un coffre distinct, sans importer ces notes, le plan de démonstration ou des préférences déduites des objets de test. Les données synthétiques de validation restent séparées des expériences vécues dans une session réelle du système.
+
 Ouvrir `.local/vault` dans Obsidian suffit pour lire les notes ; aucun plugin Obsidian ni service réseau n'est nécessaire. Le coffre n'est pas suivi par Git. Conserver une base par monde et sauvegarder ensemble sa base et son coffre pour maintenir leur correspondance.
 
 ## Organisation cible

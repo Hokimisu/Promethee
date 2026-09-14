@@ -2,9 +2,9 @@
 
 [![CI](https://github.com/Hokimisu/Promethee/actions/workflows/ci.yml/badge.svg)](https://github.com/Hokimisu/Promethee/actions/workflows/ci.yml)
 
-Un avatar IA qui parle, agit dans un espace virtuel persistant et reprend ses activités grâce à sa mémoire.
+Un avatar IA doté d'un corps, d'une mémoire et de capacités d'action dans un espace virtuel persistant.
 
-Le projet vise une pièce que l'avatar peut aménager avec ses objets : une chaise, une pancarte, un doudou, puis un lit et une TV. Un agent choisit ses actions et ses intentions de mouvement ; le monde lui renvoie ce qui s'est effectivement passé. Les expériences retenues deviennent consultables dans Obsidian.
+Le projet fournit un espace que l'avatar peut percevoir et modifier, des objets utilisables et une mémoire consultable dans Obsidian. Un agent peut former et réviser ses intentions ; le monde lui renvoie ce qui s'est effectivement passé. Aucun scénario de vie, routine ou préférence d'objet n'est prescrit.
 
 **État actuel : socle local exécutable.** La démonstration est un scénario déterministe dans un monde logique. L'avatar 3D, les modèles IA, la voix, Hermes et la génération de mouvements ne sont pas encore intégrés. Aucun appel réseau, aucune clé API et aucun GPU ne sont nécessaires pour lancer ce socle.
 
@@ -23,6 +23,8 @@ uv run promethee journal
 ```
 
 La première commande de démonstration crée trois objets, écrit une pancarte et suspend l'activité. La reprise charge le plan sauvegardé, prend le doudou, rejoint la chaise et s'assied. Relancer la démonstration terminée ne recrée pas les objets.
+
+Cette séquence est une fixture de vérification de la persistance. Elle ne définit pas les comportements attendus du futur avatar. Ses actions et ses exports restent des données de test, à exclure des prompts, de la mémoire initiale et des objectifs d'entraînement de l'agent.
 
 - `world` affiche l'état persistant, stocké dans `.local/promethee/world.sqlite3`.
 - `journal` exporte les actions logiques réussies dans `.local/vault/Promethee/Observed/`. Ouvrir `.local/vault` comme coffre Obsidian pour les consulter.
@@ -58,7 +60,7 @@ flowchart LR
     World -->|Événements observés| Agent
 ```
 
-Le moteur du monde décide si une action a réussi. Un prompt décrit une intention ; les positions, les objets et les contraintes rendent cette intention exécutable. La voix et le corps partagent la même activité en cours. Voir [l'architecture](docs/architecture.md) et les [contrats actuels](docs/contracts.md).
+Le moteur du monde décide si une action a réussi. Un prompt décrit une intention ; les positions, les objets et les contraintes rendent cette intention exécutable. La voix et le corps partagent le même contexte, avec ou sans activité en cours. Voir [l'architecture](docs/architecture.md) et les [contrats actuels](docs/contracts.md).
 
 ## Développer
 

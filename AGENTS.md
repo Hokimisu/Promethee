@@ -8,6 +8,8 @@ Promethee est un projet autonome. Ne pas importer les contraintes du robot Micro
 
 Préserver la distinction entre capacité livrée, fixture déterministe, intégration proposée et résultat effectivement vérifié. Ne pas présenter la mémoire comme un entraînement des poids, ni revendiquer une conscience.
 
+La vision reste ouverte : aucun scénario de référence, routine ou préférence d'objet ne doit définir le comportement attendu de l'avatar. Les exemples et fixtures servent uniquement à vérifier une capacité. Ne pas les injecter dans les prompts de l'agent, sa mémoire initiale ou les récompenses d'entraînement. Évaluer sur des contextes variés ; l'absence d'activité et l'abandon d'un projet sont possibles, sans constituer en eux-mêmes une réussite ou un échec.
+
 ## Commandes
 
 ```sh

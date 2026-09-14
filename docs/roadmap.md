@@ -1,40 +1,40 @@
 # Feuille de route
 
-Les critères portent sur des comportements vérifiables. Un jalon est terminé après son essai représentatif, pas après la création d'une interface vide.
+Les jalons ouvrent des capacités techniques. Leurs critères vérifient la cohérence, la fiabilité et le contrôle utilisateur, sans imposer une activité ou une personnalité à l'avatar. Les situations d'essai doivent varier ; une démonstration réussie ne suffit pas à valider un jalon.
 
 ## M0 — Continuité locale
 
 **Livré dans le socle.** Monde logique, catalogue, commandes validées, persistance, pause/reprise, export Markdown et CI.
 
-Acceptation : interrompre le scénario après la pancarte, fermer le processus, reprendre, puis constater un seul exemplaire de chaque objet et un seul événement par action. Une panne entre écriture du monde et avancement du plan doit tout annuler.
+Acceptation : des tests déterministes vérifient la persistance, la reprise après redémarrage, l'absence de double exécution et le rejet des actions invalides. Une panne entre écriture du monde et avancement du plan doit tout annuler. La fixture CLI fournit un cas reproductible ; son contenu n'est pas une cible produit.
 
 ## M1 — Corps visible et contrôlable
 
-Priorité suivante. Évaluer ARDY avec un checkpoint disponible avant de figer le moteur graphique. Construire une pièce et un humanoïde, puis la marche vers une cible et l'assise sur une chaise.
+Priorité suivante. Évaluer ARDY avec un checkpoint disponible avant de figer le moteur graphique. Construire un espace et un humanoïde, puis valider les déplacements, les changements de posture et les contacts élémentaires. Les objets d'essai sont interchangeables selon la capacité évaluée.
 
-Acceptation : dix essais avec positions de chaise variées ; enregistrer contacts incorrects, glissement des pieds, pénétrations, interruptions et temps de réaction. Aucun succès déduit du seul envoi du prompt. Conserver les vidéos et conventions de conversion. Fixer le seuil de qualité après observation du premier prototype, sans annoncer de performance anticipée.
+Acceptation : varier les positions initiales, les cibles, les supports et les moments d'interruption ; enregistrer contacts incorrects, glissement des pieds, pénétrations et temps de réaction. Aucun succès déduit du seul envoi du prompt. Conserver les vidéos et conventions de conversion. Définir les seuils techniques après les premiers essais de calibration, puis vérifier sur des situations distinctes.
 
 ## M2 — Agent et parole synchronisés
 
-Brancher Hermes/Astra aux actions du monde et GPT-Live à l'agent. Une activité et une mémoire communes ; propagation des interruptions aux composants concernés.
+Brancher Hermes/Astra aux actions du monde et GPT-Live à l'agent. Un contexte et une mémoire communs, avec ou sans activité active ; propagation des interruptions aux composants concernés.
 
-Acceptation : demander une action, la corriger pendant l'exécution et vérifier la concordance du dialogue, de l'état du monde et du mouvement. Mesurer le temps jusqu'à la réponse utile et jusqu'à la première action visible, ainsi que les échecs.
+Acceptation : tester la conversation seule, une demande d'action, sa correction et son interruption ; vérifier la concordance du dialogue, de l'état du monde et du mouvement. Mesurer le temps jusqu'à la réponse utile et, lorsqu'une action est demandée, jusqu'à son début visible, ainsi que les échecs. Parler ne doit pas déclencher automatiquement une activité physique.
 
 ## M3 — Objets et mémoire utilisables
 
-Ajouter la pancarte et le doudou au rendu, leurs interactions et la recherche de notes pertinentes. Faire apparaître les objets via le catalogue ; leurs positions et propriétés restent persistantes.
+Ajouter au rendu des objets couvrant plusieurs capacités d'interaction et la recherche de notes pertinentes. Leur choix sert la couverture technique ; aucun objet n'est rendu obligatoire dans l'usage. Les positions et propriétés restent persistantes.
 
-Acceptation : préparer une présentation, l'interrompre, redémarrer, la reprendre, retrouver un objet et appliquer une correction mémorisée. La provenance d'un souvenir doit être consultable. Le coffre ne doit pas contenir de réussites inventées.
+Acceptation : varier objets, historiques et demandes pour vérifier la récupération d'informations pertinentes, les corrections et la continuité après redémarrage. Inclure un historique vide et un objet déplacé ou absent. La mémoire permet de retrouver l'état d'une activité sans en imposer la reprise. La provenance d'un souvenir doit être consultable ; les données de test restent hors de la mémoire de l'agent.
 
 ## M4 — Initiative
 
-Laisser l'agent choisir une activité parmi ses projets et capacités. Introduire des réveils sur événement et une cadence d'initiative configurable, avec un budget d'appels et un arrêt accessible.
+Permettre à l'agent de former et réviser des intentions, d'explorer ou de rester sans activité. Introduire des réveils sur événement et une cadence d'initiative configurable, avec un budget d'appels et un arrêt accessible. Aucun projet ni usage d'objet n'est préchargé pour provoquer un comportement attendu.
 
-Acceptation : une session d'observation montre une activité choisie, menée ou abandonnée avec une raison, sans boucle d'actions identiques ni appels continus inutiles. L'utilisateur peut suspendre l'initiative sans perdre l'état.
+Acceptation : observer plusieurs sessions avec et sans sollicitation, avec des dispositions et historiques différents. Vérifier le respect des contraintes, la cohérence des effets et la possibilité de suspendre l'initiative sans perdre l'état. Ne pas noter la quantité d'activités, la réutilisation des objets de démonstration ou la conformité à un récit. Examiner aussi les boucles répétitives et les choix qui persistent malgré un changement de contexte. L'inaction seule n'est ni un échec ni une réussite.
 
 ## M5 — Espace étendu
 
-Lit, TV, nouveaux objets et services externes, chacun introduit avec ses usages et son périmètre. La génération d'assets et le RL pour des interactions plus complexes sont des pistes à décider à partir des limites mesurées de M1–M4.
+Étendre les objets, les capacités et les services externes à partir des besoins observés et des choix de l'utilisateur. Les exemples de lit ou de TV ne sont pas un programme imposé. La génération d'assets et le RL pour des interactions plus complexes sont des pistes à décider à partir des limites mesurées de M1–M4.
 
 ## Décisions restant ouvertes
 

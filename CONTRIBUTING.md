@@ -15,3 +15,5 @@ Utiliser une branche descriptive, par exemple `codex/world-renderer`. Une contri
 Les noms du code et les commits sont en anglais ; la documentation produit est en français. Aucun secret, donnée personnelle, asset sans provenance ou modèle externe ne doit entrer dans le dépôt. Les enregistrements de tests réels et leurs métriques restent locaux jusqu'à une décision explicite de publication.
 
 Les tests doivent couvrir un risque comportemental réel. Pour un changement de mouvement, joindre une observation visuelle et les conventions du squelette testé. Un rendu de démonstration doit préciser s'il montre une fixture, un modèle préentraîné ou un contrôleur entraîné pour le projet.
+
+Les exemples de démonstration ne définissent pas l'usage attendu du personnage. Formuler les critères autour de capacités et d'invariants, varier les situations d'évaluation et garder les fixtures hors des prompts, de la mémoire et des récompenses de l'agent.

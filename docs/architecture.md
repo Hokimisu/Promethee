@@ -8,6 +8,8 @@ Un paquet Python sans dépendance d'exécution, une base SQLite locale et une in
 
 Une transaction regroupe l'action, son événement et l'avancement de l'activité. Une panne entre ces écritures ne doit pas créer de divergence. Les commandes portent des identifiants stables afin qu'une retransmission n'effectue pas deux fois une action.
 
+Le plan séquentiel est un mécanisme du socle pour exécuter des commandes et tester leur reprise. Il ne définit pas toute l'activité future de l'avatar : perception, conversation, exploration et absence d'objectif doivent pouvoir exister sans plan actif. La fixture `demo.py` et ses exports restent hors du contexte et de la mémoire du futur agent.
+
 ## Responsabilités cibles
 
 | Composant | Responsabilité | N'est pas autorité sur |
@@ -20,7 +22,7 @@ Une transaction regroupe l'action, son événement et l'avancement de l'activit�
 
 ## Du langage au mouvement
 
-Le futur agent peut proposer « approche-toi de la chaise et assieds-toi ». Le runtime résout la chaise par son identifiant, vérifie ses capacités et transmet une intention accompagnée de cibles géométriques. Le contrôleur moteur adapte les poses et retourne des événements d'exécution.
+Lorsqu'une intention implique un objet, le runtime résout sa cible par identifiant, vérifie ses capacités et transmet les contraintes géométriques au contrôleur moteur. Celui-ci adapte les poses et retourne des événements d'exécution. Les exemples de commandes ne doivent pas devenir des intentions automatiquement suggérées à l'agent.
 
 ARDY est un candidat pour la génération de mouvements à partir de texte et de contraintes. Il faudra adapter le squelette, les unités, les axes, les cadences et les points de contact. Les lèvres et le visage demanderont une animation dédiée.
 

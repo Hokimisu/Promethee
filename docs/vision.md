@@ -1,21 +1,20 @@
 # Expérience visée
 
-Promethee explore un personnage virtuel persistant, capable de converser, de choisir une activité, de manipuler les objets de sa pièce et de reprendre ses projets au fil des sessions.
+Promethee explore un personnage virtuel persistant, capable de percevoir son environnement, de converser, de se mouvoir, d'agir sur son espace et de conserver une mémoire au fil des sessions. L'usage de ces capacités reste ouvert.
 
 Le nom du projet, le modèle de raisonnement et l'identité du personnage sont distincts. La personnalité de l'avatar sera configurable ; elle ne doit pas dépendre du nom d'un fournisseur de modèles.
 
-## Scénario de référence
+## Cadre ouvert
 
-1. L'avatar décide de préparer une petite présentation.
-2. Il fait apparaître une pancarte, choisit un texte et la place dans la pièce.
-3. L'utilisateur l'interrompt pour parler d'autre chose.
-4. L'avatar suspend l'activité et répond ; son corps reste réactif.
-5. Après la conversation ou lors d'une session suivante, il peut reprendre la présentation.
-6. Son journal conserve les faits réalisés et le projet restant à terminer.
+Le projet définit des capacités et des contraintes d'exécution. Il ne prescrit aucune histoire à jouer, routine quotidienne, préférence pour un objet ou activité à accomplir. Les exemples servent à comprendre une possibilité et restent remplaçables.
 
-Le socle actuel reproduit uniquement une séquence logique écrite à l'avance. Le choix spontané de l'activité, la conversation et la réalisation 3D constituent les prochains jalons.
+Observer, attendre, explorer, changer d'avis, poursuivre ou abandonner une activité sont des possibilités. Leur pertinence dépend du contexte ; aucune ne constitue à elle seule un signe de réussite du projet. Une reprise doit être possible sans devenir obligatoire.
 
-## Objets
+La démonstration actuelle est une fixture de vérification technique, écrite à l'avance. Son contenu ne doit servir ni de comportement par défaut, ni d'exemple à imiter dans les prompts, ni de souvenir initial, ni de cible de récompense. Elle vérifie la persistance et la reprise du runtime ; elle n'évalue pas l'autonomie.
+
+## Exemples d'objets
+
+Les objets évoqués ci-dessous illustrent différentes capacités à rendre disponibles. Ils ne fixent ni l'aménagement final, ni les goûts du personnage, ni l'ordre de développement.
 
 | Objet | Usage souhaité | Travail nécessaire |
 |---|---|---|
@@ -29,7 +28,7 @@ Au départ, les objets viennent d'un catalogue préparé. Faire apparaître un a
 
 ## Autonomie
 
-L'avatar pourra choisir des activités à partir de ses projets, de préférences mémorisées et de nouveaux événements. Les changements d'objectif restent observables et peuvent être interrompus par l'utilisateur. Une activité possède un début, un résultat et une raison de s'arrêter.
+L'avatar pourra former et réviser des intentions à partir du contexte, de sa mémoire et de nouveaux événements. Il pourra aussi rester sans objectif actif. Le runtime conserve les décisions et leurs effets sans imposer de productivité, de fréquence d'action ou de mise en scène destinée à plaire à l'utilisateur. Les actions en cours restent interruptibles.
 
 Le corps et le monde continuent de fonctionner entre les décisions. Le modèle de raisonnement est sollicité à l'arrivée d'événements pertinents, et éventuellement à intervalles espacés pour l'initiative ; il ne doit pas être appelé à chaque image.
 
@@ -43,8 +42,9 @@ La conscience ou l'expérience subjective ne sont pas des résultats revendiqué
 
 ## Qualité attendue
 
-- Une seule identité et une activité commune à la voix, au corps et à la mémoire.
+- Un contexte cohérent partagé par la voix, le corps et la mémoire, avec ou sans activité en cours.
 - Aucune réussite annoncée à partir d'un simple envoi de commande.
 - Des mouvements qui peuvent être interrompus et ajustés au contexte.
 - Des souvenirs dont on peut retrouver la provenance et corriger le contenu.
+- Des évaluations sur des situations variées, y compris sans consigne, sans objet familier et sans activité à reprendre. Aucun scénario unique ne définit le comportement attendu.
 - Une interface sobre : un titre par bloc, des contrôles concrets, aucun texte décoratif.
