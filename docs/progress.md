@@ -6,7 +6,7 @@ Ce registre distingue le code livré des intégrations réellement vérifiées. 
 |---|---|---|
 | T00 | Vérifié sur CPU | Python 3.13.12, uv 0.12.5 ; 22 tests initiaux, lint, format et construction réussis ; pause/reprise dans deux processus |
 | T01 | Implémenté et vérifié sur CPU | Commandes `catalog` et `act` ; 29 tests passent, dont les tests en sous-processus de `tests/test_cli_actions.py` ; lint, format et construction passent |
-| T02 | Installation et accès alternatif vérifiés ; inférence à qualifier | ARDY `693f74d` installé sous WSL avec ses dépendances ; calcul CUDA vérifié sur RTX 4080. Copie publique Nous Research accessible sans authentification, quatre empreintes de poids identiques au dépôt Meta ; téléchargement lancé. Aucun mouvement généré validé à ce stade |
+| T02 | Modèle réel et visualiseur exercés ; qualification en cours | ARDY Core génère sur RTX 4080 via un encodeur LLM2Vec séparé. Changement de texte et contrainte de vitesse exercés ; exports de 554 et 447 poses finies. Mesures reproductibles et conventions à finaliser ; voir [l'essai](../experiments/motion/README.md) |
 | T03 | Implémenté et vérifié sur CPU | Schéma v2, migration avec sauvegarde vérifiée, origine immuable et révisions ; 37 tests passent |
 | T04 | Implémenté et vérifié sur CPU | Suivi séparé, observation atomique, révision, `busy`, doublons et provenance du pilote ; contrôleur factice explicite |
 | T05 | Implémenté et vérifié sur CPU | Annulation, bail exclusif, réconciliation et coupures réelles de processus ; 60 tests passent, lint, format et construction réussis |
