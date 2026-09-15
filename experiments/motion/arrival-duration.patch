@@ -1,0 +1,32 @@
+--- a/src/promethee/ardy_worker.py
++++ b/src/promethee/ardy_worker.py
+@@ -111,5 +111,13 @@
+-                    constraints.append(
+-                        FullBodyConstraintSet(
+-                            model.skeleton, torch.tensor([frames - 1]), goal_points, goal_rotations
+-                        )
+-                    )
++                else:
++                    # A root-only goal can be met by leaning while the feet lag.
++                    # For a move, translate the observed whole-body pose to the
++                    # destination; the model still generates the path between.
++                    goal_points = local.clone()
++                    goal_points[..., 0] += float(target[0] - offset[0])
++                    goal_points[..., 2] += float(target[1] - offset[2])
++                    goal_rotations = torch.tensor(rotations, device="cuda").unsqueeze(0)
++                constraints.append(
++                    FullBodyConstraintSet(
++                        model.skeleton, torch.tensor([frames - 1]), goal_points, goal_rotations
++                    )
++                )
+--- a/src/promethee/kinematic.py
++++ b/src/promethee/kinematic.py
+@@ -273 +273,7 @@
+-                    self._submit_motion(target, text, 120)
++                    frames = 120
++                    if action["kind"] == "move":
++                        distance = math.dist(target, self.observation["avatar"]["position"])
++                        # Match the generation window to a moderate walking speed,
++                        # with time to stop; ARDY requires patches of four frames.
++                        frames = max(40, math.ceil((distance / 0.6 + 0.4) * 20 / 4) * 4)
++                    self._submit_motion(target, text, frames)

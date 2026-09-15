@@ -209,6 +209,47 @@ ou sans contact vérifiable. Les essais GPU restent nécessaires pour la marche.
 
 ## Limites empêchant de clôturer T07
 
+Trois corrections supplémentaires ont été essayées puis écartées du pilote :
+
+- Une contrainte finale du corps entier, obtenue en translatant la pose observée
+  à la destination. La série `runtime-holdout-08` (1701–1705) conserve deux postures
+  terminées mais refuse les deux déplacements : maxima du maillage 2,261 et
+  0,913 m/s. Les inclinaisons finales tête/bassin sont 2,21° et 2,81° ; une posture
+  finale plus droite ne résout donc pas le glissement pendant le trajet.
+- La même contrainte, avec une durée calculée à 0,6 m/s plus 0,4 s d'arrêt,
+  arrondie aux blocs de quatre poses et bornée à au moins 40 poses. L'essai
+  `runtime-duration-calibration-01` reprend les mêmes graines et cibles : les
+  deux déplacements restent refusés (maxima 0,350 et 1,486 m/s). Le premier cas
+  donne un P95 de 0,079 m/s, lui aussi au-delà du seuil. Les postures restent
+  inchangées et terminées. Cette comparaison n'est pas une nouvelle vérification
+  indépendante après calibration.
+- Une union des contacts prédits et des pieds dont le maillage approche le sol,
+  essayée hors pilote via `foot_anchor_trial.py --from-raw --geometry-support`.
+  `geometry-support-calibration-01` dépasse l'enveloppe verticale de 5 cm ; le
+  second cas atteint un maximum de glissement de 2,303 m/s malgré un P95 de
+  0,020 m/s. Verrouiller tout le pied à partir de cette proximité ne suffit pas.
+
+Le [patch de ces deux premières variantes](../experiments/motion/arrival-duration.patch)
+est conservé pour reproduction depuis le code de base `22b51e4`. Vérifier son
+application avec `git apply --unidiff-zero --check` dans un checkout de recherche,
+puis appliquer avec `git apply --unidiff-zero`
+et lancer `qualify_runtime.py` avec les paramètres ci-dessus. Pour isoler la
+première variante, appliquer uniquement la partie concernant `ardy_worker.py`.
+Ce patch n'est pas appliqué au pilote livré. Les critères restent en version 2.
+
+Le diagnostic [diagnose_sole_sliding.py](../experiments/motion/diagnose_sole_sliding.py)
+localise les sommets et images responsables. Dans le premier déplacement de la
+série 07, le pic de 0,325 m/s se situe aux images 105–106, sur une semelle gauche
+à 3–5 mm du sol dont les deux contacts prédits sont faux. Dans la série 08,
+le pic de 2,261 m/s concerne la semelle droite aux images 69–70, à 0–2 mm du
+sol et également déclarée sans contact. Il ne s'agit donc pas uniquement d'une
+erreur de rotation à l'arrivée. Les JSON détaillés restent dans ces dossiers.
+
+La vidéo `video-duration-calibration-01` conserve la séquence raccourcie du
+second déplacement, sans correction du rendu. Sa lecture a été lancée dans le
+navigateur ; les poses de début, milieu et fin ont été inspectées. Aucun de ces essais ne justifie
+de déclarer la marche qualifiée ni de lancer un entraînement complet.
+
 Les seuils incluent une erreur de cible ≤ 5 cm, une discontinuité initiale ≤ 2 cm,
 un saut de racine ≤ 12 cm par image, une racine dans la pièce et des rotations
 finies et orthonormales. Le nombre de déplacements refusés reste trop élevé.
