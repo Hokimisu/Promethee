@@ -32,6 +32,18 @@ class ConversationStore:
         service.runtime.require_session()
         self.service = service
 
+    def recover(self):
+        """A replacement exclusive host discards pending calls without resubmission."""
+        with self.service._transaction() as (conn, _):
+            conn.execute(
+                "UPDATE conversation_turns SET status='interrupted' WHERE status='running'"
+            )
+            world = read_world(conn)
+            if world["conversation"] is not None:
+                world["conversation"] = None
+                world["revision"] += 1
+                conn.execute("UPDATE world SET data=? WHERE id=1", (encode(world),))
+
     @staticmethod
     def _record(conn, turn_id):
         row = conn.execute(
@@ -109,7 +121,16 @@ class ConversationStore:
             if status != "running":
                 raise ActionError("Conversation result was already handled.")
             user_messages = [message for message in messages if message["role"] == "user"]
-            if not user_messages or user_messages[-1].get("content") != record["message"]:
+            # Hermes 0.20.5 can merge adjacent unanswered user messages with
+            # two newlines in the returned native history. Verify that exact
+            # known tail, never an arbitrary substring in model-produced text.
+            tail = []
+            for message in reversed(self._history(conn)):
+                if message["role"] != "user":
+                    break
+                tail.append(message["content"])
+            permitted = (record["message"], "\n\n".join(reversed(tail)))
+            if not user_messages or user_messages[-1].get("content") not in permitted:
                 raise ValueError("The native history does not retain this turn's user message.")
             record.update(messages=messages, text=result["text"], finished_at=timestamp(now))
             conn.execute(

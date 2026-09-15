@@ -1,10 +1,53 @@
 # Pont Hermes
 
 Le pont local expose cinq outils et utilise le même runtime que le contrôleur
-cinématique. Il ne lance aucun modèle de raisonnement. T09 reste ouvert : la
-conversation réelle avec Astra n'est pas encore raccordée. Le runtime sait
-désormais invalider les propositions d'un ancien tour ; la future boucle Hermes
-doit encore ouvrir et fermer ces tours. Ne pas activer une session autonome avec ce seul pont.
+cinématique. La commande `chat` lance désormais la boucle native Hermes dans
+son environnement séparé, avec historique persistant et interruption des appels.
+T09 reste ouvert : ce raccord est vérifié avec un fournisseur de test local,
+pas avec Astra. Il ne lance aucune initiative autonome.
+
+## Conversation textuelle
+
+Ouvrir d'abord une base `session` avec le contrôleur du [guide moteur](motion-validation.md).
+Une base existante doit être au schéma 6 ; arrêter ses processus avant d'appliquer
+la [migration explicite](contracts.md). Installer l'extra `agent` dans le Python
+de Promethee et utiliser l'installation Hermes 0.20.5 qualifiée ci-dessous.
+Configurer `PROMETHEE_OPENAI_API_KEY` localement, sans la mettre dans Git ni dans
+la commande. Le modèle et le mode d'API sont explicites, car leur compatibilité
+avec l'accès Astra du compte n'est pas encore validée.
+
+```sh
+python -m promethee.cli --data-dir CHEMIN_SESSION chat --hermes-python CHEMIN_PYTHON_HERMES --hermes-root CHEMIN_HERMES --model MODELE_AUTORISE --api-mode chat_completions
+```
+
+Cette commande utilise par défaut `https://api.openai.com/v1` ; `--base-url`
+permet un endpoint explicitement choisi et `--api-mode codex_responses` sélectionne
+l'autre mode accepté par l'adaptateur. Aucun autre fournisseur ni modèle n'est
+essayé automatiquement. Une clé absente ou un monde absent échoue avant l'appel.
+
+Saisir un message par ligne. Un nouveau message invalide l'appel précédent avant
+de fermer son processus, puis démarre le nouvel échange. `/cancel` coupe seulement
+la réponse en cours ; `/quit` ferme le chat. Ces opérations n'annulent pas une
+action corporelle déjà acceptée. Un arrêt du corps passe par son outil d'annulation.
+Les sorties indiquent `completed`, `failed` ou `interrupted` pour **la réponse**,
+sans les confondre avec les états d'exécution du corps. Le délai maximal vaut
+60 secondes par défaut (`--timeout`). Aucun appel au modèle n'est fait pendant
+l'attente d'un message.
+
+Un verrou détenu par le système autorise un seul hôte de conversation par monde.
+Le redémarrage ferme les anciens tours, conserve les messages restés sans réponse
+et ne réémet aucune action. Chaque appel reçoit un profil neuf dans
+`conversation-profiles/`, lié au tour et limité aux cinq outils. Ces profils
+contiennent des données privées ; ils ne sont pas des coffres à importer.
+Le contexte natif conservé dans la base fait autorité pour la reprise.
+
+Sous Windows, le processus est créé suspendu, attaché à un groupe dont la fermeture
+termine aussi ses descendants, puis démarré. Cela couvre également le lanceur de
+l'environnement virtuel et un pont MCP survivant à son parent. Les interfaces
+sont celles des [Job Objects](https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-jobobject_basic_limit_information)
+et de [CREATE_SUSPENDED](https://learn.microsoft.com/en-us/windows/win32/procthread/process-creation-flags).
+Sous Linux, l'appel possède son propre groupe de processus. Le pilote corporel
+indépendant n'appartient pas à ce groupe.
 
 ## Installation et lancement
 
@@ -145,10 +188,10 @@ résultat ne peut pas remplacer l'historique après une nouvelle demande. Un
 redémarrage retrouve le dernier contexte terminé et les messages restés sans
 réponse, sans réémettre une action. Les résultats échoués sont exclus du contexte.
 
-L'hôte doit encore gérer le lancement, l'échéance, l'arrêt du processus et la
-diffusion sérialisée des réponses. Le worker seul n'est donc pas une
-interface de conversation prête à utiliser. Il ne crée pas de monde, n'ouvre pas
-de tour et ne décide pas qu'une action corporelle a réussi.
+L'hôte `chat.py` gère le lancement, l'échéance, l'arrêt du processus et la diffusion
+sérialisée des réponses textuelles. Le worker seul ne crée pas de monde, n'ouvre
+pas de tour et ne décide pas qu'une action corporelle a réussi. La voix n'est pas
+raccordée à cette interface.
 
 Le script [qualify_hermes_loop.py](../experiments/agent/qualify_hermes_loop.py)
 utilise le vrai Hermes et le vrai transport MCP, avec un fournisseur déterministe
@@ -210,7 +253,28 @@ même après relecture du monde. Les tests CPU couvrent également échéance, f
 tour, remplacement de l'hôte et migration v4 → v5. Aucun de ces tests n'est une
 conversation avec Astra ni une validation de diffusion vocale.
 
-Restent nécessaires : accès effectif à Astra, profil conversationnel limité,
-raccord des tours à la boucle Hermes et essais réels de correction utilisateur
-et de délai fournisseur. Le pont seul ne
-satisfait pas ces critères. T07 conserve également ses limites de déplacement.
+Le script [qualify_hermes_host.py](../experiments/agent/qualify_hermes_host.py) vérifie
+le vrai Hermes avec `TextHost`, puis la commande publique après redémarrage. Il
+requiert les mêmes arguments de chemins que `qualify_hermes_loop.py`. Le fournisseur
+reste un doublon local : lecture du monde, correction pendant un appel lent,
+délai dépassé et erreur HTTP 401. Les résultats et sources restent dans le dossier
+neuf de qualification et sont exclus de la mémoire personnelle.
+
+La série `.local/hermes-host-qualification-04` termine les cinq vérifications :
+lecture en 11,11 s, arrêt de l'ancien processus lors d'une correction en 140 ms,
+échéance de 15 s respectée à environ 30 ms près, erreur fournisseur et reprise
+via `chat`. Ces délais incluent l'initialisation froide de Hermes ; ils ne
+mesurent pas la latence d'Astra. Aucun événement d'action corporelle n'est créé
+dans cette série, qui vérifie l'hôte et ses lectures MCP.
+
+Les essais ont révélé que Hermes peut fusionner deux messages utilisateur sans
+réponse en les séparant par deux sauts de ligne. Le stockage accepte cette fusion
+exacte de messages connus et conserve le contexte natif ; une simple sous-chaîne
+ou un message différent ne suffit pas. Les tests de sous-processus couvrent aussi
+l'arrêt des descendants après perte du parent, la récupération du verrou après
+une coupure et la fermeture sur échéance.
+
+Restent nécessaires : accès effectif à Astra et conversations variées avec ce
+modèle pour vérifier ses décisions et la restitution des résultats corporels.
+Le fournisseur de test ne prouve aucune qualité de raisonnement. T07 conserve
+également ses limites de déplacement ; la conversation vocale reste dans T11.

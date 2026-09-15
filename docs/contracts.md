@@ -148,8 +148,8 @@ pas à un ancien pont de récupérer le droit d'agir. La retransmission exacte
 d'une soumission existante reste une lecture idempotente de son résultat ;
 elle n'est jamais réémise. Une annulation déjà demandée reste idempotente.
 Les opérations manuelles et le pont de diagnostic sans tour restent disponibles.
-Le script de qualification raccorde ces tours à la boucle native Hermes ;
-l'interface conversationnelle et la gestion des processus restent à terminer.
+La commande `chat` raccorde ces tours à la boucle native Hermes et gère les
+processus ; sa qualification utilise un fournisseur de test local, pas Astra.
 
 La migration v4 → v5 ajoute uniquement `conversation: null` et conserve poses,
 requêtes et observations ; sauvegarde et rollback restent obligatoires. Fermer
@@ -174,10 +174,12 @@ pas dans le contexte suivant ; les messages utilisateur sont conservés.
 
 Chaque enregistrement conserve le monde, l'origine, le message et sa date. Ce
 stockage n'effectue ni résumé, ni entraînement, ni export automatique vers Obsidian.
-Le contexte transmis est limité à 512 Kio UTF-8 ; un dépassement échoue sans
+Hermes peut fusionner exactement les messages utilisateur adjacents restés sans
+réponse ; le contrôle reconnaît cette fusion connue sans accepter une simple
+sous-chaîne. Le contexte transmis est limité à 512 Kio UTF-8 ; un dépassement échoue sans
 troncature implicite. Une future gestion du contexte devra respecter les sources
-de T10. La diffusion réelle du texte ou de l'audio doit encore être sérialisée par
-l'hôte avec l'arrivée d'une correction ; le commit ne signifie pas « entendu ».
+de T10. La commande `chat` sérialise la diffusion du texte avec l'arrivée d'une
+correction. La diffusion audio reste à raccorder ; le commit ne signifie pas « entendu ».
 
 `cancel` termine immédiatement une demande non envoyée. Après envoi, il pose `cancel_requested` et une échéance (deux secondes par défaut, configurable à la création du service). Répéter l'appel ne repousse pas cette échéance. La dernière pose confirmée est conservée pendant l'attente. Une fin et une annulation concurrentes produisent un seul résultat terminal selon l'ordre enregistré.
 

@@ -35,6 +35,10 @@ def main():
     from promethee.run import configure
 
     configure(run)
+    chat = commands.add_parser("chat", help="Converse through the isolated native Hermes worker.")
+    from promethee.chat import configure as configure_chat
+
+    configure_chat(chat)
     submit = commands.add_parser("submit", help="Submit an asynchronous body action.")
     submit.add_argument("--request-id", required=True)
     submit.add_argument("--expected-revision", type=int, required=True)
@@ -45,6 +49,14 @@ def main():
     args = parser.parse_args()
     exit_code = 0
     try:
+        if args.command == "chat":
+            from promethee.chat import run_chat
+
+            try:
+                run_chat(args)
+            except KeyboardInterrupt:
+                pass
+            return 0
         if args.command == "run":
             from promethee.run import run_session
 

@@ -127,6 +127,19 @@ def test_mismatched_or_missing_input_cannot_replace_history(tmp_path):
     store.finish(turn["turn_id"], answer(turn, "Preserve this input"))
 
 
+def test_native_hermes_merge_of_unanswered_user_tail_is_preserved(tmp_path):
+    store, _ = setup(tmp_path)
+    store.begin("Unanswered")
+    turn = store.begin("Correction")
+    result = answer(turn, "Correction")
+    result["messages"] = [
+        {"role": "user", "content": "Unanswered\n\nCorrection"},
+        {"role": "assistant", "content": "Response"},
+    ]
+    store.finish(turn["turn_id"], result)
+    assert store.begin("Next")["history"] == result["messages"]
+
+
 @pytest.mark.parametrize("fail", [False, True])
 def test_v5_migration_has_empty_history_and_preserves_backup(tmp_path, fail):
     store, _ = setup(tmp_path)
