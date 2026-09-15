@@ -3,6 +3,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { VRMLoaderPlugin } from "@pixiv/three-vrm";
 import { CoreRetarget } from "./retarget.js";
+import { ObjectVisuals } from "./objects.js";
 
 const status = document.querySelector("#status"),
     slider = document.querySelector("#frame");
@@ -72,6 +73,24 @@ try {
     if (!Number.isFinite(scale) || scale < 0.5 || scale > 2)
         throw new Error("Échelle de squelette incompatible.");
     const retarget = new CoreRetarget(vrm, data.skeleton, scale);
+    const objects = new ObjectVisuals(scene, data.object_models ?? {});
+    const attachedHands = [
+        ...new Set(
+            (data.objects ?? []).flatMap((frame) =>
+                Object.values(frame).flatMap((object) =>
+                    object.spatial.attachment
+                        ? [object.spatial.attachment.joint]
+                        : [],
+                ),
+            ),
+        ),
+    ];
+    // Check the full clip before enabling playback, including the approach.
+    vrm.scene.visible = false;
+    if (attachedHands.length) {
+        for (const frame of data.frames) retarget.apply(frame, attachedHands);
+    }
+    vrm.scene.visible = true;
     const edges = data.skeleton.parents.flatMap((parent, index) =>
         parent < 0 ? [] : [[parent, index]],
     );
@@ -96,7 +115,8 @@ try {
         anchorFrame = 0;
     function display(frame) {
         index = frame;
-        retarget.apply(data.frames[index]);
+        retarget.apply(data.frames[index], attachedHands);
+        objects.display(data.objects?.[index] ?? {});
         geometry.attributes.position.array.set(
             edges.flatMap((edge) =>
                 edge.flatMap((joint) => data.frames[index].positions[joint]),
@@ -161,6 +181,7 @@ try {
         let minimum = Infinity,
             highestMinimum = -Infinity,
             maxRootError = 0;
+        const handErrors = { rightHand: 0, leftHand: 0 };
         const meshes = [];
         vrm.scene.traverse((node) => {
             if (node.isSkinnedMesh) meshes.push(node);
@@ -177,6 +198,20 @@ try {
                     new THREE.Vector3(...data.frames[i].positions[0]),
                 ),
             );
+            for (const [name, joint] of [
+                ["rightHand", "RightHand"],
+                ["leftHand", "LeftHand"],
+            ]) {
+                vrm.humanoid.getRawBoneNode(name).getWorldPosition(actual);
+                const expected =
+                    data.frames[i].positions[
+                        data.skeleton.joint_names.indexOf(joint)
+                    ];
+                handErrors[name] = Math.max(
+                    handErrors[name],
+                    actual.distanceTo(new THREE.Vector3(...expected)),
+                );
+            }
             for (const mesh of meshes) {
                 mesh.skeleton.update();
                 for (
@@ -203,6 +238,10 @@ try {
                 frames: data.frames.length,
                 uniform_scale: scale,
                 maximum_hip_error_m: maxRootError,
+                maximum_hand_error_m: handErrors,
+                objects_follow_observed_world_transform: true,
+                attached_hand_alignment_applied: attachedHands.length > 0,
+                grasp_validated: false,
                 lowest_rendered_vertex_y_m: minimum,
                 maximum_floor_penetration_m: Math.max(0, -minimum),
                 highest_lowest_vertex_y_m: highestMinimum,

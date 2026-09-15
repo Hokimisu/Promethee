@@ -235,6 +235,10 @@ Le [contrat d'observation des objets en 3D](spatial-objects.md) persiste aussi
 les attachements à la main et vérifie leur cohérence après interruption dans
 des tests CPU. Le contrôleur et le rendu d'interaction restent à raccorder.
 
+La [lecture VRM avec objets](avatar-rendering.md) affiche un doudou déjà attaché
+et adapte le bras visible à la main observée lorsque la cible est accessible.
+La prise et le dépôt dans une session restent à réaliser.
+
 **À modifier :** catalogue, validation, contrôleur et rendu.
 **À créer :** tests des interactions et fiche de provenance pour chaque asset introduit.
 

@@ -2,6 +2,83 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { Vector3, Object3D, Quaternion } from "three";
 import { rotationQuaternion, BONE_MAP, CoreRetarget } from "./retarget.js";
+import { ObjectVisuals } from "./objects.js";
+import { alignHand } from "./align-hand.js";
+
+test("hand alignment reaches a world target without stretching the arm", () => {
+    const root = new Object3D(),
+        upper = new Object3D(),
+        lower = new Object3D(),
+        hand = new Object3D();
+    root.position.set(1, 1, -1);
+    root.scale.setScalar(1.2);
+    root.add(upper);
+    upper.add(lower);
+    lower.add(hand);
+    lower.position.set(0.25, 0, 0);
+    hand.position.set(0.2, 0, 0);
+    root.updateMatrixWorld(true);
+    const target = new Vector3(1.25, 1.2, -0.8);
+    alignHand(upper, lower, hand, target, new Vector3(1.1, 1.3, -1));
+    assert.ok(hand.getWorldPosition(new Vector3()).distanceTo(target) < 1e-10);
+    assert.ok(
+        Math.abs(
+            upper
+                .getWorldPosition(new Vector3())
+                .distanceTo(lower.getWorldPosition(new Vector3())) - 0.3,
+        ) < 1e-10,
+    );
+    assert.ok(
+        Math.abs(
+            lower
+                .getWorldPosition(new Vector3())
+                .distanceTo(hand.getWorldPosition(new Vector3())) - 0.24,
+        ) < 1e-10,
+    );
+    assert.ok(
+        hand.getWorldQuaternion(new Quaternion()).angleTo(new Quaternion()) <
+            1e-7,
+    );
+    assert.throws(
+        () => alignHand(upper, lower, hand, new Vector3(4, 1, -1), target),
+        /hors de portée/,
+    );
+});
+
+test("object render follows the recorded world pose and removes absent objects", () => {
+    const scene = new Object3D();
+    const visual = new ObjectVisuals(scene, {
+        plush: [{ center: [0, 0, 0], size: [0.1, 0.2, 0.1], color: "#c99c73" }],
+    });
+    const item = {
+        asset: "plush",
+        spatial: {
+            position: [1, 0.8, -0.4],
+            rotation: [
+                [0, 0, 1],
+                [0, 1, 0],
+                [-1, 0, 0],
+            ],
+        },
+    };
+    visual.display({ item });
+    const node = visual.nodes.get("item").node;
+    assert.deepEqual(
+        node.getWorldPosition(new Vector3()).toArray(),
+        item.spatial.position,
+    );
+    assert.ok(
+        node.quaternion.angleTo(rotationQuaternion(item.spatial.rotation)) <
+            1e-7,
+    );
+    item.spatial.position = [1.1, 0.9, -0.3];
+    visual.display({ item });
+    assert.equal(visual.nodes.get("item").node, node);
+    assert.deepEqual(node.position.toArray(), item.spatial.position);
+    visual.display({});
+    assert.equal(scene.children.length, 0);
+    assert.equal(visual.nodes.size, 0);
+});
 
 test("column-vector positive yaw maps forward Z to positive X", () => {
     const q = rotationQuaternion([

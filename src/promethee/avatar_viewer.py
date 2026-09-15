@@ -6,13 +6,15 @@ import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from promethee.object_models import OBJECT_MODELS
 from promethee.pose import validate_pose
 from promethee.rendering import load_skeleton
+from promethee.world import validate_observation
 
 PIXIV_SHA256 = "12c2b97e95e700783a6a550dc0eee2d7880aeedccef9ae67bc4c5a2f0f2631a2"
 
 
-def motion_document(path, skeleton):
+def motion_document(path, skeleton, objects=None):
     import numpy as np
 
     with np.load(path, allow_pickle=False) as data:
@@ -32,10 +34,31 @@ def motion_document(path, skeleton):
         )
         for points, rots in zip(positions, rotations, strict=True)
     ]
-    return {"fps": fps, "frames": frames, "skeleton": load_skeleton(skeleton)}
+    document = {"fps": fps, "frames": frames, "skeleton": load_skeleton(skeleton)}
+    if objects is not None:
+        if Path(objects).stat().st_size > 16 * 1024 * 1024:
+            raise ValueError("Object replay exceeds 16 MiB.")
+        observations = json.loads(Path(objects).read_text(encoding="utf-8"))
+        if not isinstance(observations, list) or len(observations) != len(frames):
+            raise ValueError(
+                "Object replay must contain one complete observation per motion frame."
+            )
+        values = []
+        for observation, frame in zip(observations, frames, strict=True):
+            observed = validate_observation(observation)
+            if observed["pose"] != frame:
+                raise ValueError("Object replay and motion poses disagree.")
+            for obj in observed["objects"].values():
+                if "spatial" not in obj or obj["asset"] not in OBJECT_MODELS:
+                    raise ValueError(
+                        "Object replay requires a spatial pose and a known visual model."
+                    )
+            values.append(observed["objects"])
+        document.update(objects=values, object_models=OBJECT_MODELS)
+    return document
 
 
-def create_server(*, web_root, avatar, motion, skeleton, port=2343):
+def create_server(*, web_root, avatar, motion, skeleton, port=2343, objects=None):
     model = Path(avatar).read_bytes()
     if hashlib.sha256(model).hexdigest() != PIXIV_SHA256:
         raise ValueError("Use the pinned pixiv sample with its verified license and fingerprint.")
@@ -48,7 +71,7 @@ def create_server(*, web_root, avatar, motion, skeleton, port=2343):
         "/avatar.vrm": ("model/gltf-binary", model),
         "/motion.json": (
             "application/json",
-            json.dumps(motion_document(motion, skeleton), allow_nan=False).encode(),
+            json.dumps(motion_document(motion, skeleton, objects), allow_nan=False).encode(),
         ),
     }
 
@@ -90,6 +113,9 @@ def main():
     for option in ("web-root", "avatar", "motion", "skeleton"):
         parser.add_argument("--" + option, type=Path, required=True)
     parser.add_argument("--port", type=int, default=2343)
+    parser.add_argument(
+        "--objects", type=Path, help="Optional complete observations matching every frame."
+    )
     args = parser.parse_args()
     with create_server(**vars(args)) as server:
         print(f"Avatar replay: http://127.0.0.1:{server.server_port}", flush=True)

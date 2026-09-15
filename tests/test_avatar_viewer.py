@@ -1,5 +1,6 @@
 import hashlib
 import http.client
+import json
 import threading
 
 import pytest
@@ -44,3 +45,52 @@ def test_viewer_rejects_a_different_asset_before_serving(tmp_path):
     model.write_bytes(b"unqualified asset")
     with pytest.raises(ValueError, match="fingerprint"):
         avatar_viewer.create_server(web_root=tmp_path, avatar=model, motion=None, skeleton=None)
+
+
+def test_object_replay_requires_matching_pose_and_known_visual(
+    tmp_path, monkeypatch, articulated_pose
+):
+    np = pytest.importorskip("numpy")
+    monkeypatch.setattr(avatar_viewer, "load_skeleton", lambda _: {})
+    motion = tmp_path / "motion.npz"
+    np.savez(
+        motion,
+        posed_joints=[articulated_pose["positions"]],
+        global_rot_mats=[articulated_pose["rotations"]],
+        fps=20.0,
+    )
+    obj = {
+        "asset": "plush",
+        "position": [0, 0],
+        "spatial": {
+            "position": [0, 0.5, 0],
+            "rotation": [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+            "attachment": None,
+        },
+    }
+    observation = {
+        "pose": articulated_pose,
+        "objects": {"item": obj},
+        "avatar": {"position": [0, 0], "holding": None, "seated_on": None},
+    }
+    path = tmp_path / "objects.json"
+
+    def save():
+        path.write_text(json.dumps([observation]), encoding="utf-8")
+
+    save()
+    document = avatar_viewer.motion_document(motion, None, path)
+    assert document["objects"] == [{"item": obj}]
+    assert "plush" in document["object_models"]
+    observation["pose"]["positions"][10][0] += 0.1
+    save()
+    with pytest.raises(ValueError, match="poses disagree"):
+        avatar_viewer.motion_document(motion, None, path)
+    observation["pose"]["positions"][10][0] -= 0.1
+    obj["asset"] = "bed"
+    save()
+    with pytest.raises(ValueError, match="known visual"):
+        avatar_viewer.motion_document(motion, None, path)
+    path.write_text("[]", encoding="utf-8")
+    with pytest.raises(ValueError, match="one complete observation"):
+        avatar_viewer.motion_document(motion, None, path)

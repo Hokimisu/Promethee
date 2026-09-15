@@ -1,4 +1,5 @@
 import { Matrix4, Quaternion, Vector3 } from "three";
+import { alignHand } from "./align-hand.js";
 
 // Core's intermediate Spine1 is represented by the composed world rotation of chest.
 // These are named joints from the pinned Core27 export, not VRM raw bone indices.
@@ -46,6 +47,7 @@ export function rotationQuaternion(rows) {
 export class CoreRetarget {
     constructor(vrm, skeleton, scale) {
         this.vrm = vrm;
+        this.skeleton = skeleton;
         vrm.scene.scale.setScalar(scale);
         vrm.scene.updateMatrixWorld(true);
         this.bones = Object.entries(BONE_MAP).map(([name, source]) => {
@@ -72,7 +74,7 @@ export class CoreRetarget {
         this.hips = vrm.humanoid.getNormalizedBoneNode("hips");
     }
 
-    apply(frame) {
+    apply(frame, attachedHands = []) {
         for (const { node, index, restWorld } of this.bones) {
             node.parent.updateWorldMatrix(true, false);
             const desired = rotationQuaternion(frame.rotations[index]).multiply(
@@ -89,6 +91,27 @@ export class CoreRetarget {
         const position = new Vector3(...frame.positions[0]);
         this.hips.parent.updateWorldMatrix(true, false);
         this.hips.position.copy(this.hips.parent.worldToLocal(position));
+        this.hips.updateMatrixWorld(true);
+        for (const name of new Set(attachedHands)) {
+            const side =
+                name === "RightHand"
+                    ? "right"
+                    : name === "LeftHand"
+                      ? "left"
+                      : null;
+            if (!side) throw new Error("Articulation d’attachement inconnue.");
+            const index = this.skeleton.joint_names.indexOf(name);
+            const elbow = this.skeleton.joint_names.indexOf(
+                name === "RightHand" ? "RightForeArm" : "LeftForeArm",
+            );
+            alignHand(
+                this.vrm.humanoid.getNormalizedBoneNode(`${side}UpperArm`),
+                this.vrm.humanoid.getNormalizedBoneNode(`${side}LowerArm`),
+                this.vrm.humanoid.getNormalizedBoneNode(`${side}Hand`),
+                new Vector3(...frame.positions[index]),
+                new Vector3(...frame.positions[elbow]),
+            );
+        }
         this.vrm.update(0); // No procedural idle, spring animation or invented inter-frame motion.
         this.vrm.scene.updateMatrixWorld(true);
     }

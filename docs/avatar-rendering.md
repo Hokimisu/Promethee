@@ -59,6 +59,57 @@ animation d'attente ou correction verticale par image n'est ajoutée. Les
 proportions des membres restent celles de pixiv : les positions des mains et
 des pieds peuvent donc différer du corps Core.
 
+Pour une lecture contenant des objets attachés, le bras visible est désormais
+adapté à la position Core de la main correspondante par une résolution à deux
+segments. Les longueurs du VRM et l'orientation de main sont conservées ;
+l'objet garde sa pose mondiale observée. Cette adaptation s'applique à toute
+la séquence pour les mains concernées, y compris avant un attachement éventuel.
+Toutes les cibles sont vérifiées avant d'activer la lecture. Une cible hors de
+portée ou un plan de flexion indéterminé rend la lecture indisponible, sans
+étirer les bras ni rapprocher l'objet. Les limites articulaires et collisions
+ne sont pas évaluées par ce calcul.
+
+## Lecture d'objets enregistrés
+
+L'option `--objects observations.json` accepte une liste d'observations complètes,
+une par pose du NPZ, dans le [contrat spatial](spatial-objects.md). La pose du
+corps doit correspondre exactement à la pose du mouvement. Le fichier est
+limité à 16 Mio ; chaque objet exige une pose spatiale valide et un modèle
+visuel connu. Le [doudou géométrique](assets/geometric-plush.md) est le premier
+modèle fourni. Le serveur reste en lecture seule et n'expose aucune action.
+
+Le script [qualify_object_replay.py](../experiments/motion/qualify_object_replay.py)
+prépare un essai avec un objet déjà attaché. Il conserve les observations,
+les empreintes et le script dans un nouveau dossier local :
+
+```sh
+uv run --extra avatar python experiments/motion/qualify_object_replay.py --motion SOURCE.npz --skeleton conventions.json --output .local/object-review --side right
+```
+
+Ajouter ensuite `--objects .local/object-review/objects.json` à la commande
+du visualiseur. Cet essai ne simule ni approche, ni contact initial, ni dépôt.
+
+Les essais locaux `object-replay-qualification-01` à `03` ont révélé puis
+isolé l'écart de proportions. Le premier, cible haute du bras droit, montrait
+jusqu'à 16,48 cm entre la main visible et la main Core. L'alignement refuse
+cette séquence dès qu'une cible dépasse la portée VRM : 45,8 cm demandés pour
+45,7 cm disponibles à la première pose refusée. Le message est visible et
+les contrôles de lecture restent désactivés.
+
+Les deux cibles plus proches, à droite et à gauche, passent sur leurs 61 poses.
+Après adaptation, la distance maximale de la main concernée à sa position Core
+est respectivement 2,71 × 10⁻⁸ m et 2,78 × 10⁻⁸ m. Les vues d'arrivée montrent
+le doudou auprès de la main ; les doigts restent ouverts et le doudou bascule
+avec elle. La main non concernée conserve son écart de proportions. Les
+chaussures restent à environ 1,73 cm du sol : cet essai ne valide pas l'appui.
+
+Les sources NPZ sont respectivement les `reach-02`, `reach-00` et `reach-03`
+de `arm-reach-qualification-02`. Les SHA-256 des observations sont
+`494ccf0ce88c4a6d82a456f0885667a5609f3c446924c272c0f64eb67295b4f9`,
+`1dfca11d94a17dbe81c0b8a2324ca5f7dd2d612eb2050f471195916cfcc7e4eb`
+et `c460db25837021dce2f227cc65670b1ad1d5b15edef931c47421979be11b6c09`.
+Ces données de qualification restent exclues de la mémoire de l'agent.
+
 ## Vérification locale
 
 Le 15 septembre 2026, le navigateur intégré a affiché les textures, la posture

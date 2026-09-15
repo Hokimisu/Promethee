@@ -56,7 +56,9 @@ réponse ne peut pas remplacer la pose réconciliée. Les identifiants rejoués 
 redéclenchent pas le mouvement.
 
 Ces tests utilisent des poses artificielles pour isoler le contrat de stockage.
-Ils ne sont pas une qualification motrice. Restent à raccorder : géométrie et
-asset visuel de chaque objet, approche de la main et contact, attachement au
-bon instant, rendu de l'objet, collisions, dépôt et essais sur plusieurs
-positions. Le [ticket T08](implementation-plan.md) reste ouvert.
+Ils ne sont pas une qualification motrice. La [lecture VRM](avatar-rendering.md)
+affiche maintenant un premier doudou déjà attaché, avec adaptation du bras
+visible et refus des cibles hors de portée. Restent à raccorder au contrôleur :
+approche et contact, attachement au bon instant, collisions, dépôt et essais
+sur plusieurs positions et géométries. Le [ticket T08](implementation-plan.md)
+reste ouvert.
