@@ -37,6 +37,11 @@ obtient un contact sur toutes les images d'un déplacement et d'une posture de
 calibration. Un autre déplacement dépasse encore la correction autorisée de
 5 cm. Le raccord au contrôleur et les essais indépendants restent à réaliser.
 
+La [portée des bras après correction de hauteur](avatar-arm-reach.md#portée-après-adaptation-de-hauteur)
+est vérifiée sur 1 955 poses VRM issues des sept parcours objets. Le calcul CPU
+peut désormais recevoir un décalage vertical explicite et borné, sans modifier
+la cible observée de la main. Le rendu en direct conserve encore le décalage nul.
+
 L'[apparence VRM](avatar-rendering.md) dispose d'une lecture animée en textures,
 vérifiée sur un déplacement et une posture ARDY. Les hanches sont conservées,
 mais les chaussures flottent de 1 à 4 cm sur ces essais ; les appuis ne sont

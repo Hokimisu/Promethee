@@ -21,14 +21,25 @@ class PixivArmReach:
     def __init__(self):
         self.profile = load_profile()
 
-    def check(self, pose, skeleton, hand):
-        """Reject an unreachable observed wrist before any trajectory is played."""
+    def check(self, pose, skeleton, hand, *, root_y_offset=0.0):
+        """Check an observed wrist after a known, bounded appearance-root translation.
+
+        The Core pose and world-space hand target remain unchanged. The caller
+        must supply the offset actually used by its qualified appearance adapter.
+        This does not compute or authorize a floor correction on its own.
+        """
         import numpy as np
 
         from promethee.pose import validate_pose
 
         if hand not in {"RightHand", "LeftHand"}:
             raise ValueError("Unknown avatar hand.")
+        if (
+            type(root_y_offset) not in {int, float}
+            or not np.isfinite(root_y_offset)
+            or abs(root_y_offset) > 0.05
+        ):
+            raise ValueError("Avatar root height offset must be finite and within 5 cm.")
         height = -min(point[1] for point in skeleton["neutral_joints"])
         if abs(height - self.profile["core_hip_height"]) > 1e-6:
             raise ValueError("Core rest height differs from the qualified avatar scale.")
@@ -38,6 +49,7 @@ class PixivArmReach:
         chain = ["hips", "spine", "chest", "upperChest", side + "Shoulder", side + "UpperArm"]
         names = skeleton["joint_names"]
         position = np.asarray(pose["positions"][0], dtype=float).copy()
+        position[1] += root_y_offset
         rotations = np.asarray(pose["rotations"], dtype=float)
         # Match the renderer's normalization within floating-point roundoff.
         # The 10 micrometre reach margin exceeds these sub-micrometre differences.

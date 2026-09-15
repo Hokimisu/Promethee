@@ -64,5 +64,47 @@ Le vrai VRM chargé dans le navigateur accepte aussi le profil partagé.
 
 Cette vérification établit la portée du poignet, pas les limites anatomiques,
 la fermeture des doigts, le contact de peau, l'équilibre ou l'absence de
-collision de tout le corps. Le raccord du VRM à une session interactive reste
-à livrer ; le rendu VRM actuel relit des observations enregistrées.
+collision de tout le corps. Le raccord à une [session interactive](live-avatar.md)
+est livré ; l'adaptation des appuis visibles reste expérimentale.
+
+## Portée après adaptation de hauteur
+
+`PixivArmReach.check(pose, skeleton, hand, root_y_offset=...)` accepte maintenant
+un décalage vertical explicite du bassin de l'apparence. Ce paramètre nommé est
+exprimé en mètres dans le monde, borné à ±5 cm et nul par défaut. Le calcul
+déplace l'épaule reconstruite, mais conserve la pose Core et la cible mondiale
+de la main. Les valeurs non finies, booléennes ou hors limites sont refusées.
+Le paramètre ne calcule pas et n'active pas une correction des pieds.
+
+Un contre-exemple analytique vérifie la nécessité du contrôle : une cible
+45 cm au-dessus de l'épaule est accessible sans décalage, puis inaccessible
+après un abaissement de 2 cm, pour un bras de 45,67 cm. La limite de repli
+minimal reste elle aussi contrôlée. Ces cas sont des tests géométriques,
+pas de nouvelles prises réalisées par l'avatar.
+
+Le [comparateur](../experiments/motion/qualify_offset_reach.py) a ensuite relu les
+sept parcours objets réels, soit **1 955 poses**, avec la translation VRM
+mesurée image par image par `measure-feet.mjs --settle`. Les empreintes relient
+chaque rapport au document de mouvement et à l'asset pixiv. Les deux mains,
+les deux géométries, les translations et les orientations des parcours sont
+couvertes ; le calcul CPU accepte les mêmes cibles que la résolution du vrai
+VRM. Le bassin descend d'environ 17,29 mm et l'erreur maximale de main rendue
+reste inférieure à 3,7 × 10⁻⁸ m. Les distances épaule-poignet mesurées vont de
+0,22545 à 0,40664 m. Les données et sources restent dans
+`.local/avatar-offset-reach-qualification-01`, hors mémoire personnelle.
+
+```sh
+python experiments/motion/qualify_offset_reach.py --avatar .local/assets/pixiv-vrm/VRM1_Constraint_Twist_Sample.vrm --replays .local/parcours-objets --output .local/nouvelle-qualification
+```
+
+Chaque dossier de parcours contient `motion.npz`, `conventions.json` et
+`objects.json`. On peut fournir plusieurs dossiers à `--replays`. Le script
+utilise le Node installé et les dépendances verrouillées de `web/avatar` ;
+il mesure le skinning réel sans charger les textures et n'ouvre aucun monde.
+
+Les 14 tests de portée et la suite complète de 279 tests passent ; deux tests
+de la suite sont ignorés sous Windows. Les appels existants du contrôleur
+gardent le décalage nul, correspondant au rendu en direct livré. L'adaptateur
+d'appuis devra lui fournir les corrections réellement prévues avant lecture,
+puis les transmettre et les conserver avec les poses pour la reprise. Le
+paramètre seul ne qualifie donc pas encore les appuis en direct.

@@ -52,3 +52,33 @@ def test_changed_rest_height_cannot_reuse_the_appearance_scale():
     skeleton["neutral_joints"][21][1] -= 0.01
     with pytest.raises(ValueError, match="rest height"):
         reach.check(pose, skeleton, "RightHand")
+
+
+def test_root_lowering_changes_reach_without_moving_the_observed_hand():
+    reach, skeleton, pose, shoulder = example()
+    pose["positions"][10] = (shoulder + [0, 0.45, 0]).tolist()
+    before = copy.deepcopy(pose)
+    assert reach.check(pose, skeleton, "RightHand")["distance_m"] == pytest.approx(0.45)
+    with pytest.raises(ValueError, match="pixiv avatar arm reach"):
+        reach.check(pose, skeleton, "RightHand", root_y_offset=-0.02)
+    assert reach.check(pose, skeleton, "RightHand", root_y_offset=0.02)[
+        "distance_m"
+    ] == pytest.approx(0.43)
+    assert pose == before
+
+
+def test_root_offset_preserves_the_inner_reach_limit():
+    reach, skeleton, pose, shoulder = example()
+    pose["positions"][10] = (shoulder + [0, 0.02, 0]).tolist()
+    reach.check(pose, skeleton, "RightHand")
+    with pytest.raises(ValueError, match="pixiv avatar arm reach"):
+        reach.check(pose, skeleton, "RightHand", root_y_offset=0.02)
+
+
+@pytest.mark.parametrize(
+    "offset", [True, "0.01", None, float("nan"), float("inf"), -0.0501, 0.0501]
+)
+def test_invalid_root_offset_cannot_bypass_reach_checks(offset):
+    reach, skeleton, pose, _ = example()
+    with pytest.raises(ValueError, match="height offset"):
+        reach.check(pose, skeleton, "RightHand", root_y_offset=offset)

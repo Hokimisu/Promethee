@@ -185,6 +185,7 @@ const report = {
     measured_attached_hands: hands,
     minimum_root_offset_m: offsets.length ? Math.min(...offsets) : null,
     maximum_root_offset_m: offsets.length ? Math.max(...offsets) : null,
+    root_offsets_m: offsets,
     surface_vertex_pairs: speeds.length,
     surface_speed_max_m_s: speeds.at(-1) ?? null,
     surface_speed_p95_m_s: speeds.length
