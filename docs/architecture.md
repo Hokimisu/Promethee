@@ -32,6 +32,18 @@ Les tickets T03–T05 du [plan d'implémentation](implementation-plan.md) préci
 
 ## Voix et agent
 
+`chat.py` lance la boucle native Hermes avec un historique persistant et des
+outils MCP limités au monde. Une correction invalide le tour précédent avant
+la fermeture de ses processus. Le raccord est qualifié avec un fournisseur de
+test local ; l'accès Astra configuré répond encore HTTP 401.
+
+`memory.py` ajoute quatre outils lorsque l'hôte configure un coffre neuf lié
+à une session interactive. SQLite conserve les sources et les liens de
+correction ; la recherche lit les notes Markdown, y compris leurs éditions
+manuelles. Les notes restent des données historiques : le monde courant fait
+autorité et une recherche ne reprend aucune activité. Les jeux de qualification
+et les anciennes sessions non classées sont exclus. Voir le [contrat mémoire](memory.md).
+
 La piste principale est GPT-Live avec délégation vers un adaptateur Hermes/Astra. Elle conserve un agent persistant tout en permettant la conversation vocale. Une chaîne transcription → agent → synthèse reste une option de diagnostic si nécessaire. Les capacités et l'accès effectif aux modèles doivent être vérifiés avant l'intégration payante.
 
 Les événements d'interruption doivent parvenir à la conversation et au corps. Si l'avatar est assis, interrompre une réponse vocale ne doit pas le téléporter debout. L'annulation d'une action physique doit aboutir à une posture valide, puis être attestée par le contrôleur.
@@ -46,6 +58,6 @@ Les événements d'interruption doivent parvenir à la conversation et au corps.
 
 ## Limites du socle
 
-Les positions sont sur un plan de sol de 10 × 10 mètres. La portée d'un mètre est une règle logique arbitraire pour les tests, pas une mesure anatomique. `viewer.py` reste en lecture seule ; `run.py` ajoute des boutons passant par le service d'exécution et son unique pilote. Il n'y a pas encore de conversation avec un agent externe ni de synchronisation vocale. Le schéma v5 conserve la pose articulée observée et le tour conversationnel courant. Les migrations sont explicites, transactionnelles et précédées d'une sauvegarde vérifiée ; les versions inconnues sont refusées.
+Les positions sont sur un plan de sol de 10 × 10 mètres. La portée d'un mètre est une règle logique arbitraire pour les tests, pas une mesure anatomique. `viewer.py` reste en lecture seule ; `run.py` ajoute des boutons passant par le service d'exécution et son unique pilote. La conversation Astra et la synchronisation vocale restent à qualifier. Le schéma v7 conserve la pose articulée observée, les tours conversationnels et le registre de mémoire. Les migrations sont explicites, transactionnelles et précédées d'une sauvegarde vérifiée ; les versions inconnues sont refusées.
 
 Une activité échouée conserve son erreur et son curseur ; elle n'est pas relancée automatiquement. La replanification après changement du monde sera une responsabilité de l'adaptateur agent.

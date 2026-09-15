@@ -22,6 +22,7 @@ def export_journal(runtime, vault):
             "---\n"
             "source: promethee-logical-runtime\n"
             f"data_origin: {world['data_origin']}\n"
+            f"session_kind: {world['session_kind'] or 'unclassified'}\n"
             f"world_id: {world_id}\n"
             f"event_id: {event['seq']}\n"
             f"request_id: {event['request_id']}\n"
@@ -62,6 +63,7 @@ def export_journal(runtime, vault):
             text = (
                 "---\nsource: promethee-execution-runtime\n"
                 f"data_origin: {world['data_origin']}\nworld_id: {world_id}\n"
+                f"session_kind: {world['session_kind'] or 'unclassified'}\n"
                 f"event_id: execution-{seq}\nrequest_id: {request_id}\n"
                 f"recorded_at: {event['recorded_at']}\n"
                 f"controller_mode: {execution.get('source') or 'unavailable'}\n"

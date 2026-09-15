@@ -45,7 +45,7 @@ jobs:
       - run: uv run ruff format --check .
       - run: uv run pytest -q
       - run: uv sync --locked --extra agent --extra avatar
-      - run: uv run --extra agent --extra avatar pytest -q tests/test_mcp_transport.py tests/test_ardy_contacts.py
+      - run: uv run --extra agent --extra avatar pytest -q tests/test_mcp_transport.py tests/test_ardy_contacts.py tests/test_memory.py
       - run: uv build
       - run: uv run promethee demo --pause-after 4
       - run: uv run promethee demo --resume

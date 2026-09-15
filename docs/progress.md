@@ -13,8 +13,9 @@ Ce registre distingue le code livré des intégrations réellement vérifiées. 
 | T06 | Implémenté et vérifié avec le vrai squelette | Viser en lecture seule, deux dispositions, mise à jour d'un objet, lecture/scrutation d'un NPZ ARDY, contrôle d'échelle et de rotation ; 69 tests CPU passent. [Guide de rendu](rendering.md) |
 | T07 | En cours | Pilotage ARDY, postures, arrêt et reprise réels ; correction des jambes et distinction contact/proximité. Les séries 09–10 terminent un déplacement sur quatre et deux postures sur quatre. Les appuis restent insuffisants, même sur le déplacement accepté. [Mesures et limites](motion-validation.md) |
 | T08 | À réaliser | Interactions corporelles avec les objets non livrées |
-| T09 | Hôte texte implémenté ; Astra à raccorder | Agent restreint à cinq outils, historique natif persistant, correction et délai maximal gérés avec fermeture des processus. Commande réelle ARDY et retransmission vérifiées séparément. Qualification du vrai Hermes avec fournisseur de test local. Accès OpenAI essayé : HTTP 401. [Configuration et limites](hermes-setup.md) |
-| T10–T13 | À réaliser | Aucune intégration réelle revendiquée |
+| T09 | Hôte texte implémenté ; Astra à raccorder | Cinq outils du monde, quatre outils mémoire optionnels ; historique natif persistant, correction et délai maximal gérés avec fermeture des processus. Commande réelle ARDY et retransmission vérifiées séparément. Qualification du vrai Hermes avec fournisseur de test local. Accès OpenAI essayé : HTTP 401. [Configuration et limites](hermes-setup.md) |
+| T10 | Mémoire sourcée implémentée et vérifiée | Recherche dans les notes Markdown, sources consultables, corrections liées, distinction du monde actuel, exclusion des qualifications et préservation des éditions. Tests CPU, vrai transport MCP et vrai Hermes avec fournisseur local ; aucune qualité de raisonnement Astra ni revue visuelle Obsidian revendiquée. [Contrat et qualification](memory.md) |
+| T11–T13 | À réaliser | Aucune intégration réelle revendiquée |
 
 Les journaux de test et données locales restent dans `.local/` et ne sont pas publiés.
 

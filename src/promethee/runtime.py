@@ -13,6 +13,7 @@ from promethee.migrations import (
     check_version,
     create_conversation_tables,
     create_execution_tables,
+    create_memory_tables,
     read_world,
 )
 from promethee.world import ActionError, apply, identifier
@@ -23,9 +24,13 @@ def encode(value):
 
 
 class Runtime:
-    def __init__(self, path, *, data_origin=None, create=True):
+    def __init__(self, path, *, data_origin=None, session_kind=None, create=True):
         if data_origin not in (None, "fixture", "session"):
             raise ValueError("New worlds must have fixture or session origin.")
+        if session_kind not in (None, "interactive", "qualification"):
+            raise ValueError("Unknown session kind.")
+        if session_kind is not None and data_origin != "session":
+            raise ValueError("A session kind requires session origin.")
         self.path = Path(path)
         self.create = create
         if create:
@@ -40,6 +45,8 @@ class Runtime:
                 check_version(state)
                 if data_origin is not None and state["data_origin"] != data_origin:
                     raise ValueError("Existing world's data origin cannot be changed.")
+                if session_kind is not None and state["session_kind"] != session_kind:
+                    raise ValueError("Existing world's session kind cannot be changed.")
                 return
             if not create:
                 raise ValueError("The database does not contain a Promethee world.")
@@ -54,6 +61,7 @@ class Runtime:
             conn.execute("CREATE TABLE activities (id TEXT PRIMARY KEY, data TEXT NOT NULL)")
             create_execution_tables(conn)
             create_conversation_tables(conn)
+            create_memory_tables(conn)
             conn.execute(
                 "INSERT INTO world VALUES (1, ?)",
                 (
@@ -61,6 +69,7 @@ class Runtime:
                         {
                             **INITIAL_WORLD,
                             "data_origin": data_origin or "fixture",
+                            "session_kind": session_kind,
                             "world_id": uuid4().hex,
                         }
                     ),

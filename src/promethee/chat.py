@@ -46,7 +46,7 @@ def exclusive_host(data_dir):
                 fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
 
 
-def prepare_profile(profile, data_dir, turn_id):
+def prepare_profile(profile, data_dir, turn_id, *, vault=None):
     profile.mkdir(parents=True, exist_ok=False)
     (profile / "vault").mkdir()
     config = {
@@ -77,6 +77,12 @@ def prepare_profile(profile, data_dir, turn_id):
             }
         },
     }
+    if vault is not None:
+        server = config["mcp_servers"]["promethee"]
+        server["args"][-2:-2] = ["--vault", str(vault)]
+        server["tools"]["include"].extend(
+            ["search_memory", "read_memory_note", "read_memory_source", "write_memory_note"]
+        )
     (profile / "config.yaml").write_text(json.dumps(config), encoding="utf-8")
 
 
@@ -218,6 +224,7 @@ def configure(parser):
         "--api-mode", choices=["chat_completions", "codex_responses"], required=True
     )
     parser.add_argument("--timeout", type=float, default=60)
+    parser.add_argument("--vault", type=Path, help="Optional sourced interactive memory vault.")
 
 
 def run_chat(args):
@@ -228,11 +235,16 @@ def run_chat(args):
     data_dir = args.data_dir.resolve()
     runtime = Runtime(data_dir / "world.sqlite3", create=False)
     store = ConversationStore(ExecutionService(runtime))
+    vault = args.vault.resolve() if args.vault is not None else None
+    if vault is not None:
+        from promethee.memory import MemoryStore
+
+        MemoryStore(store.service, vault)
     worker_script = Path(__file__).with_name("hermes_worker.py").resolve()
 
     def factory(request):
         profile = data_dir / "conversation-profiles" / request["turn_id"]
-        prepare_profile(profile, data_dir, request["turn_id"])
+        prepare_profile(profile, data_dir, request["turn_id"], vault=vault)
         return WorkerProcess(
             [
                 str(args.hermes_python.resolve()),

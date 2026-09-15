@@ -15,12 +15,16 @@ from pathlib import Path
 from promethee.chat import TextHost, WorkerProcess, exclusive_host, prepare_profile
 from promethee.conversation import ConversationStore
 from promethee.execution import ExecutionService
-from promethee.runtime import Runtime
+from promethee.migrations import read_world
+from promethee.runtime import Runtime, encode
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--output", type=Path, required=True)
 parser.add_argument("--hermes-python", type=Path, required=True)
 parser.add_argument("--hermes-root", type=Path, required=True)
+parser.add_argument(
+    "--memory", action="store_true", help="Exercise the four sourced memory tools too."
+)
 args = parser.parse_args()
 output = args.output.resolve()
 output.mkdir(exist_ok=False)
@@ -32,6 +36,9 @@ for name in (
     "hermes_worker.py",
     "hermes_adapter.py",
     "windows_job.py",
+    "memory.py",
+    "mcp_server.py",
+    "migrations.py",
 ):
     shutil.copyfile(root / "src/promethee" / name, output / name)
 (output / "purpose.json").write_text(
@@ -80,6 +87,40 @@ class Provider(BaseHTTPRequestHandler):
                     }
                 ],
             }
+        elif args.memory and current == "Remember qualification":
+            last_call = request["messages"][-1].get("tool_call_id")
+            operation = None
+            if last_call == "call-world":
+                operation = (
+                    "call-memory-write",
+                    "write_memory_note",
+                    {
+                        "note_id": "qualification-note",
+                        "kind": "proposal",
+                        "title": "Qualification",
+                        "text": "This note belongs only to developer qualification.",
+                        "sources": ["user:" + service.get_world()["conversation"]["turn_id"]],
+                    },
+                )
+            elif last_call == "call-memory-write":
+                operation = ("call-memory-search", "search_memory", {"query": "qualification"})
+            if operation:
+                call_id, name, parameters = operation
+                message = {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "index": 0,
+                            "id": call_id,
+                            "type": "function",
+                            "function": {
+                                "name": "mcp__promethee__" + name,
+                                "arguments": json.dumps(parameters),
+                            },
+                        }
+                    ],
+                }
         finish = "tool_calls" if "tool_calls" in message else "stop"
         chunks = []
         for delta, reason in [(message, None), ({}, finish)]:
@@ -119,7 +160,18 @@ def wait_for(callback, timeout=45):
 
 server = ThreadingHTTPServer(("127.0.0.1", 0), Provider)
 threading.Thread(target=server.serve_forever, daemon=True).start()
-service = ExecutionService(Runtime(output / "world.sqlite3", data_origin="session"))
+service = ExecutionService(
+    Runtime(
+        output / "world.sqlite3",
+        data_origin="session",
+        session_kind="interactive" if args.memory else "qualification",
+    )
+)
+vault = None
+if args.memory:
+    from promethee.memory import MemoryStore, initialize_vault
+
+    vault = initialize_vault(service.runtime, output / "vault")
 prior_key = os.environ.get("PROMETHEE_OPENAI_API_KEY")
 os.environ["PROMETHEE_OPENAI_API_KEY"] = "diagnostic-placeholder"
 base_url = f"http://127.0.0.1:{server.server_port}/v1"
@@ -127,7 +179,7 @@ base_url = f"http://127.0.0.1:{server.server_port}/v1"
 
 def factory(request):
     profile = output / "profiles" / request["turn_id"]
-    prepare_profile(profile, output, request["turn_id"])
+    prepare_profile(profile, output, request["turn_id"], vault=vault)
     process = WorkerProcess(
         [
             str(args.hermes_python.resolve()),
@@ -171,6 +223,14 @@ try:
             assert result["status"] == "completed", result
             results.append({"case": "read", "elapsed": time.monotonic() - started, **result})
             print(json.dumps(results[-1]), flush=True)
+            if args.memory:
+                host.start("Remember qualification")
+                result = wait_for(host.poll)
+                assert result["status"] == "completed", result
+                notes = MemoryStore(service, vault).search("qualification")["notes"]
+                assert [note["note_id"] for note in notes] == ["qualification-note"]
+                results.append({"case": "sourced-memory", **result})
+                print(json.dumps(results[-1]), flush=True)
 
             host.start("Wait for correction")
             wait_for(slow_started.is_set)
@@ -227,7 +287,8 @@ try:
             "chat_completions",
             "--base-url",
             base_url,
-        ],
+        ]
+        + (["--vault", str(vault)] if vault is not None else []),
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -286,4 +347,13 @@ finally:
         os.environ.pop("PROMETHEE_OPENAI_API_KEY", None)
     else:
         os.environ["PROMETHEE_OPENAI_API_KEY"] = prior_key
+    if args.memory:
+        # Irreversible downgrade of this isolated test artifact; never promote it
+        # into personal memory merely because it exercised the interactive contract.
+        with service.runtime.connection() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            world = read_world(conn)
+            world.update(session_kind="qualification", conversation=None)
+            world["revision"] += 1
+            conn.execute("UPDATE world SET data=? WHERE id=1", (encode(world),))
     (output / "report.json").write_text(json.dumps({"results": results, "calls": calls}, indent=2))

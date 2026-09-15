@@ -15,7 +15,12 @@ def run_session(args):
     import numpy as np
     import viser
 
-    runtime = Runtime(args.data_dir / "world.sqlite3", data_origin="session")
+    database = args.data_dir / "world.sqlite3"
+    runtime = Runtime(
+        database,
+        data_origin="session",
+        session_kind="interactive" if not database.exists() else None,
+    )
     runtime.require_session()
     service = ExecutionService(runtime)
     worker = start_ardy_process(

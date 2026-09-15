@@ -20,6 +20,22 @@ def main():
     demo.add_argument("--resume", action="store_true")
     commands.add_parser("world", help="Print the authoritative world snapshot.")
     commands.add_parser(
+        "init-session", help="Create a new interactive world, without a body or model."
+    )
+    memory_init = commands.add_parser(
+        "memory-init", help="Bind a new empty vault to an interactive world."
+    )
+    memory_init.add_argument("--vault", type=Path, required=True)
+    memory_search = commands.add_parser(
+        "memory-search", help="Search registered Markdown memories."
+    )
+    memory_search.add_argument("--vault", type=Path, required=True)
+    memory_search.add_argument("--query", default="")
+    memory_export = commands.add_parser(
+        "memory-export", help="Complete pending registered note exports."
+    )
+    memory_export.add_argument("--vault", type=Path, required=True)
+    commands.add_parser(
         "catalog", help="List logical assets and capabilities without changing data."
     )
     act = commands.add_parser("act", help="Execute one logical action from a UTF-8 JSON file.")
@@ -49,6 +65,33 @@ def main():
     args = parser.parse_args()
     exit_code = 0
     try:
+        if args.command == "init-session":
+            if (args.data_dir / "world.sqlite3").exists():
+                raise ValueError("Choose a new session directory; existing data is never promoted.")
+            runtime = Runtime(
+                args.data_dir / "world.sqlite3", data_origin="session", session_kind="interactive"
+            )
+            print(
+                json.dumps(
+                    {"world_id": runtime.snapshot()["world_id"], "session_kind": "interactive"}
+                )
+            )
+            return 0
+        if args.command in {"memory-init", "memory-search", "memory-export"}:
+            from promethee.memory import MemoryStore, initialize_vault
+
+            runtime = Runtime(args.data_dir / "world.sqlite3", create=False)
+            if args.command == "memory-init":
+                result = {"vault": str(initialize_vault(runtime, args.vault))}
+            else:
+                memory = MemoryStore(ExecutionService(runtime), args.vault)
+                if args.command == "memory-search":
+                    result = memory.search(args.query)
+                else:
+                    memory.export_pending()
+                    result = {"exported": True}
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 0
         if args.command == "chat":
             from promethee.chat import run_chat
 

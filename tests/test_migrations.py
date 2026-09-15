@@ -144,11 +144,17 @@ def test_v2_upgrade_preserves_origin_revision_and_adds_execution_storage(tmp_pat
         world.pop("body")
         world.pop("pose")
         conn.execute("UPDATE world SET data=?", (json.dumps(world),))
-        for table in ("executions", "execution_events", "controller", "conversation_turns"):
+        for table in (
+            "executions",
+            "execution_events",
+            "controller",
+            "conversation_turns",
+            "memory_notes",
+        ):
             conn.execute(f"DROP TABLE {table}")
     before = contents(path)
     backup = tmp_path / "before-v3.sqlite3"
-    assert migrate(path, backup)["schema_version"] == 6
+    assert migrate(path, backup)["schema_version"] == 7
     assert contents(backup) == before
     world = Runtime(path).require_session()
     assert world["revision"] == 7
@@ -172,6 +178,7 @@ def test_v3_upgrade_fences_driver_and_preserves_or_rolls_back_active_execution(
         world.pop("pose")
         conn.execute("UPDATE world SET data=?", (json.dumps(world),))
         conn.execute("DROP TABLE conversation_turns")
+        conn.execute("DROP TABLE memory_notes")
         if fail:
             conn.execute("""CREATE TRIGGER fail_v4 BEFORE UPDATE ON world
                 BEGIN SELECT RAISE(ABORT, 'v4 rollback'); END;""")

@@ -88,6 +88,7 @@ def test_v4_migration_preserves_pose_and_execution(tmp_path, articulated_pose, f
         world.pop("conversation")
         conn.execute("UPDATE world SET data=? WHERE id=1", (json.dumps(world),))
         conn.execute("DROP TABLE conversation_turns")
+        conn.execute("DROP TABLE memory_notes")
         if fail:
             conn.execute("""CREATE TRIGGER fail_v5 BEFORE UPDATE ON world
                 BEGIN SELECT RAISE(ABORT, 'v5 rollback'); END;""")

@@ -1,6 +1,7 @@
 # Pont Hermes
 
-Le pont local expose cinq outils et utilise le même runtime que le contrôleur
+Le pont local expose cinq outils du monde, plus quatre outils de mémoire lorsque
+`--vault` désigne un coffre configuré. Il utilise le même runtime que le contrôleur
 cinématique. La commande `chat` lance désormais la boucle native Hermes dans
 son environnement séparé, avec historique persistant et interruption des appels.
 T09 reste ouvert : ce raccord est vérifié avec un fournisseur de test local,
@@ -8,8 +9,12 @@ pas avec Astra. Il ne lance aucune initiative autonome.
 
 ## Conversation textuelle
 
-Ouvrir d'abord une base `session` avec le contrôleur du [guide moteur](motion-validation.md).
-Une base existante doit être au schéma 6 ; arrêter ses processus avant d'appliquer
+Ouvrir d'abord une base `session` avec le contrôleur du [guide moteur](motion-validation.md),
+ou créer un monde vide sans corps avec `promethee --data-dir CHEMIN_SESSION init-session`.
+Pour ajouter la mémoire, initialiser un coffre neuf selon le [guide mémoire](memory.md),
+puis ajouter `--vault CHEMIN_COFFRE` à `chat`. Les anciennes sessions non classées
+peuvent converser mais ne sont pas admissibles à cette mémoire.
+Une base existante doit être au schéma 7 ; arrêter ses processus avant d'appliquer
 la [migration explicite](contracts.md). Installer l'extra `agent` dans le Python
 de Promethee et utiliser l'installation Hermes 0.20.5 qualifiée ci-dessous.
 Configurer `PROMETHEE_OPENAI_API_KEY` localement, sans la mettre dans Git ni dans
@@ -37,7 +42,8 @@ l'attente d'un message.
 Un verrou détenu par le système autorise un seul hôte de conversation par monde.
 Le redémarrage ferme les anciens tours, conserve les messages restés sans réponse
 et ne réémet aucune action. Chaque appel reçoit un profil neuf dans
-`conversation-profiles/`, lié au tour et limité aux cinq outils. Ces profils
+`conversation-profiles/`, lié au tour et limité aux cinq outils du monde, ou neuf
+avec la mémoire. Ces profils
 contiennent des données privées ; ils ne sont pas des coffres à importer.
 Le contexte natif conservé dans la base fait autorité pour la reprise.
 
@@ -133,7 +139,8 @@ construction du véritable agent ; la boucle conversationnelle reste à raccorde
 
 `hermes_adapter.py` appelle le vrai constructeur `AIAgent` de la version locale
 qualifiée, après `discover_mcp_tools()`. Il utilise uniquement le groupe
-`mcp-promethee`, vérifie les cinq noms effectivement transmis à l'agent, et
+`mcp-promethee`, vérifie les cinq noms effectivement transmis à l'agent (neuf
+avec un coffre configuré), et
 refuse une configuration qui introduirait d'autres outils ou un modèle de secours.
 Il ne recrée pas la boucle de raisonnement de Hermes.
 
@@ -150,8 +157,8 @@ découverte mais sans ce réglage, Hermes remplace les cinq schémas par ses tro
 outils de recherche et d'appel différés. Le réglage ci-dessus permet de vérifier
 directement la liste exposée. `skip_context_files=True`, `load_soul_identity=False`,
 `skip_memory=True` et `skip_background_review=True` empêchent les injections de
-contexte, identité et mémoire existantes dans cet adaptateur initial. La future
-mémoire Promethee devra être raccordée explicitement. La boucle est limitée à
+contexte, identité et mémoire existantes dans cet adaptateur. La
+mémoire Promethee est raccordée explicitement par `--vault`. La boucle est limitée à
 huit itérations par appel et aucun repli vers un autre modèle n'est configuré.
 
 Le script [qualify_hermes_scope.py](../experiments/agent/qualify_hermes_scope.py)

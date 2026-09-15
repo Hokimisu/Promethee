@@ -52,9 +52,9 @@ Cette commande réalise une transition instantanée, sans activité préécrite 
 | Origine des données, révisions et migration sauvegardée | Exécutable ; séparation fixture / session / legacy |
 | Suivi asynchrone, annulation et récupération du corps | API CPU et pilote ARDY ; arrêt et reprise vérifiés |
 | Catalogue logique chaise / pancarte / doudou / lit / TV | Exécutable ; les usages lit/TV sont à implémenter |
-| Journal Markdown lisible dans Obsidian | Export exécutable ; recherche mémoire à connecter |
+| Mémoire Markdown lisible dans Obsidian | Sources, recherche, corrections et éditions manuelles ; raccord Hermes vérifié avec fournisseur de test |
 | Contrôles automatiques et tests de comportement | Fournis |
-| Pont d'outils Hermes | MCP stdio vérifié ; conversation Astra et voix à raccorder |
+| Pont d'outils Hermes | Hôte texte, historique persistant et MCP vérifiés ; accès Astra et voix à raccorder |
 | ARDY Core et rendu Viser | Pilotage cinématique manuel ; qualification des déplacements incomplète |
 | Apparence anime en VRM | Lecture animée ARDY et textures vérifiées ; appuis et pilotage direct à raccorder |
 | Initiative autonome et services externes | Jalons ultérieurs |

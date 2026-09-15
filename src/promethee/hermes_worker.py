@@ -88,6 +88,7 @@ def main():
                     base_url=request["base_url"],
                     api_mode=request["api_mode"],
                     session_id=request["session_id"],
+                    memory_enabled="--vault" in params,
                 )
                 result = agent.run_conversation(
                     request["message"],

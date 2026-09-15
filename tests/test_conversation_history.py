@@ -150,6 +150,7 @@ def test_v5_migration_has_empty_history_and_preserves_backup(tmp_path, fail):
         world["schema_version"] = 5
         conn.execute("UPDATE world SET data=? WHERE id=1", (json.dumps(world),))
         conn.execute("DROP TABLE conversation_turns")
+        conn.execute("DROP TABLE memory_notes")
         if fail:
             conn.execute("""CREATE TRIGGER fail_v6 BEFORE UPDATE ON world
                 BEGIN SELECT RAISE(ABORT, 'v6 rollback'); END;""")

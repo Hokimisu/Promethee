@@ -17,10 +17,13 @@ from promethee.runtime import Runtime  # noqa: E402
 
 
 @asynccontextmanager
-async def connect(directory, turn_id):
+async def connect(directory, turn_id, vault=None):
+    args = ["-m", "promethee.mcp_server", "--data-dir", str(directory), "--turn-id", turn_id]
+    if vault is not None:
+        args += ["--vault", str(vault)]
     params = StdioServerParameters(
         command=sys.executable,
-        args=["-m", "promethee.mcp_server", "--data-dir", str(directory), "--turn-id", turn_id],
+        args=args,
     )
     async with stdio_client(params) as streams, ClientSession(*streams) as client:
         await client.initialize()
@@ -93,3 +96,58 @@ def test_stdio_tools_idempotence_validation_and_restart(tmp_path, articulated_po
 
     asyncio.run(run())
     handle.release()
+
+
+def test_sourced_memory_and_correction_over_stdio(tmp_path):
+    pytest.importorskip("yaml")
+    from promethee.conversation import ConversationStore
+    from promethee.memory import initialize_vault
+
+    runtime = Runtime(tmp_path / "world.sqlite3", data_origin="session", session_kind="interactive")
+    service = ExecutionService(runtime)
+    conversation = ConversationStore(service)
+    vault = initialize_vault(runtime, tmp_path / "vault")
+
+    async def run():
+        turn = conversation.begin("Developer fixture: blue object.")["turn_id"]
+        async with connect(tmp_path, turn, vault) as client:
+            tools = await client.list_tools()
+            assert len(tools.tools) == 9
+            source = await client.call_tool("read_memory_source", {"source_id": "user:" + turn})
+            assert source.structured_content["content"] == "Developer fixture: blue object."
+            args = {
+                "note_id": "blue",
+                "kind": "summary",
+                "title": "Blue object",
+                "text": "A blue object was mentioned.",
+                "sources": ["user:" + turn],
+            }
+            invalid = await client.call_tool("write_memory_note", {**args, "sources": []})
+            assert invalid.is_error
+            result = await client.call_tool("write_memory_note", args)
+            assert not result.is_error and not result.structured_content["replayed"]
+            replay = await client.call_tool("write_memory_note", args)
+            assert replay.structured_content["replayed"]
+            next_turn = conversation.begin("Developer correction: red object.")["turn_id"]
+            late = await client.call_tool("write_memory_note", {**args, "note_id": "late"})
+            assert late.is_error
+        async with connect(tmp_path, next_turn, vault) as client:
+            correction = await client.call_tool(
+                "write_memory_note",
+                {
+                    "note_id": "red",
+                    "kind": "correction",
+                    "title": "Correction",
+                    "text": "The mentioned object was red.",
+                    "sources": ["user:" + next_turn],
+                    "corrects": "blue",
+                },
+            )
+            assert not correction.is_error
+            result = await client.call_tool("search_memory", {"query": "blue"})
+            assert [n["note_id"] for n in result.structured_content["notes"]] == ["red"]
+            read = await client.call_tool("read_memory_note", {"note_id": "blue"})
+            assert read.structured_content["note_id"] == "red"
+            assert service.events() == []
+
+    asyncio.run(run())
