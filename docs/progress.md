@@ -2,6 +2,10 @@
 
 Ce registre distingue le code livré des intégrations réellement vérifiées. Les critères de référence restent dans le [plan d'implémentation](implementation-plan.md).
 
+L'[audit des critères ouverts](completion-audit.md) rapproche les archives réelles
+et le code courant. Les comptes rendus sous le tableau sont chronologiques :
+leurs limites décrivent la version de chaque essai, pas nécessairement la dernière.
+
 | Ticket | État | Preuves |
 |---|---|---|
 | T00 | Vérifié sur CPU | Python 3.13.12, uv 0.12.5 ; 22 tests initiaux, lint, format et construction réussis ; pause/reprise dans deux processus |
@@ -11,7 +15,7 @@ Ce registre distingue le code livré des intégrations réellement vérifiées. 
 | T04 | Implémenté et vérifié sur CPU | Suivi séparé, observation atomique, révision, `busy`, doublons et provenance du pilote ; contrôleur factice explicite |
 | T05 | Implémenté et vérifié sur CPU | Annulation, bail exclusif, réconciliation et coupures réelles de processus ; 60 tests passent, lint, format et construction réussis |
 | T06 | Implémenté et vérifié avec le vrai squelette | Viser en lecture seule, deux dispositions, mise à jour d'un objet, lecture/scrutation d'un NPZ ARDY, contrôle d'échelle et de rotation ; 69 tests CPU passent. [Guide de rendu](rendering.md) |
-| T07 | En cours | Pilotage ARDY, arrêt et reprise réels. Projection des appuis Core en marche ; séries nouvelles 15–16 : trois déplacements sur quatre et trois postures sur quatre terminent. Chaque trajet accepté garde un contact géométrique sur 120 images sur 120. Fiabilité, inclinaison du corps et appuis VRM restent à résoudre. [Mesures et limites](motion-validation.md) |
+| T07 | En cours ; reprise après perte du parcours VRM préparé à qualifier | Dernier essai indépendant : deux postures et un déplacement terminés, un déplacement refusé ; contact géométrique sur les 120 poses de chaque séquence acceptée. Données terminales, observations et événements concordent dans l'essai Astra réel. [Audit et limite restante](completion-audit.md#t07--corps-et-résultat-observé) |
 | T08 | Interactions cinématiques implémentées et vérifiées | Doudou et balle, plusieurs positions, géométries et orientations ; prise, dépôt, impossibilités, annulation avant/après contact et restauration. [Contrôleur](spatial-objects.md), [portée VRM](avatar-arm-reach.md) et [session en direct](live-avatar.md). Ni doigts physiques ni appuis validés |
 | T09 | Vérifié avec Astra et ARDY réels | Authentification ChatGPT native de Hermes, conversation sans action, lecture du monde, historique après redémarrage, posture exécutée et résultat observé. Après interruption pendant le mouvement, le nouveau tour retrouve l'annulation sans relancer l'action. Refus d'un objet absent. [Configuration, essais et limites](hermes-setup.md) |
 | T10 | Mémoire sourcée vérifiée sur CPU et avec Astra | Six appels réels dans deux mondes : recherche vide, proposition, correction retrouvée avec l'ancien terme, source relue et distinction du monde actuel. Deux notes dans le premier coffre, zéro dans le second, aucune action ; coffres ensuite exclus comme qualification. Retrait d'objet et contenus non fiables couverts par tests CPU ; pas de revue visuelle Obsidian. [Contrat et qualification](memory.md) |

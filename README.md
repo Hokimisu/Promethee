@@ -52,13 +52,13 @@ Cette commande réalise une transition instantanée, sans activité préécrite 
 | Origine des données, révisions et migration sauvegardée | Exécutable ; séparation fixture / session / legacy |
 | Suivi asynchrone, annulation et récupération du corps | API CPU et pilote ARDY ; arrêt et reprise vérifiés |
 | Catalogue logique chaise / pancarte / doudou / lit / TV | Exécutable ; les usages lit/TV sont à implémenter |
-| Mémoire Markdown lisible dans Obsidian | Sources, recherche, corrections et éditions manuelles ; raccord Hermes vérifié avec fournisseur de test |
+| Mémoire Markdown lisible dans Obsidian | Sources, recherche et corrections ; six appels Astra réels dans deux mondes de qualification |
 | Contrôles automatiques et tests de comportement | Fournis |
 | Pont d'outils Hermes | Astra réel : conversation, historique, posture exécutée et annulation retrouvée après interruption |
 | Voix de diagnostic | Chaîne transcription/Hermes/synthèse testée avec fournisseurs simulés ; microphone et voix réels non qualifiés |
 | ARDY Core et rendu Viser | Pilotage cinématique manuel ; qualification des déplacements incomplète |
-| Apparence anime en VRM | Lecture et [session en direct](docs/live-avatar.md) ; prise/dépôt cinématiques, arrêt et restauration vérifiés ; appuis non validés |
-| Initiative à budget explicite | Pause persistante et réveils regroupés ; essais avec fournisseur simulé, comportements Astra non qualifiés |
+| Apparence anime en VRM | Lecture et [session en direct](docs/live-avatar.md) ; prise/dépôt cinématiques, arrêt et restauration ; contacts géométriques des poses préparées mesurés, équilibre physique non validé |
+| Initiative à budget explicite | Essais Astra réels : pause persistante, budgets, historiques variés et capacités retirées ; dépendance vocale encore ouverte |
 | Services externes | Extensions ultérieures selon besoin observé |
 
 ## Architecture cible
