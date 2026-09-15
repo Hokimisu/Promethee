@@ -36,8 +36,10 @@ Les tickets T03–T05 du [plan d'implémentation](implementation-plan.md) préci
 outils MCP limités au monde. Une correction invalide le tour précédent avant
 la fermeture de ses processus. La boucle native Hermes utilise soit une clé
 API explicite, soit sa connexion ChatGPT existante dans un profil dédié.
-Astra a conversé, lu un monde vide et retrouvé le contexte après redémarrage ;
-son pilotage corporel reste à qualifier. L'accès à l'API par la clé configurée
+Astra a conversé, lu le monde, retrouvé le contexte après redémarrage, demandé
+une posture réellement exécutée par ARDY et confirmé une annulation. Les
+résultats récents du contrôleur sont accessibles avec la lecture du monde,
+même quand l'ancien tour de raisonnement a été invalidé. L'accès à l'API par la clé configurée
 avait répondu HTTP 401 ; il est distinct de ce raccord ChatGPT.
 
 `memory.py` ajoute quatre outils lorsque l'hôte configure un coffre neuf lié

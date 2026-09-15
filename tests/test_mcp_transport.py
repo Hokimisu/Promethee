@@ -91,6 +91,9 @@ def test_stdio_tools_idempotence_validation_and_restart(tmp_path, articulated_po
             assert result.structured_content["status"] == "accepted"
             stopped = await client.call_tool("cancel_action", {"request_id": "transport-one"})
             assert stopped.structured_content["status"] == "cancelled"
+            refreshed = await client.call_tool("read_world")
+            receipt = refreshed.structured_content["recent_executions"]["items"][0]
+            assert receipt["request_id"] == "transport-one" and receipt["status"] == "cancelled"
             assert handle.claim_next() is None
             assert runtime.snapshot()["avatar"] == observation["avatar"]
 

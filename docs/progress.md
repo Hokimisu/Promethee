@@ -13,13 +13,26 @@ Ce registre distingue le code livré des intégrations réellement vérifiées. 
 | T06 | Implémenté et vérifié avec le vrai squelette | Viser en lecture seule, deux dispositions, mise à jour d'un objet, lecture/scrutation d'un NPZ ARDY, contrôle d'échelle et de rotation ; 69 tests CPU passent. [Guide de rendu](rendering.md) |
 | T07 | En cours | Pilotage ARDY, arrêt et reprise réels. Projection des appuis Core en marche ; séries nouvelles 15–16 : trois déplacements sur quatre et trois postures sur quatre terminent. Chaque trajet accepté garde un contact géométrique sur 120 images sur 120. Fiabilité, inclinaison du corps et appuis VRM restent à résoudre. [Mesures et limites](motion-validation.md) |
 | T08 | Interactions cinématiques implémentées et vérifiées | Doudou et balle, plusieurs positions, géométries et orientations ; prise, dépôt, impossibilités, annulation avant/après contact et restauration. [Contrôleur](spatial-objects.md), [portée VRM](avatar-arm-reach.md) et [session en direct](live-avatar.md). Ni doigts physiques ni appuis validés |
-| T09 | Hôte texte implémenté ; Astra à raccorder | Cinq outils du monde, quatre outils mémoire optionnels ; historique natif persistant, correction et délai maximal gérés avec fermeture des processus. Commande réelle ARDY et retransmission vérifiées séparément. Qualification du vrai Hermes avec fournisseur de test local. Accès OpenAI essayé : HTTP 401. [Configuration et limites](hermes-setup.md) |
+| T09 | Vérifié avec Astra et ARDY réels | Authentification ChatGPT native de Hermes, conversation sans action, lecture du monde, historique après redémarrage, posture exécutée et résultat observé. Après interruption pendant le mouvement, le nouveau tour retrouve l'annulation sans relancer l'action. Refus d'un objet absent. [Configuration, essais et limites](hermes-setup.md) |
 | T10 | Mémoire sourcée implémentée et vérifiée | Recherche dans les notes Markdown, sources consultables, corrections liées, distinction du monde actuel, exclusion des qualifications et préservation des éditions. Tests CPU, vrai transport MCP et vrai Hermes avec fournisseur local ; aucune qualité de raisonnement Astra ni revue visuelle Obsidian revendiquée. [Contrat et qualification](memory.md) |
 | T11 | Diagnostic vocal implémenté ; qualification réelle à faire | Micro à la demande → même Hermes → synthèse. Interruptions testées ; vrai Hermes et SDK audio avec fournisseurs/périphérique simulés. Aucun microphone ni fournisseur réel validé ; GPT-Live reste à raccorder. [Mode et limites](voice.md) |
 | T12 | Initiative bornée implémentée ; observations Astra à faire | Budget et pause persistants, regroupement d'événements, réservation atomique et tours obsolètes testés. Un réveil dans le vrai Hermes avec fournisseur local ; aucune initiative personnelle activée. [Contrat et limites](initiative.md) |
 | T13 | À réaliser selon limite mesurée | Aucun entraînement ni connecteur supplémentaire revendiqué |
 
 Les journaux de test et données locales restent dans `.local/` et ne sont pas publiés.
+
+La branche [codex/execution-receipts-after-interruption](https://github.com/Hokimisu/Promethee/tree/codex/execution-receipts-after-interruption)
+rend les huit résultats d'exécution les plus récemment mis à jour consultables
+avec le monde. Le nouveau tour Astra peut ainsi retrouver une action dont
+l'ancien tour interrompu n'a pas conservé l'identifiant. Les deux essais réels
+et leurs relectures VRM sont décrits dans le [guide Hermes](hermes-setup.md).
+Vérifications : 355 tests passent, deux sont ignorés ; lint, format et
+construction du paquet réussis. La voix réelle et la qualification complète
+des mouvements restent ouvertes.
+
+Les paragraphes suivants conservent les étapes de qualification antérieures ;
+leurs limites décrivent chaque essai à sa date. Les guides liés documentent
+les corrections et essais ultérieurs.
 
 Les [poses d'apparence préparées](avatar-foot-contact.md#poses-préparées-avant-lecture)
 peuvent être exportées et rejouées sans recalculer l'adaptation. Sur 519 images

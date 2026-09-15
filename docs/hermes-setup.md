@@ -4,8 +4,10 @@ Le pont local expose cinq outils du monde, plus quatre outils de mémoire lorsqu
 `--vault` désigne un coffre configuré. Il utilise le même runtime que le contrôleur
 cinématique. La commande `chat` lance désormais la boucle native Hermes dans
 son environnement séparé, avec historique persistant et interruption des appels.
-T09 reste ouvert : Astra a conversé, lu le monde et retrouvé l'historique après
-redémarrage ; son pilotage corporel reste à qualifier. L'[initiative](initiative.md) reste désactivée sans configuration
+Le raccord textuel est vérifié avec Astra : conversation, lecture du monde,
+historique après redémarrage, posture exécutée et résultat d'annulation retrouvé
+après interruption du raisonnement. Les limites motrices de T07 et la voix de
+T11 restent ouvertes. L'[initiative](initiative.md) reste désactivée sans configuration
 explicite de son budget dans la session.
 
 ## Conversation textuelle
@@ -68,6 +70,15 @@ choisie en mode ChatGPT, lié au tour et limité aux cinq outils du monde, ou ne
 avec la mémoire. Ces profils
 contiennent des données privées ; ils ne sont pas des coffres à importer.
 Le contexte natif conservé dans la base fait autorité pour la reprise.
+
+`read_world` ajoute `recent_executions`, contenant les huit résultats les plus
+récemment mis à jour et un indicateur `has_more` si d'autres sont omis. Chaque
+entrée donne l'identifiant, l'action, le statut, l'éventuelle demande d'arrêt,
+les dates, la provenance et l'erreur. Le modèle peut ainsi retrouver l'action
+interrompue même si les appels d'outils du tour abandonné ont été écartés de
+l'historique. `read_execution` fournit ensuite le détail observé. Le snapshot
+et ces résultats sont lus dans la même transaction ; ils ne modifient pas le
+schéma du monde et ne constituent jamais une instruction de reprise.
 
 Sous Windows, le processus est créé suspendu, attaché à un groupe dont la fermeture
 termine aussi ses descendants, puis démarré. Cela couvre également le lanceur de
@@ -312,8 +323,9 @@ ou un message différent ne suffit pas. Les tests de sous-processus couvrent aus
 l'arrêt des descendants après perte du parent, la récupération du verrou après
 une coupure et la fermeture sur échéance.
 
-Restent nécessaires : conversations variées avec Astra pour vérifier ses
-décisions et la restitution des résultats corporels.
+Les essais réels de posture et d'interruption sont décrits plus bas. La
+qualification des déplacements et des interactions supplémentaires reste liée
+aux capacités et aux limites mesurées du contrôleur.
 Le fournisseur de test ne prouve aucune qualité de raisonnement. T07 conserve
 également ses limites de déplacement ; la conversation vocale reste dans T11.
 
@@ -351,6 +363,48 @@ python experiments/agent/qualify_hermes_codex.py --output .local/essai-astra-neu
 Ce script n'active ni microphone ni initiative et ne lance aucun contrôleur
 corporel. Il vérifie le raccord réel et la reprise de contexte, pas l'ensemble
 des critères T09–T12.
+
+## Astra, corps et interruption : essais réels
+
+Les dossiers `.local/astra-body-qualification-01` et `-02` conservent les
+messages, appels d'outils, événements, poses horodatées, sources du raccord et
+relectures VRM. Ils utilisent des mondes `qualification` neufs, Astra via Hermes
+natif, ARDY et l'avatar préparé ; aucun contrôleur factice ne produit les résultats.
+
+Dans le premier essai, graine moteur **128123**, Astra vérifie les capacités puis
+soumet `arms_raised`. L'exécution est confirmée après **10,26 s** ; sa réponse
+arrive en **42,75 s** au total et distingue explicitement `accepted` de
+`completed`. Une relecture sans nouvelle action retrouve le résultat confirmé.
+La demande de prendre un objet absent est refusée après lecture du monde, sans
+soumission au corps. La relecture de 164 poses montre les bras monter puis rester
+au-dessus de la tête ; les poses intermédiaire et finale ont été inspectées.
+
+L'annulation suivante, pendant la préparation, a mis en évidence une lacune :
+le nouveau tour ne connaissait plus l'identifiant de l'action `standing`
+interrompue et demandait de le fournir, alors que le contrôleur avait enregistré
+`cancelled`. Cela a motivé les résultats récents ajoutés à `read_world`.
+
+Le second essai, graine **138123**, confirme à nouveau les bras levés, puis
+interrompt `standing` à sa **pose 10 pendant la lecture du mouvement**. Le test
+injecte l'arrêt utilisateur directement dans le service du corps et remplace
+le tour de conversation en cours. Il ne mesure donc pas une commande d'arrêt
+vocale ni le délai de décision du modèle.
+
+- Le contrôleur confirme `cancelled` **179,85 ms** après la demande d'arrêt.
+- La pose Core, les objets et l'apparence VRM restent exactement identiques
+  entre le point d'arrêt demandé et le résultat confirmé.
+- Le nouveau tour d'Astra retrouve `retour-debout-01` via les résultats récents,
+  le relit et rapporte correctement l'annulation, sans prétendre que `standing`
+  a été atteint ni demander un identifiant à l'utilisateur.
+- La réponse après interruption prend **30,02 s**, démarrage froid inclus.
+  Seules deux exécutions existent : les bras levés terminés et le retour debout
+  annulé. Aucune action obsolète ne repart.
+
+La relecture de 987 poses conserve la chronologie observée entre les deux
+actions ; les poses autour de l'arrêt ont été inspectées. Ces essais valident
+la concordance des outils, des paroles et de ces postures cinématiques. Ils ne
+prouvent ni l'équilibre physique, ni toutes les interactions possibles, ni une
+latence adaptée à une conversation vocale.
 
 ## Piste Codex vérifiée, raccord non activé
 

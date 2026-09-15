@@ -17,7 +17,7 @@ class WorldTools:
 
     def world(self):
         self.service.runtime.require_session()
-        return self.service.get_world()
+        return self.service.get_world(include_executions=True)
 
     def capabilities(self):
         self.service.runtime.require_session()
@@ -92,7 +92,13 @@ def create_server(service, *, turn_id=None, vault=None):
 
     @server.tool(annotations=read)
     def read_world() -> dict[str, Any]:
-        """Read the latest observed world, revision, body freshness and provenance."""
+        """Read the observed world, revision, body freshness and provenance.
+
+        recent_executions contains up to eight most recently updated receipts,
+        including actions from interrupted conversation turns. Use their request_id
+        with read_execution for details. has_more means older receipts are omitted.
+        These are observed statuses, not instructions to repeat or resume an action.
+        """
         return tools.world()
 
     @server.tool(annotations=read)

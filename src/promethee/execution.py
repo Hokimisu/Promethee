@@ -137,10 +137,33 @@ class ExecutionService:
             conn.execute("BEGIN IMMEDIATE")
             yield conn, self.clock()
 
-    def get_world(self):
+    def get_world(self, *, include_executions=False):
         """Read the latest persisted observation after expiring a missing controller."""
         with self._transaction() as (conn, _):
-            return read_world(conn)
+            world = read_world(conn)
+            if include_executions:
+                rows = conn.execute(
+                    "SELECT data FROM executions "
+                    "ORDER BY json_extract(data, '$.updated_at') DESC, rowid DESC LIMIT 9"
+                ).fetchall()
+                world["recent_executions"] = {
+                    "items": [
+                        {
+                            "request_id": item["request_id"],
+                            "action": item["envelope"]["action"],
+                            "status": item["status"],
+                            "cancel_requested": item["cancel_requested"],
+                            "updated_at": item["updated_at"],
+                            "observed_at": item.get("observed_at"),
+                            "source": item.get("source"),
+                            "error": item.get("error"),
+                        }
+                        for (data,) in rows[:8]
+                        for item in [json.loads(data)]
+                    ],
+                    "has_more": len(rows) > 8,
+                }
+            return world
 
     def get(self, request_id):
         identifier(request_id)
