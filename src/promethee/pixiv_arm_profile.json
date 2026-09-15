@@ -1,0 +1,116 @@
+{
+  "version": 1,
+  "asset_sha256": "12c2b97e95e700783a6a550dc0eee2d7880aeedccef9ae67bc4c5a2f0f2631a2",
+  "scale": 1.05102644033269,
+  "core_hip_height": 0.9544128252334833,
+  "bones": {
+    "hips": {
+      "source": "Hips",
+      "parent": null,
+      "rest_position": [
+        0.0,
+        0.9080763,
+        0.00357606518
+      ]
+    },
+    "spine": {
+      "source": "Spine",
+      "parent": "hips",
+      "rest_position": [
+        -1.2805015617171721e-31,
+        0.9601476046817369,
+        0.016093543481218303
+      ]
+    },
+    "chest": {
+      "source": "Spine2",
+      "parent": "spine",
+      "rest_position": [
+        -1.8990820002644376e-21,
+        1.073160322213064,
+        0.01914335011772217
+      ]
+    },
+    "upperChest": {
+      "source": "Spine3",
+      "parent": "chest",
+      "rest_position": [
+        -1.9902703803918768e-21,
+        1.1808033855098155,
+        0.004496786464117292
+      ]
+    },
+    "rightShoulder": {
+      "source": "RightShoulder",
+      "parent": "upperChest",
+      "rest_position": [
+        -0.022395400000000083,
+        1.286490647003297,
+        -0.025472319978990726
+      ]
+    },
+    "rightUpperArm": {
+      "source": "RightArm",
+      "parent": "rightShoulder",
+      "rest_position": [
+        -0.10855583866621563,
+        1.274230204407538,
+        -0.025472267463827105
+      ]
+    },
+    "rightLowerArm": {
+      "source": "RightForeArm",
+      "parent": "rightUpperArm",
+      "rest_position": [
+        -0.32840856966621623,
+        1.274230358467448,
+        -0.025472215951412792
+      ]
+    },
+    "rightHand": {
+      "source": "RightHand",
+      "parent": "rightLowerArm",
+      "rest_position": [
+        -0.5430938852168595,
+        1.2742303768333687,
+        -0.025097521371525766
+      ]
+    },
+    "leftShoulder": {
+      "source": "LeftShoulder",
+      "parent": "upperChest",
+      "rest_position": [
+        0.022395399999999916,
+        1.286490647003297,
+        -0.02547231997899075
+      ]
+    },
+    "leftUpperArm": {
+      "source": "LeftArm",
+      "parent": "leftShoulder",
+      "rest_position": [
+        0.10855582431209358,
+        1.274230204329703,
+        -0.025472217172409547
+      ]
+    },
+    "leftLowerArm": {
+      "source": "LeftForeArm",
+      "parent": "leftUpperArm",
+      "rest_position": [
+        0.3284085993120971,
+        1.274231788901152,
+        -0.025472238303211422
+      ]
+    },
+    "leftHand": {
+      "source": "LeftHand",
+      "parent": "leftLowerArm",
+      "rest_position": [
+        0.5430937663238267,
+        1.2742338917704332,
+        -0.025846663277149462
+      ]
+    }
+  }
+}

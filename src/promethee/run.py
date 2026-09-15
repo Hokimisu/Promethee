@@ -31,8 +31,14 @@ def run_session(args):
         encoder_url=args.encoder_url,
     )
     try:
+        from promethee.avatar_reach import PixivArmReach
+
         controller = KinematicController(
-            service, worker, seed=args.seed, object_interactions=args.object_interactions
+            service,
+            worker,
+            seed=args.seed,
+            object_interactions=args.object_interactions,
+            arm_reach_check=PixivArmReach().check if args.object_interactions else None,
         )
     except Exception:
         worker.close()

@@ -80,7 +80,16 @@ def posture_reached(pose, name):
 
 
 class KinematicController:
-    def __init__(self, service, worker, *, clock=time.monotonic, seed=0, object_interactions=False):
+    def __init__(
+        self,
+        service,
+        worker,
+        *,
+        clock=time.monotonic,
+        seed=0,
+        object_interactions=False,
+        arm_reach_check=None,
+    ):
         world = service.runtime.require_session()
         if world["avatar"]["seated_on"] or (
             not object_interactions and (world["objects"] or world["avatar"]["holding"])
@@ -105,6 +114,7 @@ class KinematicController:
         self.object_frames = None
         self.object_expected = None
         self.skeleton = None
+        self.arm_reach_check = arm_reach_check
         self.frame = 0
         self.ready = False
         self.seed = seed
@@ -209,6 +219,12 @@ class KinematicController:
                     candidate["pose"] = pose
                     held = candidate["avatar"]["holding"]
                     if held:
+                        if self.arm_reach_check is not None:
+                            self.arm_reach_check(
+                                pose,
+                                self.skeleton,
+                                candidate["objects"][held]["spatial"]["attachment"]["joint"],
+                            )
                         candidate["objects"][held] = follow_attachment(
                             candidate["objects"][held], pose
                         )
@@ -254,6 +270,13 @@ class KinematicController:
                     json.dumps(item["skeleton"]), encoding="utf-8"
                 )
                 if self.pose is not None:
+                    held = self.observation["avatar"]["holding"]
+                    if held and self.arm_reach_check is not None:
+                        self.arm_reach_check(
+                            self.pose,
+                            self.skeleton,
+                            self.observation["objects"][held]["spatial"]["attachment"]["joint"],
+                        )
                     # This body is virtual: restore its last persisted checkpoint explicitly.
                     if not self.handle.reconcile(self.observation, stopped=True):
                         raise RuntimeError("Checkpoint restoration lost ownership.")
@@ -307,7 +330,12 @@ class KinematicController:
 
                     try:
                         validate_body_action(self.observation, action)
-                        frames = prepare_object_action(self.observation, self.skeleton, action)
+                        frames = prepare_object_action(
+                            self.observation,
+                            self.skeleton,
+                            action,
+                            arm_reach_check=self.arm_reach_check,
+                        )
                     except (ValueError, KeyError) as exc:
                         self._feedback("failed", str(exc))
                         return

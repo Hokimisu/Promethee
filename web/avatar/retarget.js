@@ -28,6 +28,37 @@ export const BONE_MAP = {
     leftToes: "LeftToeBase",
 };
 
+export function validateArmProfile(vrm, skeleton, scale, profile) {
+    if (
+        !profile ||
+        profile.version !== 1 ||
+        Math.abs(scale - profile.scale) > 1e-8 ||
+        Math.abs(
+            -Math.min(...skeleton.neutral_joints.map((p) => p[1])) -
+                profile.core_hip_height,
+        ) > 1e-6
+    )
+        throw new Error(
+            "L’échelle de l’avatar diffère du profil de portée du contrôleur.",
+        );
+    for (const [name, bone] of Object.entries(profile.bones)) {
+        const node = vrm.humanoid.getNormalizedBoneNode(name);
+        const parent =
+            bone.parent && vrm.humanoid.getNormalizedBoneNode(bone.parent);
+        if (
+            !node ||
+            BONE_MAP[name] !== bone.source ||
+            (parent && node.parent !== parent) ||
+            node
+                .getWorldPosition(new Vector3())
+                .distanceTo(new Vector3(...bone.rest_position)) > 1e-6
+        )
+            throw new Error(
+                `La géométrie de l’avatar diffère du profil de portée : ${name}.`,
+            );
+    }
+}
+
 export function rotationQuaternion(rows) {
     const m = new Matrix4().set(
         ...rows[0],

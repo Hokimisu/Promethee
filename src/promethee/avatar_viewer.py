@@ -6,12 +6,11 @@ import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from promethee.avatar_reach import PIXIV_SHA256, load_profile
 from promethee.object_models import OBJECT_MODELS
 from promethee.pose import validate_pose
 from promethee.rendering import load_skeleton
 from promethee.world import validate_observation
-
-PIXIV_SHA256 = "12c2b97e95e700783a6a550dc0eee2d7880aeedccef9ae67bc4c5a2f0f2631a2"
 
 
 def motion_document(path, skeleton, objects=None):
@@ -34,7 +33,12 @@ def motion_document(path, skeleton, objects=None):
         )
         for points, rots in zip(positions, rotations, strict=True)
     ]
-    document = {"fps": fps, "frames": frames, "skeleton": load_skeleton(skeleton)}
+    document = {
+        "fps": fps,
+        "frames": frames,
+        "skeleton": load_skeleton(skeleton),
+        "avatar_profile": load_profile(),
+    }
     if objects is not None:
         if Path(objects).stat().st_size > 16 * 1024 * 1024:
             raise ValueError("Object replay exceeds 16 MiB.")

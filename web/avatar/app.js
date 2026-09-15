@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { VRMLoaderPlugin } from "@pixiv/three-vrm";
-import { CoreRetarget } from "./retarget.js";
+import { CoreRetarget, validateArmProfile } from "./retarget.js";
 import { ObjectVisuals } from "./objects.js";
 
 const status = document.querySelector("#status"),
@@ -72,6 +72,7 @@ try {
     const scale = coreHipHeight / (hipY - restBounds.min.y);
     if (!Number.isFinite(scale) || scale < 0.5 || scale > 2)
         throw new Error("Échelle de squelette incompatible.");
+    validateArmProfile(vrm, data.skeleton, scale, data.avatar_profile);
     const retarget = new CoreRetarget(vrm, data.skeleton, scale);
     const objects = new ObjectVisuals(scene, data.object_models ?? {});
     const attachedHands = [

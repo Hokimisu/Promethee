@@ -108,9 +108,10 @@ l'état attendu avant/après contact. Le replay contient 280 poses, échantillon
 nominalement à 20 Hz en omettant les délais de préparation CPU. Dans le VRM pixiv,
 l'écart maximal entre la main droite adaptée et la main Core est de 0,000000033 m.
 Les pieds visibles restent environ 17 mm au-dessus du sol : cet essai ne valide
-pas l'appui. Les doigts restent ouverts. Il reste à partager les contraintes
-de portée du VRM avec le contrôleur
-avant de déclarer T08 terminé.
+pas l'appui. Les doigts restent ouverts. Le contrôleur et le visualiseur
+partagent désormais un [profil de portée pixiv](avatar-arm-reach.md). Le raccord
+de l'apparence VRM à une session interactive reste à livrer avant de déclarer
+l'intégration complète.
 
 Trois essais supplémentaires utilisent le même code moteur, sans retoucher les
 seuils après le premier parcours :

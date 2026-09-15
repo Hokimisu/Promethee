@@ -89,7 +89,7 @@ def _poses(values):
     ]
 
 
-def prepare_object_action(observation, skeleton, action):
+def prepare_object_action(observation, skeleton, action, *, arm_reach_check=None):
     """Preflight the whole trajectory and return observed snapshots for playback."""
     import numpy as np
 
@@ -161,6 +161,8 @@ def prepare_object_action(observation, skeleton, action):
                 )
                 frames = []
                 for index, pose in enumerate(first + lift[1:]):
+                    if arm_reach_check is not None:
+                        arm_reach_check(pose, skeleton, ARMS[side][2])
                     value = copy.deepcopy(current)
                     value["pose"] = pose
                     if index >= len(first) - 1:
@@ -196,6 +198,8 @@ def prepare_object_action(observation, skeleton, action):
         )
         frames = []
         for index, pose in enumerate(poses):
+            if arm_reach_check is not None:
+                arm_reach_check(pose, skeleton, attachment["joint"])
             value = copy.deepcopy(current)
             value["pose"] = pose
             value["objects"][object_id] = follow_attachment(obj, pose)

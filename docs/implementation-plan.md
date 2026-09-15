@@ -236,10 +236,12 @@ mains occupées, cible absente, annulations avant/après contact et redémarrage
 La lecture VRM adapte la main visible ; les commandes directes sont disponibles
 dans le visualiseur Core. Aucun objet n'est créé automatiquement.
 
-T08 reste ouvert : doigts et peau ne sont pas modélisés, les contraintes de
-portée VRM restent propres au replay. Six parcours couvrent maintenant les deux
-géométries, des positions latérales, des rotations de ±90° et des translations
-dans la pièce. Une prise cinématique ne valide pas la physique.
+T08 reste ouvert : le raccord du VRM à une session interactive reste à livrer.
+Le [profil de portée pixiv](avatar-arm-reach.md) est maintenant vérifié avant
+exécution et comparé au vrai modèle dans le visualiseur. Six parcours couvrent
+les deux géométries, des positions latérales, des rotations de ±90° et des
+translations dans la pièce. Doigts et peau ne sont pas modélisés ; une prise
+cinématique ne valide pas la physique.
 
 **À modifier :** catalogue, validation, contrôleur et rendu.
 **À créer :** tests des interactions et fiche de provenance pour chaque asset introduit.

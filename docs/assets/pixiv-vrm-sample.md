@@ -40,3 +40,8 @@ Viser n'expose pas les articulations d'un GLB importé via son `GlbHandle`.
 La vue Three.js conserve les textures et anime ce modèle à partir des rotations
 Core enregistrées. Les mesures montrent encore des chaussures au-dessus du sol :
 ne pas annoncer cet avatar comme un corps dont les appuis sont validés.
+
+Un [profil de portée des bras](../avatar-arm-reach.md), dérivé des coordonnées
+du VRM et couvert par sa licence, permet maintenant au contrôleur de refuser
+une prise impossible pour cette apparence avant son exécution. Le navigateur
+vérifie que le modèle chargé correspond toujours à ce profil.

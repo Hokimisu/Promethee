@@ -1,9 +1,58 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { Vector3, Object3D, Quaternion } from "three";
-import { rotationQuaternion, BONE_MAP, CoreRetarget } from "./retarget.js";
+import {
+    rotationQuaternion,
+    BONE_MAP,
+    CoreRetarget,
+    validateArmProfile,
+} from "./retarget.js";
 import { ObjectVisuals } from "./objects.js";
 import { alignHand } from "./align-hand.js";
+
+test("appearance profile refuses changed scale, geometry and parentage", () => {
+    const profile = JSON.parse(
+        readFileSync(
+            new URL(
+                "../../src/promethee/pixiv_arm_profile.json",
+                import.meta.url,
+            ),
+        ),
+    );
+    const root = new Object3D(),
+        nodes = {};
+    for (const [name, bone] of Object.entries(profile.bones)) {
+        const node = new Object3D();
+        (nodes[bone.parent] ?? root).add(node);
+        node.position.fromArray(bone.rest_position);
+        if (bone.parent)
+            node.position.sub(
+                new Vector3(...profile.bones[bone.parent].rest_position),
+            );
+        nodes[name] = node;
+    }
+    root.updateMatrixWorld(true);
+    const vrm = { humanoid: { getNormalizedBoneNode: (name) => nodes[name] } };
+    const skeleton = { neutral_joints: [[0, -profile.core_hip_height, 0]] };
+    validateArmProfile(vrm, skeleton, profile.scale, profile);
+    assert.throws(
+        () => validateArmProfile(vrm, skeleton, profile.scale + 0.01, profile),
+        /échelle/,
+    );
+    nodes.rightHand.position.x += 0.001;
+    root.updateMatrixWorld(true);
+    assert.throws(
+        () => validateArmProfile(vrm, skeleton, profile.scale, profile),
+        /géométrie/,
+    );
+    nodes.rightHand.position.x -= 0.001;
+    root.attach(nodes.rightHand);
+    assert.throws(
+        () => validateArmProfile(vrm, skeleton, profile.scale, profile),
+        /géométrie/,
+    );
+});
 
 test("hand alignment reaches a world target without stretching the arm", () => {
     const root = new Object3D(),

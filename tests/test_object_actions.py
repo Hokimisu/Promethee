@@ -206,3 +206,22 @@ def test_second_geometry_cannot_spawn_over_existing_object(objects):
     )
     assert objects[1].get("overlap")["status"] == "failed"
     assert objects[1].get_world()["objects"] == before
+
+
+def test_avatar_reach_refusal_does_not_play_or_attach(objects):
+    controller, service, _, _, _ = objects
+    spawn(objects)
+    before = copy.deepcopy(controller.observation)
+    checked = []
+
+    def refuse(pose, skeleton, hand):
+        checked.append(hand)
+        raise ValueError("Appearance arm cannot reach this target.")
+
+    controller.arm_reach_check = refuse
+    command(objects, "appearance-limit", "take", {"object_id": "item"})
+    assert checked
+    assert service.get("appearance-limit")["status"] == "failed"
+    assert controller.observation == before
+    assert controller.trajectory is None
+    assert service.get_world()["avatar"]["holding"] is None

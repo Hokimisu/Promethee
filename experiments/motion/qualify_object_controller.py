@@ -11,6 +11,7 @@ from pathlib import Path
 
 import numpy as np
 
+from promethee.avatar_reach import PixivArmReach
 from promethee.avatar_viewer import motion_document
 from promethee.execution import ExecutionService
 from promethee.kinematic import KinematicController
@@ -53,7 +54,14 @@ def main():
     source_root = Path(__file__).resolve().parents[2]
     sources = [Path(__file__)] + [
         source_root / "src" / "promethee" / name
-        for name in ("object_actions.py", "object_models.py", "arm_reach.py", "kinematic.py")
+        for name in (
+            "object_actions.py",
+            "object_models.py",
+            "arm_reach.py",
+            "kinematic.py",
+            "avatar_reach.py",
+            "pixiv_arm_profile.json",
+        )
     ]
     source_hashes = {}
     for source in sources:
@@ -99,7 +107,10 @@ def main():
     )
     handle.release()
     controller = KinematicController(
-        service, ArchivedPoseWorker(args.output, motion["skeleton"]), object_interactions=True
+        service,
+        ArchivedPoseWorker(args.output, motion["skeleton"]),
+        object_interactions=True,
+        arm_reach_check=PixivArmReach().check,
     )
     controller.tick()
     observations, results = [], []
@@ -148,7 +159,10 @@ def main():
         controller.close()
         service = ExecutionService(Runtime(path))
         controller = KinematicController(
-            service, ArchivedPoseWorker(args.output, motion["skeleton"]), object_interactions=True
+            service,
+            ArchivedPoseWorker(args.output, motion["skeleton"]),
+            object_interactions=True,
+            arm_reach_check=PixivArmReach().check,
         )
         controller.tick()
         assert controller.observation == before
@@ -185,6 +199,7 @@ def main():
         "sample_period_seconds": 0.05,
         "preparation_delays_omitted_from_replay": True,
         "gravity_or_finger_grasp_validated": False,
+        "pixiv_arm_reach_checked_before_playback": True,
     }
     (args.output / "report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(json.dumps(report), flush=True)
