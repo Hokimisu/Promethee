@@ -214,3 +214,52 @@ restent nécessaires.
 
 Vérifications du changement : 302 tests Python réussis, deux tests optionnels
 ignorés, lint, formatage et construction du paquet réussis.
+
+## Préparation annulable en arrière-plan
+
+`AppearancePreparation` exécute la mesure Three.js, puis le validateur Python
+dans deux sous-processus successifs. Un seul travail est admis à la fois.
+`submit(document, mode=...)` fige le document et renvoie un identifiant ;
+`poll()` ne livre les poses qu'après validation complète. `cancel()` invalide
+aussi un résultat terminé mais pas encore consommé. Le prochain travail reçoit
+un autre identifiant. Ces méthodes sont appelées par une seule boucle propriétaire.
+
+Un thread supervise les processus ; la validation lourde ne s'exécute pas dans
+ce thread. L'essai initial y effectuait aussi la lecture Core et la validation,
+avec une pause de scrutation atteignant 122 ms au premier import de NumPy, puis
+54 ms après préchargement. La séparation du validateur supprime ces pauses sur
+les cas mesurés, au prix du démarrage d'un interpréteur supplémentaire.
+
+Chaque travail garde son document, sa mesure, ses poses et ses diagnostics dans
+un dossier distinct. Une erreur de géométrie, de validation ou de délai ne
+renvoie aucune pose. Le délai commun est de 60 secondes au maximum ; l'arrêt
+termine uniquement le sous-processus lancé pour ce travail, attend sa sortie
+et peut le tuer après deux secondes de grâce. Fermer le préparateur annule son
+travail et libère ses ressources. Aucune écriture du monde n'a lieu ici.
+
+Sur le vrai VRM et les mêmes séquences de calibration :
+
+| Cas | Résultat | Durée totale |
+|---|---|---:|
+| Objets 07 | 279 poses préparées et validées | 1,81 s |
+| Retour 16 | 120 poses préparées et validées | 1,40 s |
+| Bras levés 13 | 120 poses préparées et validées | 1,44 s |
+| Premier trajet 15 | Refus géométrique, aucune pose livrée | 0,33 s |
+
+Deux autres essais annulent respectivement le vrai processus géométrique et le
+vrai processus de validation. Leur sortie est constatée environ 20,3 ms après
+la demande, sans livraison de poses. L'outil scrute toutes les 20 ms ; ses
+intervalles maximaux restent entre 20,6 et 21,1 ms pendant les trois préparations
+réussies. La sérialisation initiale de `submit`, effectuée une fois dans le
+thread appelant, prend séparément 21 à 50 ms. Il ne s'agit ni d'une garantie
+temps réel ni d'une mesure du bouton d'arrêt de la session.
+
+Les données sont conservées dans `.local/appearance-process-qualification-03`.
+Les essais précédents sont conservés sous les suffixes `01` et `02`. Les tests
+de cycle de vie utilisent de vrais sous-processus avec des poses analytiques ;
+ils couvrent annulation, résultat tardif, fermeture, délai, refus et isolation
+du document soumis. Le raccord à `KinematicController` et la persistance de la
+pose visible restent à réaliser avant d'activer ce chemin dans la session.
+
+Vérifications de cette étape : 308 tests Python réussis, deux tests optionnels
+ignorés ; lint, formatage et construction du paquet réussis.

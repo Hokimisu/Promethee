@@ -181,3 +181,22 @@ def load_prepared_poses(path, motion_bytes):
             if np.linalg.norm(position - source["positions"][names.index(hand)]) > 1e-5:
                 raise ValueError("Prepared avatar wrist misses the observed Core target.")
     return artifact
+
+
+def main():
+    """Validate in a separate process so Core parsing cannot stall the body loop."""
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    for option in ("poses", "motion", "output"):
+        parser.add_argument("--" + option, type=Path, required=True)
+    args = parser.parse_args()
+    with args.motion.open("rb") as stream:
+        payload = stream.read(MAX_BYTES + 1)
+    result = load_prepared_poses(args.poses, payload)
+    with args.output.open("x", encoding="utf-8") as stream:
+        json.dump(result, stream, allow_nan=False)
+
+
+if __name__ == "__main__":
+    main()
