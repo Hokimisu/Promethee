@@ -64,3 +64,75 @@ navigateur restitue exactement les mêmes hauteurs, nombres de sommets et
 comptes de contact que le rapport sans textures. La lecture revient ensuite
 à sa pose initiale et ses contrôles redeviennent disponibles. Les sept tests
 web, le formatage et la construction du rendu passent.
+
+## Essai d'adaptation, hors session
+
+`measure-feet.mjs --settle` teste une translation verticale du bassin visible
+pour amener la chaussure la plus basse au sol. Les cibles des mains associées
+aux objets restent aux positions Core observées ; une nouvelle résolution des
+bras compense la translation. Les longueurs des membres ne changent pas.
+Sur les deux déplacements de calibration, cette translation donne un contact
+à chaque image mais révèle du glissement : maximum/P95 de 1,254/0,539 m/s pour
+le premier trajet 15, et 0,315/0,071 m/s pour le retour 16. Elle ne suffit donc
+pas à adapter la marche.
+
+L'option `--plant` teste en plus un ancrage des chevilles et des orientations
+de pied pendant les phases d'appui prédites par ARDY. Les jambes sont résolues
+sur la géométrie VRM. Le bassin descend seulement pour rendre ces cibles
+accessibles ; une enveloppe calculée sur toute la séquence limite les variations.
+Un dégagement de 1 cm protège le pied libre. La correction résiduelle est
+mesurée sur le maillage réel après résolution. La correction totale de racine
+reste limitée à 5 cm et 15 mm par image. Il ne s'agit pas d'un solveur physique.
+
+Les essais initiaux d'ancrage dépassaient la limite de variation verticale aux
+changements d'appui. L'enveloppe anticipe désormais les besoins futurs avec une
+pente de 13 mm par image ; la limite finale de 15 mm reste vérifiée après la
+correction du maillage. Le premier trajet 15 dépasse encore 5 cm et demeure
+refusé. Aucun seuil final n'est relevé pour le faire passer.
+
+| Calibration | Mode | Contact mesuré | Glissement maximal / P95 | Correction verticale maximale |
+|---|---|---:|---:|---:|
+| Série 15, premier trajet | Ancrage | Non qualifié | Refus avant mesure complète | Dépasse 5 cm |
+| Série 16, retour | Ancrage | 120 / 120 images | 0,03269 / 0,01309 m/s | 28,24 mm |
+| Série 13, bras levés | Ancrage | 120 / 120 images | 0,00392 / 0,00170 m/s | 24,08 mm |
+| Objets 07, prise/dépôt | Translation seule | 279 / 279 images | Moins de 10⁻⁸ m/s | 17,29 mm |
+
+Le parcours objets conserve la position de la main droite à 3,3 × 10⁻⁸ m près.
+Il n'archive pas de contacts ARDY : aucun indicateur d'appui n'y est inventé,
+et seul `--settle` est essayé. Les sauts articulaires maximaux mesurés après
+adaptation sont respectivement 0,210 m pour le retour 16, 0,171 m pour les bras
+levés et 0,0153 m pour les objets. Les faibles vitesses de semelle ne garantissent
+donc pas la douceur de tous les membres.
+
+La lecture expérimentale `.local/vrm-plant-preview-01` du retour 16 a été
+inspectée dans le navigateur, au départ, au milieu et à l'arrivée. Elle utilise
+les poses VRM précalculées, sans deuxième correction. Le bouton de mesure
+retrouve exactement les hauteurs du rapport : le point rendu le plus bas reste
+entre −2,57 × 10⁻¹¹ et 1,24 × 10⁻¹¹ m. Les bras libres conservent leurs
+différences de proportions ; aucune qualité de prise n'est déduite de ce trajet.
+
+Ces résultats proviennent de données ayant servi au réglage, pas d'une nouvelle
+qualification indépendante. Les fichiers, sources et empreintes sont archivés
+dans `.local/vrm-grounding-calibration-01`. Un échec est écrit explicitement dans
+le rapport, avec le nombre d'images effectivement mesurées ; il ne vaut pas une
+correction réussie.
+
+Pour reproduire l'essai, exporter les indicateurs réellement présents dans le
+NPZ, puis choisir le mode de mesure :
+
+```sh
+python experiments/motion/export_foot_trial.py --motion mouvement.npz --skeleton conventions.json --output mouvement.json
+node web/avatar/measure-feet.mjs .local/assets/pixiv-vrm/VRM1_Constraint_Twist_Sample.vrm mouvement.json nouveau-rapport.json --plant
+```
+
+`--plant` exige les quatre indicateurs booléens de contact par image ; il refuse
+leur absence ou une phase sans appui prédit. `--settle` n'en a pas besoin. Le
+mode sans option conserve la mesure du rendu original.
+
+`foot-planting-trial.js` n'est importé ni par le rendu en direct ni par le pilote.
+Avant un raccord, le contrôleur doit vérifier la portée des bras avec le
+décalage du bassin, transmettre les appuis et les corrections avec les poses,
+et conserver ces contraintes pendant les annulations et reprises. L'actuel
+profil de bras suppose les hanches à leur position Core : activer cette
+correction uniquement dans le navigateur contournerait sa vérification.
+Le rendu livré reste inchangé et T07 reste ouvert.

@@ -32,6 +32,11 @@ image en contact VRM sur trois séquences où Core garde un appui sur 120 images
 sur 120. Le lecteur et un outil local permettent désormais de vérifier cette
 différence ; sa correction reste nécessaire.
 
+Un [essai d'ancrage VRM hors session](avatar-foot-contact.md#essai-dadaptation-hors-session)
+obtient un contact sur toutes les images d'un déplacement et d'une posture de
+calibration. Un autre déplacement dépasse encore la correction autorisée de
+5 cm. Le raccord au contrôleur et les essais indépendants restent à réaliser.
+
 L'[apparence VRM](avatar-rendering.md) dispose d'une lecture animée en textures,
 vérifiée sur un déplacement et une posture ARDY. Les hanches sont conservées,
 mais les chaussures flottent de 1 à 4 cm sur ces essais ; les appuis ne sont
