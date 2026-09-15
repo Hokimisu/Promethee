@@ -21,6 +21,9 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--from-raw", action="store_true")
     parser.add_argument("--geometry-support", action="store_true")
+    parser.add_argument(
+        "--settle", action="store_true", help="Use bounded signed posture grounding."
+    )
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=False)
     (args.output / "trial-source.py").write_text(Path(__file__).read_text())
@@ -31,6 +34,7 @@ def main():
                 "request": str(args.request),
                 "from_raw": args.from_raw,
                 "geometry_support": args.geometry_support,
+                "settle": args.settle,
             },
             indent=2,
         )
@@ -51,7 +55,7 @@ def main():
     predicted = values["foot_contacts"].copy()
     if args.geometry_support:
         grounded = {key: value.copy() for key, value in values.items()}
-        ground_motion(grounded, skin)
+        ground_motion(grounded, skin, settle=args.settle)
         indices, weights = skin.lbs_indices.numpy(), skin.lbs_weights.numpy()
         masks = [
             (np.isin(indices, bones) * weights).sum(axis=-1) > 0.5 for bones in ([25, 26], [21, 22])
@@ -70,7 +74,7 @@ def main():
         values["foot_contacts"] = (predicted > 0.5) | geometry
     residual = stabilize_contacts(values, skeleton)
     values["foot_contacts"] = predicted
-    grounding = ground_motion(values, skin)
+    grounding = ground_motion(values, skin, settle=args.settle)
     np.savez(args.output / "anchored.npz", **values)
     joints, contact = values["posed_joints"], values["foot_contacts"] > 0.5
     speeds = (

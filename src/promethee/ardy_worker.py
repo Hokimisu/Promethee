@@ -158,7 +158,7 @@ def serve(args, send):
                     raise ValueError("Non-finite generated motion.")
                 if label == "processed":
                     continue_from_pose(values, job["start_pose"], cpu_skin.skeleton)
-                    if initial is not None and job["posture"] is None:
+                    if initial is not None:
                         contact_residual = stabilize_contacts(values, cpu_skin.skeleton)
                     grounding = ground_motion(values, cpu_skin, settle=job["posture"] is not None)
                 with (args.output / f"{job_id}-{label}.npz").open("xb") as stream:

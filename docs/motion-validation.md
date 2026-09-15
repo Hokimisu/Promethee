@@ -161,8 +161,9 @@ jambe ajuste les rotations sans allonger les os ni changer la trajectoire XZ
 du bassin. Une cible hors de portée est projetée dans l'espace atteignable ;
 son écart est mesuré. Le décalage se dissipe en huit images pendant la phase
 sans appui. Le tronc, les bras et le mouvement de balancement viennent d'ARDY.
-Ce traitement reste cinématique. Il précède la correction verticale du maillage
-et ne s'applique qu'aux déplacements, pas aux postures ni à l'initialisation.
+Ce traitement reste cinématique. Il précède la correction verticale du maillage.
+Lors de cette troisième série, il ne s'appliquait qu'aux déplacements ; son
+extension ultérieure aux postures est décrite plus bas.
 
 Les scripts `contact_order_trial.py` et `foot_anchor_trial.py` gardent les essais
 comparatifs. Replacer le correcteur C++ officiel après le raccord progressif,
@@ -346,3 +347,47 @@ l'arrivée : le corps reste debout et les bras arrivent au-dessus de la tête.
 Les chaussures du VRM ont une autre morphologie ; cette mesure Core ne prouve
 pas leur contact. T07 reste ouvert pour le glissement, la marche et les appuis
 de l'apparence finale.
+
+## Stabilisation des appuis pendant les postures
+
+Le cas bras levés refusé dans la série 12 a ensuite servi à tester le correcteur
+des jambes déjà utilisé en déplacement. Il réduit le glissement de surface de
+0,08449 / 0,06174 m/s (maximum / P95) à 0,01611 / 0,00893 m/s. Les huit postures
+distinctes des séries 09–12 passent cette comparaison : maximum de glissement
+entre 0,00540 et 0,01967 m/s, contact sur 120 images sur 120, raccord initial
+au plus à 12,42 mm. Elles servent désormais de calibration pour cette extension.
+
+Les sources et mesures restent dans `.local/posture-contact-calibration-01`
+à `08`. Reproduction d'un cas :
+
+```sh
+python experiments/motion/foot_anchor_trial.py --request JOB-request.json --output NOUVEAU_DOSSIER --from-raw --settle
+```
+
+Exécuter cette commande dans l'environnement ARDY. `--settle` sélectionne la
+correction verticale signée des postures ; il ne modifie pas le pilote. La
+comparaison repart de la sortie brute et du raccord initial, sans appliquer
+deux fois le correcteur. Aucun seuil n'a été augmenté.
+
+Le pilote applique maintenant `stabilize_contacts` à toute génération partant
+d'une pose observée, y compris une posture. L'initialisation reste inchangée.
+Les contacts prédits déterminent les phases d'ancrage et de relâchement ; le
+contrôle final continue de mesurer les sommets réels de semelle. Les jambes
+gardent leurs longueurs et les autres articulations restent issues d'ARDY.
+
+Deux nouvelles séries après cette décision, 13 (2201–2205) et 14 (2301–2305),
+terminent les quatre postures dans le vrai runtime :
+
+| Série / posture | Glissement max / P95 (m/s) | Contact de surface | Durée jusqu'au résultat |
+|---|---:|---:|---:|
+| 13 / bras levés | 0,00473 / 0,00222 | 120 / 120 images | 8,63 s |
+| 13 / debout | 0,00586 / 0,00242 | 120 / 120 images | 8,60 s |
+| 14 / bras levés | 0,00854 / 0,00535 | 120 / 120 images | 8,49 s |
+| 14 / debout | 0,01090 / 0,00749 | 120 / 120 images | 8,67 s |
+
+La vidéo `.local/video-posture-contacts-13/motion.mp4` et ses images de début,
+milieu et fin conservent le vrai maillage Core, sans correction de rendu.
+L'extension améliore les gestes sur place ; les déplacements terminent toujours
+seulement un essai sur quatre dans ces deux séries, et le contact du VRM reste
+à adapter. Ni équilibre physique ni fiabilité générale de la marche ne sont
+validés par ces résultats. T07 reste ouvert.
