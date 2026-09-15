@@ -123,7 +123,7 @@ def test_world_outcome_and_event_commit_or_roll_back_together(body):
     assert driver.complete(item)
 
 
-def test_controller_source_and_capabilities_are_explicit(tmp_path):
+def test_controller_source_and_capabilities_are_explicit(tmp_path, articulated_pose):
     runtime = Runtime(tmp_path / "session.sqlite3", data_origin="session")
     service = ExecutionService(runtime)
     with pytest.raises(ActionError, match="fixture"):
@@ -131,7 +131,10 @@ def test_controller_source_and_capabilities_are_explicit(tmp_path):
     handle = service.acquire_controller(source="kinematic", supported_actions=["move"])
     world = service.get_world()
     assert service.submit("unconfirmed", world["revision"], move([1, 0]))["status"] == "rejected"
-    handle.reconcile({key: world[key] for key in ("avatar", "objects")}, stopped=True)
+    observation = {key: world[key] for key in ("avatar", "objects")}
+    with pytest.raises(ActionError, match="articulated pose"):
+        handle.reconcile(observation, stopped=True)
+    handle.reconcile({**observation, "pose": articulated_pose}, stopped=True)
     unsupported = {
         "kind": "spawn",
         "args": {"object_id": "x", "asset": "plush", "position": [0, 0]},

@@ -1,6 +1,6 @@
-# Contrats exécutables — monde version 3
+# Contrats exécutables — monde version 4
 
-Ces exemples décrivent l'API Python locale. Aucun endpoint HTTP, WebSocket ou MCP n'est encore livré.
+Ces exemples décrivent l'API Python locale. Le rendu utilise HTTP/WebSocket sur l'interface de boucle locale. `run` propose des boutons de pilotage qui passent par le service d'exécution ; aucune API REST d'action ni MCP n'est encore livrée.
 
 ## Pilotage manuel
 
@@ -76,10 +76,10 @@ Le snapshot comporte aussi `data_origin` (`fixture`, `session`, `legacy`) et `re
 
 ## Migration explicite
 
-Ouvrir une ancienne base v1 ou v2 ne la modifie pas. Pour la migrer, choisir une sauvegarde qui n'existe pas :
+Ouvrir une ancienne base v1, v2 ou v3 ne la modifie pas. Pour la migrer, arrêter le pilote et choisir une sauvegarde qui n'existe pas :
 
 ```sh
-uv run promethee --data-dir .local/ancien-monde migrate --backup .local/sauvegardes/avant-v3.sqlite3
+uv run promethee --data-dir .local/ancien-monde migrate --backup .local/sauvegardes/avant-v4.sqlite3
 ```
 
 La sauvegarde SQLite est copiée et vérifiée pendant que les écritures sont exclues, avant la migration transactionnelle. Les données sans origine deviennent `legacy`, leur révision commence à zéro ; leur ID de monde, historique et plans sont préservés. Une nouvelle migration d'une base déjà à jour ne fait rien. Une sauvegarde existante n'est jamais écrasée et une version inconnue reste refusée.
@@ -90,7 +90,7 @@ Les noms d'objets identifient des instances ; les noms d'assets identifient des 
 
 ## Exécutions du corps
 
-`ExecutionService(runtime)` propose `get_world()`, `supported_actions()`, `submit(request_id, expected_revision, action)`, `get(request_id)`, `cancel(request_id)` et `events(after=0, limit=100)`. Cette API est livrée sur CPU ; aucun pilote 3D n'est encore intégré. Les tests injectent leur propre contrôleur `logical-test` dans une fixture.
+`ExecutionService(runtime)` propose `get_world()`, `supported_actions()`, `submit(request_id, expected_revision, action)`, `get(request_id)`, `cancel(request_id)` et `events(after=0, limit=100)`. Cette API reste testable sur CPU. Le pilote ARDY optionnel expose actuellement `move` et `posture`, cette dernière avec l'argument exact `name` (`standing` ou `arms_raised`). L'action logique `act` n'accepte pas `posture`. Les tests injectent leur propre contrôleur `logical-test` dans une fixture ; les essais ARDY et la commande `run` sont décrits dans [la qualification T07](motion-validation.md).
 
 `submit` persiste une enveloppe comportant l'ID, la révision attendue et l'action. Il ne déplace rien. Une retransmission strictement identique retourne l'état courant avec `replayed: true`, avant tout contrôle de révision. Un ID avec une autre enveloppe est refusé, même si la précédente exécution est terminée. Un nouvel essai utilise un nouvel ID.
 
@@ -119,7 +119,9 @@ Seul le pilote appelle `acquire_controller(source=..., supported_actions=[...], 
 - `feedback(request_id, sequence, status, observation=..., error=...)` fournit le retour ; la session est attachée au handle. Les séquences répétées ou anciennes, sessions périmées et retours après un état terminal sont ignorés.
 - `release()` abandonne la propriété et interrompt les exécutions actives.
 
-L'observation actuelle comprend exactement `avatar` et `objects`, avec les champs du monde logique. Les positions sont finies, dans les bornes, et les références aux objets tenus ou occupés doivent être cohérentes. Ce format provisoire ne contient pas les articulations : T07 l'étendra après l'essai moteur. `completed` et l'accusé `cancelled` exigent une observation complète ; `failed` exige une cause. Un échec sans observation rend le corps non confirmé.
+L'observation comprend `avatar` et `objects`, avec les champs du monde logique, et `pose` pour un pilote `kinematic` ou `physics`. Seul le pilote `logical-test` peut omettre cette pose. Les positions sont finies, dans les bornes, et les références aux objets tenus ou occupés doivent être cohérentes. `completed` et l'accusé `cancelled` exigent une observation complète ; `failed` exige une cause. Un échec sans observation rend le corps non confirmé.
+
+`pose` est aussi conservée à la racine du snapshot, initialement `null`. Son format exact est `{skeleton, positions, rotations}` : `skeleton` vaut `cskel27`, `positions` contient 27 triplets XYZ en mètres, Y vertical, et `rotations` contient 27 matrices globales 3 × 3 dans le même ordre articulaire que l'export T02. Les matrices sont finies, orthonormales et de déterminant +1 à une tolérance de 0,01. La projection XZ des hanches doit correspondre à `avatar.position` à 0,1 mm près. Ces contrôles détectent une observation incohérente ; ils ne certifient pas l'équilibre, la morphologie ou les contacts.
 
 Le champ `body` du monde contient `status` (`confirmed` ou `unconfirmed`), `observed_at` et `source`. `ExecutionService.get_world()` et la CLI `world` appliquent les expirations avant lecture. `Runtime.snapshot()` fournit seulement le dernier état persisté. Une lecture qui constate la perte du pilote peut donc modifier le statut et la révision, sans inventer une nouvelle pose.
 
@@ -131,4 +133,4 @@ L'expiration du bail ou du délai d'arrêt produit `interrupted`, conserve la de
 
 Pour reprendre après une panne : laisser expirer le bail de l'ancien pilote, acquérir un nouveau handle, obtenir et valider une observation complète du système effectivement arrêté, puis appeler `reconcile`. Après une annulation expirée avec un pilote encore propriétaire, ce même handle peut réconcilier une fois l'arrêt acquis. Ne pas recopier la destination souhaitée comme observation. L'ancienne exécution reste interrompue ; soumettre ensuite une nouvelle requête avec un nouvel ID et la révision relue. Aucun accès manuel à SQLite n'est requis.
 
-La migration v2 → v3 ajoute les tables d'exécution et initialise le corps comme non confirmé, sans modifier l'origine ni la révision existantes. La migration v1 passe successivement par les deux étapes, sous la même sauvegarde et transaction.
+La migration v2 → v3 ajoute les tables d'exécution. La migration v3 → v4 ajoute `pose: null`, conserve l'origine et la révision, rend le corps non confirmé et retire la propriété de l'ancien pilote. Les exécutions encore `accepted` ou `running` deviennent `interrupted` avec la cause `schema_migrated` et un événement atomique. Les anciens succès restent historiques. Une observation 2D n'est jamais transformée en pose articulée. Les migrations depuis v1 ou v2 traversent les étapes nécessaires sous la même sauvegarde et transaction ; un échec annule aussi les interruptions et la révocation du pilote.

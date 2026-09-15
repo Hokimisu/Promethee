@@ -53,3 +53,13 @@ def body(tmp_path):
     runtime = Runtime(tmp_path / "body.sqlite3")
     service = ExecutionService(runtime, clock=clock)
     return service, FakeBody(service), clock
+
+
+@pytest.fixture
+def articulated_pose():
+    # Dimension/rotation fixture only; this is not a plausible body or a model trial.
+    return {
+        "skeleton": "cskel27",
+        "positions": [[0.0, 1.0, 0.0] for _ in range(27)],
+        "rotations": [[[1, 0, 0], [0, 1, 0], [0, 0, 1]] for _ in range(27)],
+    }

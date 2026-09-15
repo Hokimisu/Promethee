@@ -16,6 +16,7 @@ def old_database(tmp_path):
     world.pop("revision")
     world.pop("data_origin")
     world.pop("body")
+    world.pop("pose")
     world.update(schema_version=1, world_id="historical-world")
     world["avatar"]["position"] = [1, 0]
     steps = [
@@ -141,13 +142,50 @@ def test_v2_upgrade_preserves_origin_revision_and_adds_execution_storage(tmp_pat
         world = read_world(conn)
         world.update(schema_version=2, revision=7)
         world.pop("body")
+        world.pop("pose")
         conn.execute("UPDATE world SET data=?", (json.dumps(world),))
         for table in ("executions", "execution_events", "controller"):
             conn.execute(f"DROP TABLE {table}")
     before = contents(path)
     backup = tmp_path / "before-v3.sqlite3"
-    assert migrate(path, backup)["schema_version"] == 3
+    assert migrate(path, backup)["schema_version"] == 4
     assert contents(backup) == before
     world = Runtime(path).require_session()
     assert world["revision"] == 7
     assert world["body"]["status"] == "unconfirmed"
+
+
+@pytest.mark.parametrize("fail", [False, True])
+def test_v3_upgrade_fences_driver_and_preserves_or_rolls_back_active_execution(
+    body, tmp_path, fail
+):
+    service, driver, _ = body
+    request = service.submit(
+        "move-old", service.get_world()["revision"], {"kind": "move", "args": {"position": [1, 0]}}
+    )
+    assert request["status"] == "accepted"
+    driver.start()
+    path = service.runtime.path
+    with service.runtime.connection() as conn:
+        world = read_world(conn)
+        world.update(schema_version=3)
+        world.pop("pose")
+        conn.execute("UPDATE world SET data=?", (json.dumps(world),))
+        if fail:
+            conn.execute("""CREATE TRIGGER fail_v4 BEFORE UPDATE ON world
+                BEGIN SELECT RAISE(ABORT, 'v4 rollback'); END;""")
+    before = contents(path)
+    backup = tmp_path / "before-v4.sqlite3"
+    if fail:
+        with pytest.raises(sqlite3.IntegrityError, match="v4 rollback"):
+            migrate(path, backup)
+        assert contents(path) == before
+    else:
+        migrate(path, backup)
+        state = service.get_world()
+        assert state["pose"] is None and state["body"]["status"] == "unconfirmed"
+        assert service.get("move-old")["status"] == "interrupted"
+        assert service.get("move-old")["error"]["code"] == "schema_migrated"
+        assert not driver.handle.heartbeat()
+        assert service.events()[-1]["kind"] == "interrupted"
+    assert contents(backup) == before

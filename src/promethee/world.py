@@ -5,6 +5,7 @@ import math
 import re
 
 from promethee.catalog import CATALOG
+from promethee.pose import validate_pose
 
 ACTION_FIELDS = {
     "spawn": {"object_id", "asset", "position"},
@@ -15,6 +16,24 @@ ACTION_FIELDS = {
     "sit": {"object_id"},
     "stand": set(),
 }
+BODY_ACTION_FIELDS = {**ACTION_FIELDS, "posture": {"name"}}
+POSTURES = {"standing", "arms_raised"}
+
+
+def validate_body_action(world, action):
+    """Check an intention without applying it to the authoritative world."""
+    if isinstance(action, dict) and action.get("kind") == "posture":
+        if set(action) != {"kind", "args"}:
+            raise ActionError("An action must contain exactly 'kind' and 'args'.")
+        args = action["args"]
+        if not isinstance(args, dict) or set(args) != {"name"}:
+            raise ActionError("Expected posture arguments: ['name']")
+        if not isinstance(args["name"], str) or args["name"] not in POSTURES:
+            raise ActionError("Unknown posture.")
+        if world["avatar"]["holding"] or world["avatar"]["seated_on"]:
+            raise ActionError("Posture changes require empty hands and no occupied support.")
+        return
+    apply(copy.deepcopy(world), action)
 
 
 class ActionError(ValueError):
@@ -116,14 +135,26 @@ def apply(world, action):
 
 
 def validate_observation(observation):
-    """Validate a full floor-plane observation; never accept world metadata from a driver."""
-    if not isinstance(observation, dict) or set(observation) != {"avatar", "objects"}:
-        raise ActionError("An observation must contain exactly avatar and objects.")
+    """Validate observations; only logical test drivers may omit an articulated pose."""
+    if not isinstance(observation, dict) or not {"avatar", "objects"} <= set(observation) <= {
+        "avatar",
+        "objects",
+        "pose",
+    }:
+        raise ActionError("An observation requires avatar, objects and optionally pose.")
     observed = copy.deepcopy(observation)
     avatar, objects = observed["avatar"], observed["objects"]
     if not isinstance(avatar, dict) or set(avatar) != {"position", "holding", "seated_on"}:
         raise ActionError("Invalid observed avatar fields.")
     avatar["position"] = position(avatar["position"])
+    try:
+        observed["pose"] = (
+            validate_pose(observed["pose"], avatar["position"])
+            if observed.get("pose") is not None
+            else None
+        )
+    except ValueError as exc:
+        raise ActionError(str(exc)) from exc
     if not isinstance(objects, dict) or len(objects) > 32:
         raise ActionError("Invalid observed objects.")
     for object_id, obj in objects.items():

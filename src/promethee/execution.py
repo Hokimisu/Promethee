@@ -14,7 +14,13 @@ from uuid import uuid4
 
 from promethee.migrations import read_world
 from promethee.runtime import encode
-from promethee.world import ACTION_FIELDS, ActionError, apply, identifier, validate_observation
+from promethee.world import (
+    BODY_ACTION_FIELDS,
+    ActionError,
+    identifier,
+    validate_body_action,
+    validate_observation,
+)
 
 ACTIVE = {"accepted", "running"}
 TERMINAL = {"rejected", "completed", "failed", "cancelled", "interrupted"}
@@ -87,6 +93,8 @@ class ExecutionService:
     @staticmethod
     def _observe(conn, observation, source, now):
         observed = validate_observation(observation)
+        if source != "logical-test" and observed["pose"] is None:
+            raise ActionError("A real body observation requires an articulated pose.")
         world = read_world(conn)
         before = copy.deepcopy(world)
         world.update(observed)
@@ -192,7 +200,7 @@ class ExecutionService:
                 code, message = "busy", "Another body execution is active."
             else:
                 try:
-                    apply(copy.deepcopy(world), action)
+                    validate_body_action(world, action)
                     if action["kind"] not in control["supported_actions"]:
                         raise ActionError("The controller does not implement this action.")
                 except ActionError as exc:
@@ -236,7 +244,8 @@ class ExecutionService:
         if not isinstance(supported_actions, (list, tuple, set)) or not supported_actions:
             raise ValueError("Declare at least one supported action.")
         if any(
-            not isinstance(kind, str) or kind not in ACTION_FIELDS for kind in supported_actions
+            not isinstance(kind, str) or kind not in BODY_ACTION_FIELDS
+            for kind in supported_actions
         ):
             raise ValueError("Unknown supported action.")
         lease_seconds = positive_seconds(lease_seconds)

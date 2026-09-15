@@ -24,9 +24,9 @@ Le plan séquentiel est un mécanisme du socle pour exécuter des commandes et t
 
 Lorsqu'une intention implique un objet, le runtime résout sa cible par identifiant, vérifie ses capacités et transmet les contraintes géométriques au contrôleur moteur. Celui-ci adapte les poses et retourne des événements d'exécution. Les exemples de commandes ne doivent pas devenir des intentions automatiquement suggérées à l'agent.
 
-ARDY est un candidat pour la génération de mouvements à partir de texte et de contraintes. Il faudra adapter le squelette, les unités, les axes, les cadences et les points de contact. Les lèvres et le visage demanderont une animation dédiée.
+ARDY Core produit désormais les poses du premier contrôleur cinématique. `ardy_worker.py` tourne dans son environnement Python 3.11 ; `motion_process.py` échange des messages JSON bornés et des fichiers numériques locaux avec le runtime CPU. `kinematic.py` lit les poses à 20 Hz et persiste des observations toutes les 250 ms. Les points de contact et la fiabilité des postures restent à qualifier ; les lèvres et le visage demanderont une animation dédiée.
 
-`execution.py` fournit désormais un cycle `accepted → running → completed / failed / cancelled`, avec rejet avant envoi et état `interrupted` après perte de confirmation. Les retours du pilote mettent le monde à jour atomiquement avec le résultat et l'événement. Le contrôleur possède un bail exclusif et chaque retour est lié à sa session. L'API est testée avec un pilote factice ; le pilote 3D reste à connecter. Le booléen `ok` conserve uniquement son sens logique.
+`execution.py` fournit désormais un cycle `accepted → running → completed / failed / cancelled`, avec rejet avant envoi et état `interrupted` après perte de confirmation. Les retours du pilote mettent le monde à jour atomiquement avec le résultat et l'événement. Le contrôleur possède un bail exclusif et chaque retour est lié à sa session. Des tests CPU et un premier raccord ARDY réel vérifient ces opérations ; voir les [mesures et limites T07](motion-validation.md). Le booléen `ok` conserve uniquement son sens logique.
 
 Les tickets T03–T05 du [plan d'implémentation](implementation-plan.md) précisent cette évolution, les rejets, l'état `interrupted` après perte de confirmation, les migrations et la compatibilité avec le socle logique.
 
@@ -46,6 +46,6 @@ Les événements d'interruption doivent parvenir à la conversation et au corps.
 
 ## Limites du socle
 
-Les positions sont sur un plan de sol de 10 × 10 mètres. La portée d'un mètre est une règle logique arbitraire pour les tests, pas une mesure anatomique. Le serveur de rendu local n'agit pas sur le monde ; il n'y a pas encore d'agent externe ni de synchronisation vocale. Le schéma v3 distingue l'origine des données, la révision du monde et la confirmation du corps, et stocke séparément les exécutions asynchrones. Les migrations sont explicites, transactionnelles et précédées d'une sauvegarde vérifiée ; les versions inconnues sont refusées.
+Les positions sont sur un plan de sol de 10 × 10 mètres. La portée d'un mètre est une règle logique arbitraire pour les tests, pas une mesure anatomique. `viewer.py` reste en lecture seule ; `run.py` ajoute des boutons passant par le service d'exécution et son unique pilote. Il n'y a pas encore d'agent externe ni de synchronisation vocale. Le schéma v4 conserve aussi la pose articulée observée. Les migrations sont explicites, transactionnelles et précédées d'une sauvegarde vérifiée ; les versions inconnues sont refusées.
 
 Une activité échouée conserve son erreur et son curseur ; elle n'est pas relancée automatiquement. La replanification après changement du monde sera une responsabilité de l'adaptateur agent.

@@ -85,14 +85,11 @@ def main():
         if motion is not None
         else None
     )
+    pose_info = server.gui.add_markdown("")
     if motion is not None:
         server.gui.add_markdown(
             "Lecture d'un enregistrement de test ; "
             "elle ne modifie pas le corps enregistré dans le monde."
-        )
-    else:
-        server.gui.add_markdown(
-            "Squelette neutre de diagnostic ; aucune posture du corps n'est encore observée."
         )
 
     def update_world(snapshot):
@@ -100,6 +97,14 @@ def main():
             f"Monde `{snapshot['world_id']}` · révision {snapshot['revision']} · "
             f"{snapshot['data_origin']} · corps {snapshot['body']['status']}"
         )
+        if motion is None:
+            pose_info.content = (
+                f"Dernière pose enregistrée : {snapshot['body']['observed_at']} "
+                f"({snapshot['body']['source']})."
+                if snapshot.get("pose") is not None
+                else "Squelette neutre de diagnostic ; "
+                "aucune posture du corps n'est encore observée."
+            )
         objects = snapshot["objects"]
         for key in markers.keys() - objects.keys():
             for handle in markers.pop(key):
@@ -139,7 +144,11 @@ def main():
                 read_failed = True
             next_read = tick + 0.25
         if motion is None:
-            points = np.asarray(rest_pose(skeleton, state["avatar"]["position"], args.heading))
+            points = np.asarray(
+                state["pose"]["positions"]
+                if state.get("pose") is not None
+                else rest_pose(skeleton, state["avatar"]["position"], args.heading)
+            )
         else:
             if playing.value:
                 if not previous_playing:

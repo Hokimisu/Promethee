@@ -6,7 +6,7 @@ Un avatar IA doté d'un corps, d'une mémoire et de capacités d'action dans un 
 
 Le projet fournit un espace que l'avatar peut percevoir et modifier, des objets utilisables et une mémoire consultable dans Obsidian. Un agent peut former et réviser ses intentions ; le monde lui renvoie ce qui s'est effectivement passé. Aucun scénario de vie, routine ou préférence d'objet n'est prescrit.
 
-**État actuel : socle local et rendu en lecture seule.** La démonstration reste une fixture déterministe dans un monde logique. Un visualiseur optionnel affiche le monde et rejoue les mouvements ARDY réellement mesurés. Le contrôle continu du corps, la voix et Hermes restent à intégrer. Aucun appel réseau, aucune clé API et aucun GPU ne sont nécessaires pour lancer le socle logique.
+**État actuel : socle local et premier pilote cinématique ARDY.** La démonstration reste une fixture déterministe dans un monde logique. Le rendu optionnel permet désormais un pilotage manuel du squelette avec progression et arrêt confirmés. La [qualification T07](docs/motion-validation.md) reste en cours : postures et contacts présentent encore des défauts mesurés. La voix et Hermes restent à intégrer. Aucun appel réseau, aucune clé API et aucun GPU ne sont nécessaires pour lancer le socle logique.
 
 ## Essayer
 

@@ -31,9 +31,28 @@ def main():
     migration.add_argument("--backup", type=Path, required=True)
     journal = commands.add_parser("journal", help="Export successful actions as Markdown.")
     journal.add_argument("--vault", type=Path, default=Path(".local/vault"))
+    run = commands.add_parser("run", help="Open a session with the real kinematic body.")
+    from promethee.run import configure
+
+    configure(run)
+    submit = commands.add_parser("submit", help="Submit an asynchronous body action.")
+    submit.add_argument("--request-id", required=True)
+    submit.add_argument("--expected-revision", type=int, required=True)
+    submit.add_argument("--file", type=Path, required=True)
+    for name in ("execution", "cancel"):
+        command = commands.add_parser(name)
+        command.add_argument("--request-id", required=True)
     args = parser.parse_args()
     exit_code = 0
     try:
+        if args.command == "run":
+            from promethee.run import run_session
+
+            try:
+                run_session(args)
+            except KeyboardInterrupt:
+                pass
+            return 0
         if args.command == "catalog":
             print(json.dumps(CATALOG, ensure_ascii=False, indent=2))
             return 0
@@ -42,10 +61,22 @@ def main():
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return 0
         action = None
-        if args.command == "act":
+        if args.command in {"act", "submit"}:
             action = json.loads(args.file.read_text(encoding="utf-8"))
+        if args.command in {"submit", "execution", "cancel"}:
+            if not (args.data_dir / "world.sqlite3").is_file():
+                raise ValueError("Open a world before controlling its body.")
         runtime = Runtime(args.data_dir / "world.sqlite3")
-        if args.command == "act":
+        if args.command == "submit":
+            result = ExecutionService(runtime).submit(
+                args.request_id, args.expected_revision, action
+            )
+            exit_code = 1 if result["status"] == "rejected" else 0
+        elif args.command in {"execution", "cancel"}:
+            service = ExecutionService(runtime)
+            operation = service.get if args.command == "execution" else service.cancel
+            result = operation(args.request_id)
+        elif args.command == "act":
             result = runtime.execute(args.request_id, action)
             exit_code = 0 if result["ok"] else 1
         elif args.command == "world":

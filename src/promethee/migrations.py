@@ -2,9 +2,10 @@
 
 import json
 import sqlite3
+from datetime import UTC, datetime
 from pathlib import Path
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 def create_execution_tables(conn):
@@ -32,6 +33,31 @@ def _upgrade(conn, world):
         world.update(
             schema_version=3, body={"status": "unconfirmed", "observed_at": None, "source": None}
         )
+    if world["schema_version"] == 3:
+        # A floor-plane observation cannot attest an articulated body. Fence old drivers
+        # and preserve unfinished requests as interrupted, never silently replay them.
+        now = datetime.now(UTC).isoformat()
+        for request_id, data in conn.execute(
+            "SELECT request_id,data FROM executions WHERE status IN ('accepted','running')"
+        ).fetchall():
+            item = json.loads(data)
+            item.update(
+                status="interrupted",
+                updated_at=now,
+                error={"code": "schema_migrated", "message": "Reconcile the articulated body."},
+            )
+            conn.execute(
+                "UPDATE executions SET status=?,data=? WHERE request_id=?",
+                ("interrupted", json.dumps(item), request_id),
+            )
+            event = {"kind": "interrupted", "recorded_at": now, "execution": item}
+            conn.execute(
+                "INSERT INTO execution_events(request_id,data) VALUES (?,?)",
+                (request_id, json.dumps(event)),
+            )
+        conn.execute("UPDATE controller SET data=? WHERE id=1", (json.dumps({"session_id": None}),))
+        world.update(schema_version=4, pose=None)
+        world["body"]["status"] = "unconfirmed"
 
 
 def read_world(conn):
@@ -61,7 +87,7 @@ def migrate(path, backup):
             version = world.get("schema_version")
             if version == SCHEMA_VERSION:
                 return {"schema_version": version, "migrated": False, "backup": None}
-            if type(version) is not int or version not in (1, 2):
+            if type(version) is not int or version not in (1, 2, 3):
                 raise ValueError(f"No migration available from schema {version!r}.")
             if path == backup:
                 raise ValueError("Backup must be a different, new file.")
