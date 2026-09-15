@@ -29,7 +29,13 @@ def main():
     )
     shutil.copyfile(__file__, args.output / "qualification-source.py")
     source_folder = Path(kinematic_module.__file__).parent
-    for name in ("kinematic.py", "ardy_worker.py", "ardy_geometry.py", "motion_process.py"):
+    for name in (
+        "kinematic.py",
+        "ardy_worker.py",
+        "ardy_geometry.py",
+        "ardy_contacts.py",
+        "motion_process.py",
+    ):
         shutil.copyfile(source_folder / name, args.output / name)
     (args.output / "purpose.json").write_text(
         json.dumps(

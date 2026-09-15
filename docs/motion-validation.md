@@ -153,13 +153,69 @@ préservée. Au redémarrage, cette même pose est réconciliée sans générati
 réémission de l'ancienne demande. Mesures dans
 `.local/manual-session-01/crash-measurement.json` et `restart-measurement.json`.
 
+## Troisième série : appuis des jambes et contrôle du maillage
+
+`ardy_contacts.py` conserve un point d'appui par talon et orteil tant que le
+contact prédit reste actif. Une résolution géométrique des deux segments de
+jambe ajuste les rotations sans allonger les os ni changer la trajectoire XZ
+du bassin. Une cible hors de portée est projetée dans l'espace atteignable ;
+son écart est mesuré. Le décalage se dissipe en huit images pendant la phase
+sans appui. Le tronc, les bras et le mouvement de balancement viennent d'ARDY.
+Ce traitement reste cinématique. Il précède la correction verticale du maillage
+et ne s'applique qu'aux déplacements, pas aux postures ni à l'initialisation.
+
+Les scripts `contact_order_trial.py` et `foot_anchor_trial.py` gardent les essais
+comparatifs. Replacer le correcteur C++ officiel après le raccord progressif,
+avec la racine finale ou toute sa trajectoire contrainte, augmente le maximum
+de glissement à environ 0,700 m/s sur le cas étudié. Le correcteur des jambes
+ramène ce maximum prédit à 0,067 m/s sur ce même cas. Les séries 02–04 servent
+désormais de calibration, sans être recomptées comme vérification indépendante.
+Un de leurs cas reste impossible à ramener dans l'enveloppe verticale de 5 cm.
+
+Deux séries nouvelles, 05 (graines 1401–1405) et 06 (1501–1505), ont terminé
+leurs quatre actions avec les anciens contrôles : quatre déplacements et quatre
+postures au total. Erreurs finales des déplacements : 10 à 22 mm. Cependant,
+le diagnostic indépendant des sommets de semelle contredit ce succès :
+
+| Déplacement | Maximum prédit (m/s) | Maximum du maillage (m/s) | P95 du maillage (m/s) |
+|---|---:|---:|---:|
+| Série 05, premier | 0,127 | 0,215 | 0,0157 |
+| Série 05, second | 0,042 | 3,439 | 0,2918 |
+| Série 06, premier | 0,007 | 1,229 | 0,0315 |
+| Série 06, second | 0,048 | 1,813 | 0,0216 |
+
+La pénétration résiduelle est inférieure à 4 × 10⁻⁹ m. Elle ne suffit pas à
+prouver un appui correct. La vidéo `video-runtime-holdout-05/motion.mp4` montre
+aussi un tronc fortement penché sur le second déplacement ; la marche ne peut
+donc pas être qualifiée de naturelle sur la base de ces chiffres. Le lecteur
+vidéo simple fonctionne, contrairement au précédent lecteur multi-vidéos.
+
+La version 2 des critères ajoute un rejet conservateur sur les sommets de pied
+portant plus de 50 % de poids de peau vers les quatre os de pied. Le même sommet
+doit être à moins de 5 mm du sol dans deux images successives. Les limites sont
+0,2 m/s au maximum et 0,05 m/s au percentile 95 ; l'absence de paire de contact
+vérifiable est également refusée. Les anciens seuils restent inchangés. Les
+mesures sont enregistrées dans `JOB-contacts.json` même si la trajectoire échoue.
+Ce critère géométrique ne certifie pas l'équilibre physique.
+
+La série 07 (graines 1601–1605), réservée après cette modification, termine les
+deux postures et refuse les deux déplacements avant lecture : maxima du maillage
+0,325 et 1,033 m/s. Le runtime conserve la position observée précédente. Les
+réussites historiques 05–06 ne sont pas réécrites ; elles attestent les contrôles
+de cette ancienne version et restent des données de qualification exclues de
+toute mémoire d'agent. Les neuf tests CPU de géométrie couvrent les rotations,
+les limites de portée, les segments dégénérés et le rejet d'une semelle glissante
+ou sans contact vérifiable. Les essais GPU restent nécessaires pour la marche.
+
 ## Limites empêchant de clôturer T07
 
 Les seuils incluent une erreur de cible ≤ 5 cm, une discontinuité initiale ≤ 2 cm,
 un saut de racine ≤ 12 cm par image, une racine dans la pièce et des rotations
 finies et orthonormales. Le nombre de déplacements refusés reste trop élevé.
-La fiabilité directionnelle, la revue complète des vidéos et le choix d'une
-mesure de glissement fidèle au contact réel restent à résoudre.
+La fiabilité directionnelle, la revue complète des vidéos et la correction des
+pics de glissement du maillage restent à résoudre. Le nouveau rejet les expose
+mais ne constitue pas une correction de la marche.
 
-La suite comprend aussi le raccord de [l'avatar anime](assets/pixiv-vrm-sample.md). Les interactions
-avec objets, Hermes, la mémoire d'agent et la voix ne sont pas encore livrés.
+L'[avatar anime](assets/pixiv-vrm-sample.md) suit les mouvements enregistrés dans
+une vue séparée en lecture seule. Les interactions corporelles avec objets,
+la conversation Hermes/Astra, la mémoire d'agent et la voix restent à livrer.
