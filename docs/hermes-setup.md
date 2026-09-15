@@ -130,6 +130,42 @@ ce mode d'API. Une connexion réelle exige encore ces vérifications.
 
 ## Résultats et limites
 
+`hermes_worker.py` exécute maintenant un appel de la boucle native
+`AIAgent.run_conversation` dans le Python séparé de Hermes. Il reçoit un message,
+l'historique natif et les identifiants de session/tour par stdin, puis retourne
+les messages, le texte et les indicateurs d'échec/interruption par stdout. Il
+vérifie que le profil MCP est lié au même tour. La clé vient uniquement de
+`PROMETHEE_OPENAI_API_KEY`, jamais du message JSON ; les erreurs d'entrée et les
+exceptions retournent une catégorie sans reproduire leur texte brut.
+
+L'hôte doit encore gérer le lancement, l'échéance, l'arrêt du processus et la
+persistance de l'historique. Il doit fermer le tour avant de diffuser une réponse
+et écarter les résultats obsolètes ou échoués. Le worker seul n'est donc pas une
+interface de conversation prête à utiliser. Il ne crée pas de monde, n'ouvre pas
+de tour et ne décide pas qu'une action corporelle a réussi.
+
+Le script [qualify_hermes_loop.py](../experiments/agent/qualify_hermes_loop.py)
+utilise le vrai Hermes et le vrai transport MCP, avec un fournisseur déterministe
+sur la boucle locale. Il vérifie deux lectures du monde, la présence du premier
+échange dans l'appel suivant, puis une proposition volontairement retardée par
+une correction. Celle-ci est refusée malgré une révision fraîche et sa réponse
+est écartée ; aucun événement d'action n'est créé. Un dernier appel simule un
+refus HTTP 401 pour vérifier la remontée de l'échec. Ce fournisseur est un doublon
+de test explicite, sans raisonnement ni accès à Astra.
+
+```sh
+python experiments/agent/qualify_hermes_loop.py --output .local/essai-hermes-neuf --hermes-python CHEMIN_PYTHON_HERMES --hermes-root CHEMIN_HERMES
+```
+
+Le Python appelant doit avoir l'extra `agent` installé. Le script conserve les
+sources, profils, messages et résultats dans le dossier neuf indiqué. Ces données
+de qualification sont exclues de toute mémoire personnelle. La première série
+réussie avec historique, `.local/hermes-loop-qualification-02`, a pris environ
+10,7 secondes par appel, incluant un nouveau processus et l'initialisation de
+Hermes. Ce délai ne mesure pas la vitesse d'Astra et reste trop élevé pour la voix.
+Hermes sonde aussi `/api/show` sur cet endpoint local ; le doublon répond 404 et
+les appels de conversation restent sur le protocole explicitement choisi.
+
 Le 15 septembre 2026, sous Windows 11 :
 
 - Les tests CPU vérifient la provenance, le refus de création implicite,
