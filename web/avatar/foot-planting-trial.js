@@ -13,6 +13,16 @@ function worldRotation(node, value) {
     node.updateMatrixWorld(true);
 }
 
+export function settledRootLowering(lowering, skinHeight) {
+    const requested = lowering + skinHeight;
+    const bounded = Math.max(-0.05, Math.min(0.05, requested));
+    if (!Number.isFinite(requested) || Math.abs(requested - bounded) > 0.0001)
+        throw new Error(
+            `Combined VRM root correction exceeds 5 cm outside the 0.1 mm surface contact tolerance: ${requested} m.`,
+        );
+    return bounded;
+}
+
 export class FootPlantingTrial {
     constructor(
         vrm,
@@ -140,9 +150,12 @@ export class FootPlantingTrial {
         );
         if (!Number.isFinite(height))
             throw new Error("Non-finite VRM skin-floor residual.");
+        // Keep the existing root budget and surface tolerance simultaneously.
+        // The final mesh measurement still decides whether a foot is in contact.
+        const settled = settledRootLowering(lowering, height);
         const hips = this.vrm.humanoid.getNormalizedBoneNode("hips");
         const target = hips.getWorldPosition(new Vector3());
-        target.y -= height;
+        target.y -= settled - lowering;
         hips.position.copy(hips.parent.worldToLocal(target));
         hips.updateMatrixWorld(true);
         for (const hand of hands) {
@@ -166,9 +179,6 @@ export class FootPlantingTrial {
         }
         this.vrm.update(0);
         this.vrm.scene.updateMatrixWorld(true);
-        lowering += height;
-        if (Math.abs(lowering) > 0.05)
-            throw new Error("Combined VRM root correction exceeds 5 cm.");
-        return -lowering;
+        return -settled;
     }
 }

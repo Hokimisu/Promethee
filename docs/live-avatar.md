@@ -128,3 +128,22 @@ d'échec à résoudre ; ces résultats ne valident pas encore les déplacements.
 avec des cibles et une graine choisies avant l'essai. Le dossier de sortie doit
 être neuf. Il conserve les sources, la configuration, les résultats et les
 observations horodatées ; ces dernières ne sont pas une vidéo à cadence garantie.
+
+La correction de mise au sol respecte désormais ensemble la limite de 5 cm du
+bassin et la tolérance de contact de 0,1 mm, au lieu de forcer systématiquement
+la semelle à exactement zéro. Un dépassement qui laisserait la surface hors de
+cette tolérance reste refusé. Les contrôles finaux du maillage, des vitesses et
+de la continuité restent identiques.
+
+Sur le déplacement refusé du premier essai, le dépassement était de 0,094 mm
+à la pose 25. Sa relecture corrigée passe les 120 poses, avec une correction
+plafonnée à 5 cm, un contact mesuré à chaque pose et une vitesse de surface
+maximale de 0,020 m/s. Il s'agit d'une recalibration sur une trajectoire archivée,
+pas d'une nouvelle réussite du runtime historique.
+
+Un nouvel essai distinct (`.local/runtime-prepared-holdout-02`, graines
+87123–87127) termine le déplacement vers `[-0.18, 0.22]` avec 4 mm d'erreur,
+puis les postures bras levés et debout. Le retour vers `[0.14, -0.08]` reste
+refusé pour absence d'appui prédit. Le déplacement préparé conserve 120 contacts
+de surface sur 120 poses, une vitesse maximale de 0,038 m/s et une correction
+verticale maximale de 49,5 mm. T07 reste ouvert.

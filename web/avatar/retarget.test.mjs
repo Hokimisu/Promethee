@@ -12,6 +12,23 @@ import { ObjectVisuals } from "./objects.js";
 import { alignHand } from "./align-hand.js";
 import { footSurfaceSummary } from "./foot-geometry.js";
 import { capturePreparedPose, applyPreparedPose } from "./prepared-pose.js";
+import { settledRootLowering } from "./foot-planting-trial.js";
+
+test("skin settling satisfies both root and contact budgets at their boundary", () => {
+    assert.equal(settledRootLowering(0.02, 0.001), 0.021);
+    for (const sign of [-1, 1]) {
+        const lowering = sign * 0.04984;
+        const residual = sign * 0.000253;
+        const result = settledRootLowering(lowering, residual);
+        assert.equal(Math.abs(result), 0.05);
+        assert.ok(Math.abs(lowering + residual - result) <= 0.0001);
+        assert.throws(() => settledRootLowering(sign * 0.0499, sign * 0.0003));
+    }
+    for (const value of [NaN, Infinity, -Infinity]) {
+        assert.throws(() => settledRootLowering(value, 0));
+        assert.throws(() => settledRootLowering(0, value));
+    }
+});
 
 test("prepared poses replay independently of previous state without changing lengths", () => {
     const scene = new Object3D();
