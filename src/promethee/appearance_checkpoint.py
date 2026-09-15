@@ -22,21 +22,23 @@ def validate_appearance(value, pose):
     if value is None:
         return None
     profile = load_profile()
+    fields = {
+        "version",
+        "avatar_sha256",
+        "core_pose_sha256",
+        "scale",
+        "mode",
+        "aligned_hands",
+        "frame",
+    }
+    if isinstance(value, dict) and value.get("version") == 2:
+        fields.add("alignment_weights")
     if (
         pose is None
         or not isinstance(value, dict)
-        or set(value)
-        != {
-            "version",
-            "avatar_sha256",
-            "core_pose_sha256",
-            "scale",
-            "mode",
-            "aligned_hands",
-            "frame",
-        }
+        or set(value) != fields
         or type(value["version"]) is not int
-        or value["version"] != 1
+        or value["version"] not in (1, 2)
         or value["avatar_sha256"] != PIXIV_SHA256
         or value["core_pose_sha256"] != pose_digest(pose)
         or type(value["scale"]) not in (int, float)
@@ -52,6 +54,18 @@ def validate_appearance(value, pose):
         or len(hands) != len(set(hands))
     ):
         raise ValueError("Invalid checkpoint hand alignment.")
+    if value["version"] == 2:
+        weights = value["alignment_weights"]
+        if (
+            not isinstance(weights, dict)
+            or set(weights) != {"RightHand", "LeftHand"}
+            or any(
+                type(w) not in (int, float) or not math.isfinite(w) or not 0 <= w <= 1
+                for w in weights.values()
+            )
+            or set(hands) != {hand for hand, weight in weights.items() if weight == 1}
+        ):
+            raise ValueError("Invalid checkpoint hand alignment weights.")
     frame = value["frame"]
     if (
         not isinstance(frame, dict)
@@ -85,4 +99,10 @@ def appearance_checkpoint(artifact, index, pose):
     checkpoint.update(
         core_pose_sha256=pose_digest(pose), frame=copy.deepcopy(artifact["frames"][index])
     )
+    if artifact["version"] == 2:
+        weights = copy.deepcopy(artifact["frame_alignment_weights"][index])
+        checkpoint.update(
+            alignment_weights=weights,
+            aligned_hands=[hand for hand, weight in weights.items() if weight == 1],
+        )
     return validate_appearance(checkpoint, pose)

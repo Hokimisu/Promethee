@@ -165,6 +165,9 @@ class AvatarLiveServer:
                     "avatar_profile": load_profile(),
                     "object_models": OBJECT_MODELS,
                     "controller_session": controller.handle.session_id,
+                    "prepared_appearance": controller.observation.get("appearance") is not None,
+                    "initial_appearance": controller.observation.get("appearance"),
+                    "initial_objects": controller.observation["objects"],
                     "actions": self.service.supported_actions(),
                 }
             )

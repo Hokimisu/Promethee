@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { applyPreparedPose } from "./prepared-pose.js";
 
 const labels = {
     accepted: "Accepté",
@@ -165,6 +166,14 @@ export function startLive({
     orbit.target.set(root[0], 1, root[2]);
     camera.position.set(root[0] + 3, 2, root[2] + 5.3);
     orbit.update();
+    if (data.prepared_appearance) {
+        applyPreparedPose(
+            retarget,
+            data.frames[0],
+            data.initial_appearance.frame,
+        );
+        objects.display(data.initial_objects);
+    }
     let previousTime = null;
     renderer.setAnimationLoop((now) => {
         if (latest && healthy && renderError === null) {
@@ -187,11 +196,25 @@ export function startLive({
                 if (heldHands.has(name)) weights[name] = 1;
             }
             try {
-                retarget.apply(
-                    latest.observation.pose,
-                    Object.keys(weights).filter((name) => weights[name] > 0),
-                    weights,
-                );
+                if (latest.observation.appearance) {
+                    applyPreparedPose(
+                        retarget,
+                        latest.observation.pose,
+                        latest.observation.appearance.frame,
+                    );
+                } else {
+                    if (data.prepared_appearance)
+                        throw new Error(
+                            "La pose visible confirmée est absente.",
+                        );
+                    retarget.apply(
+                        latest.observation.pose,
+                        Object.keys(weights).filter(
+                            (name) => weights[name] > 0,
+                        ),
+                        weights,
+                    );
+                }
                 objects.display(latest.observation.objects);
                 geometry.attributes.position.array.set(
                     edges.flatMap((edge) =>

@@ -15,6 +15,9 @@ def run_session(args):
     import numpy as np
     import viser
 
+    if args.prepare_avatar and args.avatar is None:
+        raise ValueError("Prepared appearance requires --avatar.")
+
     database = args.data_dir / "world.sqlite3"
     runtime = Runtime(
         database,
@@ -30,8 +33,18 @@ def run_session(args):
         wsl=args.wsl,
         encoder_url=args.encoder_url,
     )
+    appearance = None
     try:
         from promethee.avatar_reach import PixivArmReach
+
+        if args.prepare_avatar:
+            from promethee.appearance_process import AppearancePreparation
+
+            appearance = AppearancePreparation(
+                avatar=args.avatar,
+                script=args.web_root.parent / "measure-feet.mjs",
+                output=args.data_dir / "appearance",
+            )
 
         controller = KinematicController(
             service,
@@ -39,9 +52,12 @@ def run_session(args):
             seed=args.seed,
             object_interactions=args.object_interactions,
             arm_reach_check=PixivArmReach().check if args.object_interactions else None,
+            appearance_preparation=appearance,
         )
     except Exception:
         worker.close()
+        if appearance is not None:
+            appearance.close()
         raise
     server = None
     try:
@@ -219,6 +235,11 @@ def configure(parser):
         "--avatar", type=Path, help="Use the pinned pixiv VRM for the live session."
     )
     parser.add_argument("--web-root", type=Path, default=Path("web/avatar/dist"))
+    parser.add_argument(
+        "--prepare-avatar",
+        action="store_true",
+        help="Experimentally prepare and persist VRM support poses before playback.",
+    )
     parser.add_argument(
         "--object-interactions",
         action="store_true",

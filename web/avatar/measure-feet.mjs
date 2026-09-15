@@ -58,7 +58,7 @@ const scale =
 validateArmProfile(vrm, data.skeleton, scale, data.avatar_profile);
 const retarget = new CoreRetarget(vrm, data.skeleton, scale);
 const geometry = new FootGeometry(vrm);
-const hands = [
+const desiredHands = [
     ...new Set(
         (data.objects ?? []).flatMap((objects) =>
             Object.values(objects).flatMap((obj) =>
@@ -67,22 +67,57 @@ const hands = [
         ),
     ),
 ];
+const initialWeights = Object.fromEntries(
+    ["RightHand", "LeftHand"].map((name) => [
+        name,
+        data.initial_appearance
+            ? (data.initial_appearance.alignment_weights?.[name] ??
+              (data.initial_appearance.aligned_hands.includes(name) ? 1 : 0))
+            : desiredHands.includes(name)
+              ? 1
+              : 0,
+    ]),
+);
+const hands = [
+    ...new Set([
+        ...desiredHands,
+        ...Object.keys(initialWeights).filter(
+            (name) => initialWeights[name] > 0,
+        ),
+    ]),
+];
+const frameWeights = [];
+const fullHands = new Set();
+let fullHandSamples = 0;
+let maximumAlignmentError = 0;
 const samples = [];
 const preparedFrames = [];
 const offsets = [];
 let maximumHandError = 0;
 let maximumHipError = 0;
 let maximumJointStep = 0;
+let maximumInitialJointStep = null;
 let previousJoints = null;
 let failure = null;
 let planting;
 try {
+    let initialJoints = null;
+    if (data.initial_appearance) {
+        applyPreparedPose(
+            retarget,
+            data.initial_pose,
+            data.initial_appearance.frame,
+        );
+        initialJoints = retarget.bones.map(({ node }) =>
+            node.getWorldPosition(new Vector3()),
+        );
+    }
     if (mode === "--plant") {
         const collect = new FootPlantingTrial(vrm, retarget, geometry, {
             collect: true,
         });
         for (const [index, frame] of data.frames.entries())
-            collect.apply(frame, data.foot_contacts?.[index], hands);
+            collect.apply(frame, data.foot_contacts?.[index], []);
         const plan = [...collect.required];
         for (let i = 1; i < plan.length; i++)
             plan[i] = Math.max(plan[i], plan[i - 1] - 0.013);
@@ -91,10 +126,19 @@ try {
         planting = new FootPlantingTrial(vrm, retarget, geometry, { plan });
     }
     for (const [index, frame] of data.frames.entries()) {
-        retarget.apply(frame, hands);
+        retarget.apply(frame);
+        const weights = Object.fromEntries(
+            Object.entries(initialWeights).map(([name, start]) => [
+                name,
+                start +
+                    ((desiredHands.includes(name) ? 1 : 0) - start) *
+                        Math.min(1, index / 5),
+            ]),
+        );
+        frameWeights.push(weights);
         let offset = 0;
         if (mode === "--plant")
-            offset = planting.apply(frame, data.foot_contacts?.[index], hands);
+            offset = planting.apply(frame, data.foot_contacts?.[index], []);
         if (mode === "--settle") {
             const before = geometry.sample();
             offset = -Math.min(
@@ -111,8 +155,28 @@ try {
             const positions = frame.positions.map((p) => [...p]);
             positions[0][1] += offset;
             // Preserve observed hand targets; only the appearance pelvis is lowered.
-            retarget.apply({ ...frame, positions }, hands);
+            retarget.apply({ ...frame, positions });
         }
+        const targets = Object.fromEntries(
+            hands.map((hand) => {
+                const bone = hand === "RightHand" ? "rightHand" : "leftHand";
+                return [
+                    hand,
+                    vrm.humanoid
+                        .getRawBoneNode(bone)
+                        .getWorldPosition(new Vector3())
+                        .lerp(
+                            new Vector3(
+                                ...frame.positions[
+                                    data.skeleton.joint_names.indexOf(hand)
+                                ],
+                            ),
+                            weights[hand],
+                        ),
+                ];
+            }),
+        );
+        retarget.alignHands(frame, hands, weights);
         offsets.push(offset);
         if (
             offsets.length > 1 &&
@@ -130,19 +194,27 @@ try {
         preparedFrames.push(prepared);
         for (const hand of hands) {
             const bone = hand === "RightHand" ? "rightHand" : "leftHand";
-            maximumHandError = Math.max(
-                maximumHandError,
-                vrm.humanoid
-                    .getRawBoneNode(bone)
-                    .getWorldPosition(new Vector3())
-                    .distanceTo(
+            const actual = vrm.humanoid
+                .getRawBoneNode(bone)
+                .getWorldPosition(new Vector3());
+            maximumAlignmentError = Math.max(
+                maximumAlignmentError,
+                actual.distanceTo(targets[hand]),
+            );
+            if (weights[hand] === 1) {
+                fullHands.add(hand);
+                fullHandSamples++;
+                maximumHandError = Math.max(
+                    maximumHandError,
+                    actual.distanceTo(
                         new Vector3(
                             ...frame.positions[
                                 data.skeleton.joint_names.indexOf(hand)
                             ],
                         ),
                     ),
-            );
+                );
+            }
         }
         maximumHipError = Math.max(
             maximumHipError,
@@ -155,6 +227,15 @@ try {
         const joints = retarget.bones.map(({ node }) =>
             node.getWorldPosition(new Vector3()),
         );
+        if (index === 0 && initialJoints) {
+            maximumInitialJointStep = Math.max(
+                ...joints.map((point, i) => point.distanceTo(initialJoints[i])),
+            );
+            if (maximumInitialJointStep > 0.02)
+                throw new Error(
+                    "Prepared appearance does not continue the visible pose within 2 cm.",
+                );
+        }
         if (previousJoints)
             maximumJointStep = Math.max(
                 maximumJointStep,
@@ -197,10 +278,11 @@ const report = {
     ),
     uniform_scale: scale,
     maximum_joint_step_m: samples.length > 1 ? maximumJointStep : null,
+    maximum_initial_joint_step_m: maximumInitialJointStep,
     maximum_hip_error_m: samples.length ? maximumHipError : null,
-    maximum_attached_hand_error_m:
-        samples.length && hands.length ? maximumHandError : null,
-    measured_attached_hands: hands,
+    maximum_attached_hand_error_m: fullHandSamples ? maximumHandError : null,
+    maximum_alignment_target_error_m: maximumAlignmentError,
+    measured_attached_hands: [...fullHands],
     minimum_root_offset_m: offsets.length ? Math.min(...offsets) : null,
     maximum_root_offset_m: offsets.length ? Math.max(...offsets) : null,
     root_offsets_m: offsets,
@@ -236,7 +318,8 @@ if (preparedPath) {
             (foot) => foot.lowest_vertex_y_m < -0.001,
         ) ||
         maximumJointStep > 0.3 ||
-        maximumHandError > 1e-5
+        maximumHandError > 1e-5 ||
+        maximumAlignmentError > 1e-5
     )
         throw new Error(
             "Appearance geometry did not pass preparation gates; no poses exported.",
@@ -244,12 +327,13 @@ if (preparedPath) {
     writeFileSync(
         preparedPath,
         JSON.stringify({
-            version: 1,
+            version: 2,
             avatar_sha256: sha256(bytes),
             motion_sha256: sha256(motionBytes),
             scale,
             mode: mode ?? "none",
             aligned_hands: hands,
+            frame_alignment_weights: frameWeights,
             frames: preparedFrames,
         }),
         { flag: "wx" },

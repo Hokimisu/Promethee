@@ -171,3 +171,13 @@ def test_held_hand_must_be_aligned_in_the_visible_checkpoint(articulated_pose):
         validate_observation(observation)
     observation["appearance"]["aligned_hands"] = ["RightHand"]
     assert validate_observation(observation) == observation
+
+
+def test_partial_alignment_is_preserved_without_claiming_a_fully_aligned_hand(articulated_pose):
+    observation = observed(articulated_pose)
+    value = observation["appearance"]
+    value.update(version=2, alignment_weights={"RightHand": 0.4, "LeftHand": 0})
+    assert validate_observation(observation)["appearance"]["alignment_weights"]["RightHand"] == 0.4
+    value["aligned_hands"] = ["RightHand"]
+    with pytest.raises(ActionError, match="alignment weights"):
+        validate_observation(observation)

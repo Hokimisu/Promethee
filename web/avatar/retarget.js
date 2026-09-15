@@ -124,6 +124,10 @@ export class CoreRetarget {
         this.hips.parent.updateWorldMatrix(true, false);
         this.hips.position.copy(this.hips.parent.worldToLocal(position));
         this.hips.updateMatrixWorld(true);
+        this.alignHands(frame, attachedHands, handWeights);
+    }
+
+    alignHands(frame, attachedHands = [], handWeights = {}) {
         for (const name of new Set(attachedHands)) {
             const weight = handWeights[name] ?? 1;
             if (!Number.isFinite(weight) || weight < 0 || weight > 1)

@@ -8,6 +8,30 @@ import pytest
 from promethee import avatar_viewer
 
 
+def test_prepared_replay_keeps_checkpoints_and_refuses_partial_coverage(
+    tmp_path, monkeypatch, articulated_pose
+):
+    from test_appearance_checkpoint import observed
+
+    np = pytest.importorskip("numpy")
+    monkeypatch.setattr(avatar_viewer, "load_skeleton", lambda _: {})
+    motion, objects = tmp_path / "motion.npz", tmp_path / "objects.json"
+    np.savez(
+        motion,
+        posed_joints=[articulated_pose["positions"]] * 2,
+        global_rot_mats=[articulated_pose["rotations"]] * 2,
+        fps=20.0,
+    )
+    observations = [observed(articulated_pose), observed(articulated_pose)]
+    objects.write_text(json.dumps(observations))
+    data = avatar_viewer.motion_document(motion, None, objects)
+    assert data["appearance_frames"] == [item["appearance"] for item in observations]
+    observations[1]["appearance"] = None
+    objects.write_text(json.dumps(observations))
+    with pytest.raises(ValueError, match="every frame"):
+        avatar_viewer.motion_document(motion, None, objects)
+
+
 def test_viewer_serves_only_declared_files_and_no_mutations(tmp_path, monkeypatch):
     model = tmp_path / "avatar.vrm"
     model.write_bytes(b"local transport fixture, not a VRM qualification")

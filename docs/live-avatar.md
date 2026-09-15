@@ -77,3 +77,33 @@ réémission idempotente, arrêt avant départ et pendant l'approche ou après
 contact, refus des requêtes étrangères, flux périmé et chemins inconnus.
 Les tests JavaScript vérifient aussi les extrémités et l'absence d'accumulation
 du mélange des mains. Ils ne remplacent pas l'inspection du maillage réel.
+
+## Apparence préparée (expérimental)
+
+Ajouter `--prepare-avatar` pour calculer les poses VRM avant leur lecture.
+Node.js et les dépendances de `web/avatar` doivent rester installés : construire
+le seul fichier du navigateur ne suffit pas. Une base existante doit être au
+schéma 10, avec sauvegarde vérifiée lors de sa migration.
+
+Le contrôleur prépare la géométrie puis la fait vérifier dans deux processus
+annulables. Le corps conserve sa dernière observation pendant cette préparation.
+Chaque pose jouée persiste ensemble le corps Core, les objets, les rotations VRM
+et la correction verticale. Le navigateur applique cet instantané sans refaire
+l'alignement des mains. Après un arrêt ou un redémarrage, la même apparence est
+restaurée. Une session contenant ces poses exige ce mode pour continuer.
+
+Les instantanés d'apparence de version 2 conservent aussi le poids d'alignement
+de chaque main. La transition dure 0,25 s à partir du poids sauvegardé, y compris
+après une interruption partielle. Un objet tenu exige un alignement complet.
+Le premier essai sans cette transition produisait un saut de 13,4 cm ; il a été
+refusé avant lecture par la limite de continuité de 2 cm.
+
+Les qualifications locales `prepared-controller-qualification-02` (balle) et
+`prepared-controller-qualification-03` (doudou) couvrent prise, dépôt, arrêt avant
+et après contact, reprise et refus d'actions invalides. Le second essai couvre
+également l'arrêt pendant l'alignement partiel et sa restauration exacte. Ces
+essais utilisent une pose Core archivée, pas une nouvelle génération ARDY.
+La relecture des 408 poses du doudou conserve les instantanés VRM : le maillage
+affiché a été inspecté dans le navigateur, avec contact du pied gauche sur les
+408 poses et le pied droit à environ 3,5 mm du sol. Les doigts et l'équilibre
+physique ne sont pas validés. Ce mode ne clôt pas T07.

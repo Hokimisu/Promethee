@@ -11,6 +11,7 @@ from pathlib import Path
 
 import numpy as np
 
+from promethee.appearance_process import AppearancePreparation
 from promethee.avatar_reach import PixivArmReach
 from promethee.avatar_viewer import motion_document
 from promethee.execution import ExecutionService
@@ -47,6 +48,9 @@ def main():
     parser.add_argument("--offset-xz", type=float, nargs=2, default=[0, 0])
     parser.add_argument("--object-position", type=float, nargs=3, default=[0, 1.15, 0.25])
     parser.add_argument("--asset", choices=sorted(CONTACT_POINTS), default="plush")
+    parser.add_argument(
+        "--avatar", type=Path, help="Also prepare and persist the pinned VRM appearance."
+    )
     args = parser.parse_args()
     if not np.isfinite([args.heading_degrees, *args.offset_xz, *args.object_position]).all():
         parser.error("Trial coordinates must be finite.")
@@ -61,6 +65,9 @@ def main():
             "kinematic.py",
             "avatar_reach.py",
             "pixiv_arm_profile.json",
+            "appearance_process.py",
+            "prepared_avatar.py",
+            "appearance_checkpoint.py",
         )
     ]
     source_hashes = {}
@@ -106,24 +113,48 @@ def main():
         stopped=True,
     )
     handle.release()
-    controller = KinematicController(
-        service,
-        ArchivedPoseWorker(args.output, motion["skeleton"]),
-        object_interactions=True,
-        arm_reach_check=PixivArmReach().check,
-    )
-    controller.tick()
+
+    def create_controller():
+        controller = KinematicController(
+            service,
+            ArchivedPoseWorker(args.output, motion["skeleton"]),
+            object_interactions=True,
+            arm_reach_check=PixivArmReach().check,
+            appearance_preparation=AppearancePreparation(
+                avatar=args.avatar,
+                script=source_root / "web/avatar/measure-feet.mjs",
+                output=args.output / "appearance",
+            )
+            if args.avatar
+            else None,
+        )
+        started = time.monotonic()
+        while not controller.ready:
+            controller.tick()
+            if time.monotonic() - started > 20:
+                controller.close()
+                raise TimeoutError("Appearance initialization exceeded 20 seconds.")
+            time.sleep(0.02)
+        return controller
+
+    controller = create_controller()
     observations, results = [], []
 
     def perform(rid, kind, values, expected, cancel_after=None):
         started = time.monotonic()
         service.submit(rid, service.get_world()["revision"], {"kind": kind, "args": values})
         controller.tick()
-        play_start = time.monotonic()
+        play_start = time.monotonic() if controller.trajectory is not None else None
         while service.get(rid)["status"] in {"accepted", "running"}:
             if time.monotonic() - started > 20:
                 raise TimeoutError("Object action exceeded its qualification deadline.")
-            if cancel_after is not None and time.monotonic() - play_start >= cancel_after:
+            if controller.trajectory is not None and play_start is None:
+                play_start = time.monotonic()
+            if (
+                cancel_after is not None
+                and play_start is not None
+                and time.monotonic() - play_start >= cancel_after
+            ):
                 service.cancel(rid)
             time.sleep(0.05)
             controller.tick()
@@ -147,6 +178,17 @@ def main():
             {"object_id": "sample", "asset": args.asset, "position": point(args.object_position)},
             "completed",
         )
+        if args.avatar:
+            perform("cancel-alignment-blend", "take", {"object_id": "sample"}, "cancelled", 0.1)
+            before = copy.deepcopy(controller.observation)
+            assert before["avatar"]["holding"] is None
+            assert any(
+                0 < weight < 1 for weight in before["appearance"]["alignment_weights"].values()
+            )
+            controller.close()
+            service = ExecutionService(Runtime(path))
+            controller = create_controller()
+            assert controller.observation == before
         perform("take", "take", {"object_id": "sample"}, "completed")
         perform("occupied", "take", {"object_id": "sample"}, "rejected")
         placement = np.asarray(args.object_position) + [0, -0.02, 0.02]
@@ -158,13 +200,7 @@ def main():
         before = copy.deepcopy(controller.observation)
         controller.close()
         service = ExecutionService(Runtime(path))
-        controller = KinematicController(
-            service,
-            ArchivedPoseWorker(args.output, motion["skeleton"]),
-            object_interactions=True,
-            arm_reach_check=PixivArmReach().check,
-        )
-        controller.tick()
+        controller = create_controller()
         assert controller.observation == before
         replacement = np.asarray(args.object_position) + [0, 0, 0.01]
         perform("place-after-restart", "place", {"position": point(replacement)}, "completed")
@@ -197,7 +233,8 @@ def main():
         "object_spawn_orientation": "world identity, not rotated with the trial",
         "samples": len(observations),
         "sample_period_seconds": 0.05,
-        "preparation_delays_omitted_from_replay": True,
+        "preparation_delays_omitted_from_replay": not bool(args.avatar),
+        "prepared_appearance_enabled": bool(args.avatar),
         "gravity_or_finger_grasp_validated": False,
         "pixiv_arm_reach_checked_before_playback": True,
     }

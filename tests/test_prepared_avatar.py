@@ -156,3 +156,21 @@ def test_imperfect_core_matrix_uses_the_measured_three_conversion():
     np.testing.assert_allclose(normalized_core_rotation(matrix), expected, atol=1e-15)
     u, _, vt = np.linalg.svd(matrix)
     assert np.max(abs(expected - u @ vt)) > 1e-5
+
+
+@pytest.mark.parametrize("invalid", [False, True])
+def test_version_two_weights_must_match_the_requested_alignment(tmp_path, invalid):
+    payload, artifact = record()
+    artifact.update(
+        version=2,
+        frame_alignment_weights=[{"RightHand": 1.0, "LeftHand": 0.0} for _ in artifact["frames"]],
+    )
+    if invalid:
+        artifact["frame_alignment_weights"][0]["RightHand"] = 0.4
+    path = tmp_path / "poses.json"
+    path.write_text(json.dumps(artifact))
+    if invalid:
+        with pytest.raises(ValueError, match="transition differs"):
+            load_prepared_poses(path, payload)
+    else:
+        assert load_prepared_poses(path, payload) == artifact

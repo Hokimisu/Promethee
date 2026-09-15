@@ -48,6 +48,7 @@ def motion_document(path, skeleton, objects=None):
                 "Object replay must contain one complete observation per motion frame."
             )
         values = []
+        appearances = []
         for observation, frame in zip(observations, frames, strict=True):
             observed = validate_observation(observation)
             if observed["pose"] != frame:
@@ -58,7 +59,14 @@ def motion_document(path, skeleton, objects=None):
                         "Object replay requires a spatial pose and a known visual model."
                     )
             values.append(observed["objects"])
+            appearances.append(observed.get("appearance"))
         document.update(objects=values, object_models=OBJECT_MODELS)
+        if any(appearance is not None for appearance in appearances):
+            if any(appearance is None for appearance in appearances):
+                raise ValueError(
+                    "A prepared replay requires an appearance checkpoint for every frame."
+                )
+            document["appearance_frames"] = appearances
     return document
 
 

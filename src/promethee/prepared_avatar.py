@@ -67,11 +67,13 @@ def load_prepared_poses(path, motion_bytes):
         "aligned_hands",
         "frames",
     }
+    if isinstance(artifact, dict) and artifact.get("version") == 2:
+        fields.add("frame_alignment_weights")
     if (
         not isinstance(artifact, dict)
         or set(artifact) != fields
         or type(artifact["version"]) is not int
-        or artifact["version"] != 1
+        or artifact["version"] not in (1, 2)
         or artifact["avatar_sha256"] != PIXIV_SHA256
         or artifact["motion_sha256"] != hashlib.sha256(motion_bytes).hexdigest()
         or not _number(artifact["scale"])
@@ -109,6 +111,29 @@ def load_prepared_poses(path, motion_bytes):
         for obj in frame.values()
         if obj["spatial"].get("attachment") is not None
     }
+    desired_hands = expected_hands.copy()
+    initial_weights = {hand: float(hand in desired_hands) for hand in ("RightHand", "LeftHand")}
+    if document.get("initial_appearance") is not None:
+        from promethee.appearance_checkpoint import validate_appearance
+
+        initial = document["initial_pose"]
+        validate_pose(initial, [initial["positions"][0][0], initial["positions"][0][2]])
+        checkpoint = validate_appearance(document["initial_appearance"], initial)
+        if artifact["version"] != 2:
+            raise ValueError("Appearance continuation requires version 2 weights.")
+        initial_weights = checkpoint.get(
+            "alignment_weights",
+            {
+                hand: float(hand in checkpoint["aligned_hands"])
+                for hand in ("RightHand", "LeftHand")
+            },
+        )
+        expected_hands.update(hand for hand, weight in initial_weights.items() if weight > 0)
+    if artifact["version"] == 2:
+        if not isinstance(artifact["frame_alignment_weights"], list) or len(
+            artifact["frame_alignment_weights"]
+        ) != len(document["frames"]):
+            raise ValueError("Prepared avatar alignment weight count differs.")
     hands = artifact["aligned_hands"]
     if (
         not isinstance(hands, list)
@@ -137,7 +162,9 @@ def load_prepared_poses(path, motion_bytes):
         side = "right" if hand == "RightHand" else "left"
         mutable.update({side + "UpperArm", side + "LowerArm"})
     previous_offset = None
-    for source, prepared in zip(document["frames"], artifact["frames"], strict=True):
+    for index, (source, prepared) in enumerate(
+        zip(document["frames"], artifact["frames"], strict=True)
+    ):
         validate_pose(source, [source["positions"][0][0], source["positions"][0][2]])
         if (
             not isinstance(prepared, dict)
@@ -154,11 +181,31 @@ def load_prepared_poses(path, motion_bytes):
         previous_offset = offset
         rotations = {name: _rotation(q) for name, q in prepared["rotations"].items()}
         normalized = [normalized_core_rotation(rows) for rows in source["rotations"]]
+        weights = {hand: float(hand in hands) for hand in ("RightHand", "LeftHand")}
+        if artifact["version"] == 2:
+            weights = artifact["frame_alignment_weights"][index]
+            if (
+                not isinstance(weights, dict)
+                or set(weights) != {"RightHand", "LeftHand"}
+                or any(not _number(w) or not 0 <= w <= 1 for w in weights.values())
+            ):
+                raise ValueError("Invalid prepared avatar alignment weights.")
+            expected_weights = {
+                hand: start + (float(hand in desired_hands) - start) * min(1, index / 5)
+                for hand, start in initial_weights.items()
+            }
+            if any(abs(weights[hand] - expected_weights[hand]) > 1e-12 for hand in weights):
+                raise ValueError("Prepared avatar alignment transition differs from its source.")
+            for obj in objects[index].values():
+                attachment = obj["spatial"].get("attachment")
+                if attachment is not None and weights[attachment["joint"]] != 1:
+                    raise ValueError("A held object requires full visible hand alignment.")
         for name in set(bones) - mutable:
             if np.max(np.abs(rotations[name] - normalized[names.index(bones[name])])) > 1e-5:
                 raise ValueError("Prepared avatar changed an unadapted Core rotation.")
         for hand in hands:
-            reach.check(source, skeleton, hand, root_y_offset=offset)
+            if weights[hand] == 1:
+                reach.check(source, skeleton, hand, root_y_offset=offset)
             side = "right" if hand == "RightHand" else "left"
             chain = [
                 "hips",
@@ -172,13 +219,18 @@ def load_prepared_poses(path, motion_bytes):
             ]
             position = np.array(source["positions"][0], dtype=float)
             position[1] += offset
+            baseline = position.copy()
             for parent, child in zip(chain[:-1], chain[1:], strict=True):
                 rest = profile["bones"]
                 delta = (
                     np.array(rest[child]["rest_position"]) - rest[parent]["rest_position"]
                 ) * profile["scale"]
                 position += rotations[parent] @ delta
-            if np.linalg.norm(position - source["positions"][names.index(hand)]) > 1e-5:
+                baseline += normalized[names.index(bones[parent])] @ delta
+            target = baseline + weights[hand] * (
+                np.asarray(source["positions"][names.index(hand)]) - baseline
+            )
+            if np.linalg.norm(position - target) > 1e-5:
                 raise ValueError("Prepared avatar wrist misses the observed Core target.")
     return artifact
 

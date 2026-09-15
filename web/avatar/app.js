@@ -5,6 +5,7 @@ import { VRMLoaderPlugin } from "@pixiv/three-vrm";
 import { CoreRetarget, validateArmProfile } from "./retarget.js";
 import { ObjectVisuals } from "./objects.js";
 import { startLive } from "./live.js";
+import { applyPreparedPose } from "./prepared-pose.js";
 import { FootGeometry, footSurfaceSummary } from "./foot-geometry.js";
 
 const status = document.querySelector("#status"),
@@ -111,7 +112,14 @@ try {
         ];
         // Check the full clip before enabling playback, including the approach.
         vrm.scene.visible = false;
-        if (attachedHands.length) {
+        if (data.appearance_frames) {
+            for (const [index, appearance] of data.appearance_frames.entries())
+                applyPreparedPose(
+                    retarget,
+                    data.frames[index],
+                    appearance.frame,
+                );
+        } else if (attachedHands.length) {
             for (const frame of data.frames)
                 retarget.apply(frame, attachedHands);
         }
@@ -143,7 +151,13 @@ try {
             anchorFrame = 0;
         function display(frame) {
             index = frame;
-            retarget.apply(data.frames[index], attachedHands);
+            if (data.appearance_frames)
+                applyPreparedPose(
+                    retarget,
+                    data.frames[index],
+                    data.appearance_frames[index].frame,
+                );
+            else retarget.apply(data.frames[index], attachedHands);
             objects.display(data.objects?.[index] ?? {});
             geometry.attributes.position.array.set(
                 edges.flatMap((edge) =>
@@ -281,7 +295,10 @@ try {
                     lowest_rendered_vertex_y_m: minimum,
                     maximum_floor_penetration_m: Math.max(0, -minimum),
                     highest_lowest_vertex_y_m: highestMinimum,
-                    floor_correction_applied: false,
+                    floor_correction_applied: Boolean(data.appearance_frames),
+                    prepared_appearance_replayed: Boolean(
+                        data.appearance_frames,
+                    ),
                     foot_support_validated: false,
                     foot_surface: footSurfaceSummary(footSamples),
                 },

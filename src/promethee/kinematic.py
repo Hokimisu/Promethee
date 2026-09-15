@@ -79,6 +79,16 @@ def posture_reached(pose, name):
     return max(wrists) < points[4][1] and points[6][1] > points[0][1] + 0.5
 
 
+def read_contact_flags(path):
+    import numpy as np
+
+    with np.load(path, allow_pickle=False) as data:
+        flags = data["foot_contacts"]
+        if flags.dtype != np.bool_ or flags.ndim != 2 or flags.shape[1] != 4:
+            raise ValueError("Appearance preparation requires archived boolean contact flags.")
+        return flags.tolist()
+
+
 class KinematicController:
     def __init__(
         self,
@@ -89,8 +99,11 @@ class KinematicController:
         seed=0,
         object_interactions=False,
         arm_reach_check=None,
+        appearance_preparation=None,
     ):
         world = service.runtime.require_session()
+        if world.get("appearance") is not None and appearance_preparation is None:
+            raise ActionError("Restore this session with prepared appearance mode enabled.")
         if world["avatar"]["seated_on"] or (
             not object_interactions and (world["objects"] or world["avatar"]["holding"])
         ):
@@ -107,6 +120,12 @@ class KinematicController:
             + (["spawn", "take", "place"] if object_interactions else []),
         )
         self.observation = {key: copy.deepcopy(world[key]) for key in ("avatar", "objects", "pose")}
+        if appearance_preparation is not None:
+            self.observation["appearance"] = copy.deepcopy(world.get("appearance"))
+        self.appearance_preparation = appearance_preparation
+        self.appearance_job = None
+        self.preparation = None
+        self.appearance_frames = None
         self.active = None
         self.sequence = 0
         self.job_id = None
@@ -152,6 +171,9 @@ class KinematicController:
         ):
             raise RuntimeError("Controller feedback lost ownership or its execution.")
         if status != "running":
+            if self.appearance_preparation is not None:
+                self.appearance_preparation.cancel()
+            self.appearance_job = self.preparation = self.appearance_frames = None
             self.message = {
                 "completed": "Mouvement terminé.",
                 "cancelled": "Mouvement arrêté.",
@@ -162,6 +184,80 @@ class KinematicController:
             self.job_id = None
             self.object_frames = None
             self.object_expected = None
+
+    def _prepare_appearance(self, poses, object_frames=None, contacts=None):
+        from promethee.avatar_reach import load_profile
+        from promethee.spatial import follow_attachment
+
+        document = {
+            "fps": 20,
+            "frames": poses,
+            "skeleton": self.skeleton,
+            "avatar_profile": load_profile(),
+        }
+        if object_frames is not None:
+            document["objects"] = [frame["objects"] for frame in object_frames]
+        else:
+            document["objects"] = []
+            for pose in poses:
+                objects = copy.deepcopy(self.observation["objects"])
+                held = self.observation["avatar"]["holding"]
+                if held:
+                    objects[held] = follow_attachment(objects[held], pose)
+                document["objects"].append(objects)
+        if contacts is not None:
+            document["foot_contacts"] = contacts
+        if self.observation.get("appearance") is not None:
+            document.update(
+                initial_pose=self.pose, initial_appearance=self.observation["appearance"]
+            )
+        self.appearance_job = self.appearance_preparation.submit(
+            document, mode="--plant" if contacts is not None else "--settle"
+        )
+        self.preparation = {
+            "poses": poses,
+            "objects": object_frames,
+            "expected": copy.deepcopy(self.observation),
+        }
+        self.message = "Préparation de la pose visible."
+
+    def _appearance_result(self, item):
+        if item["job_id"] != self.appearance_job:
+            return  # Includes a cancelled job whose result arrived after its acknowledgement.
+        from promethee.appearance_checkpoint import appearance_checkpoint
+
+        try:
+            if item["type"] != "prepared":
+                raise ValueError(item.get("error", "Appearance preparation was cancelled."))
+            pending = self.preparation
+            if self.observation != pending["expected"]:
+                raise ValueError("The observed body changed during appearance preparation.")
+            poses = pending["poses"]
+            artifact = item["appearance"]
+            if len(artifact["frames"]) != len(poses):
+                raise ValueError("Prepared appearance frame count differs from the body.")
+            appearances = [appearance_checkpoint(artifact, i, pose) for i, pose in enumerate(poses)]
+            if not self.ready:
+                self._observe_pose(poses[0])
+                self.observation["appearance"] = appearances[0]
+                if not self.handle.reconcile(self.observation, stopped=True):
+                    raise RuntimeError("Appearance initialization lost controller ownership.")
+                self.ready = True
+                self.job_id = None
+                self.message = "Corps cinématique prêt."
+            else:
+                self.trajectory = poses
+                self.appearance_frames = appearances
+                self.object_frames = pending["objects"]
+                self.object_expected = copy.deepcopy(self.observation)
+                self.frame = 0
+                self.play_started = self.clock()
+                self.message = "Mouvement en cours."
+            self.appearance_job = self.preparation = None
+        except (ValueError, KeyError, TypeError) as exc:
+            if not self.active:
+                raise RuntimeError(f"Cannot initialize the visible body: {exc}") from exc
+            self._feedback("failed", str(exc))
 
     def _submit_motion(self, target, text, frames):
         self.job_id = uuid4().hex
@@ -219,7 +315,7 @@ class KinematicController:
                     candidate["pose"] = pose
                     held = candidate["avatar"]["holding"]
                     if held:
-                        if self.arm_reach_check is not None:
+                        if self.arm_reach_check is not None and self.appearance_preparation is None:
                             self.arm_reach_check(
                                 pose,
                                 self.skeleton,
@@ -233,6 +329,19 @@ class KinematicController:
             if not self.active:
                 raise RuntimeError(f"Cannot initialize the body: {exc}") from exc
             self._feedback("failed", str(exc))
+            return
+        if self.appearance_preparation is not None:
+            try:
+                self._prepare_appearance(
+                    poses if self.ready else poses[:1],
+                    contacts=read_contact_flags(self.worker.output / expected_file)
+                    if self.ready
+                    else None,
+                )
+            except (ValueError, OSError, KeyError) as exc:
+                if not self.active:
+                    raise RuntimeError(f"Cannot initialize the visible body: {exc}") from exc
+                self._feedback("failed", str(exc))
             return
         if not self.ready:
             # Instantiation of the virtual body; no action or hidden activity is created.
@@ -271,12 +380,22 @@ class KinematicController:
                 )
                 if self.pose is not None:
                     held = self.observation["avatar"]["holding"]
-                    if held and self.arm_reach_check is not None:
+                    if (
+                        held
+                        and self.arm_reach_check is not None
+                        and self.appearance_preparation is None
+                    ):
                         self.arm_reach_check(
                             self.pose,
                             self.skeleton,
                             self.observation["objects"][held]["spatial"]["attachment"]["joint"],
                         )
+                    if (
+                        self.appearance_preparation is not None
+                        and self.observation.get("appearance") is None
+                    ):
+                        self._prepare_appearance([self.pose])
+                        continue
                     # This body is virtual: restore its last persisted checkpoint explicitly.
                     if not self.handle.reconcile(self.observation, stopped=True):
                         raise RuntimeError("Checkpoint restoration lost ownership.")
@@ -288,6 +407,9 @@ class KinematicController:
                     )
             elif item["type"] in {"generated", "error"}:
                 self._result(item)
+        if self.appearance_preparation is not None:
+            while item := self.appearance_preparation.poll():
+                self._appearance_result(item)
         now = self.clock()
         if not self.ready and now - self.started_at > 180:
             raise TimeoutError("Motion initialization exceeded 180 seconds.")
@@ -302,9 +424,12 @@ class KinematicController:
             self.frame = min(int((now - self.play_started) * 20), len(self.trajectory) - 1)
             if self.object_frames is not None:
                 self.observation = copy.deepcopy(self.object_frames[self.frame])
-                self.object_expected = copy.deepcopy(self.observation)
             else:
                 self._observe_pose(self.trajectory[self.frame])
+            if self.appearance_frames is not None:
+                self.observation["appearance"] = copy.deepcopy(self.appearance_frames[self.frame])
+            if self.object_frames is not None:
+                self.object_expected = copy.deepcopy(self.observation)
             if self.frame == len(self.trajectory) - 1:
                 action = self.active["envelope"]["action"]
                 if action["kind"] == "posture" and not posture_reached(
@@ -318,7 +443,12 @@ class KinematicController:
             elif now >= self.next_checkpoint:
                 self._feedback("running")
                 self.next_checkpoint = now + 0.25
-        if self.ready and self.active is None and self.worker.pending is None:
+        if (
+            self.ready
+            and self.active is None
+            and self.worker.pending is None
+            and (self.appearance_preparation is None or self.appearance_preparation.pending is None)
+        ):
             self.active = self.handle.claim_next()
             if self.active:
                 self.sequence = 0
@@ -331,7 +461,7 @@ class KinematicController:
                     try:
                         validate_body_action(self.observation, action)
                         frames = prepare_object_action(
-                            self.observation,
+                            {key: self.observation[key] for key in ("avatar", "objects", "pose")},
                             self.skeleton,
                             action,
                             arm_reach_check=self.arm_reach_check,
@@ -339,6 +469,13 @@ class KinematicController:
                     except (ValueError, KeyError) as exc:
                         self._feedback("failed", str(exc))
                         return
+                    if self.appearance_preparation is not None:
+                        if action["kind"] != "spawn":
+                            self._prepare_appearance([frame["pose"] for frame in frames], frames)
+                            return
+                        # Spawning changes only objects: retain the exact observed body.
+                        for frame in frames:
+                            frame["appearance"] = copy.deepcopy(self.observation["appearance"])
                     self.object_frames = frames
                     self.object_expected = copy.deepcopy(self.observation)
                     self.trajectory = [frame["pose"] for frame in frames]
@@ -366,4 +503,8 @@ class KinematicController:
             try:
                 self.handle.release()
             finally:
-                self.worker.close()
+                try:
+                    self.worker.close()
+                finally:
+                    if self.appearance_preparation is not None:
+                        self.appearance_preparation.close()
