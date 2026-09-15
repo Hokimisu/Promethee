@@ -39,12 +39,40 @@ export function captureFootState(vrm, geometry) {
                     new Quaternion(),
                 ),
                 knee: bone(side, "LowerLeg").getWorldPosition(new Vector3()),
+                toe: bone(side, "Toes").getWorldPosition(new Vector3()),
+                surface: surfaces[side],
                 supporting:
                     Math.abs(Math.min(...surfaces[side].map((p) => p[1]))) <=
                     0.0001,
             },
         ]),
     );
+}
+
+function supportPivot(state, mode) {
+    const direction = state.toe.clone().sub(state.target);
+    direction.y = 0;
+    if (direction.lengthSq() < 1e-12)
+        throw new Error("Foot support needs a heel-to-toe direction.");
+    direction.normalize();
+    const floor = Math.min(...state.surface.map((point) => point[1]));
+    let vertex = -1;
+    let best = -Infinity;
+    for (const [index, point] of state.surface.entries()) {
+        // Select a sole vertex; the final 0.1 mm contact test is unchanged.
+        if (point[1] > floor + 0.002) continue;
+        const score =
+            new Vector3(...point).sub(state.target).dot(direction) *
+            (mode === "toe" ? 1 : -1);
+        if (score > best) {
+            best = score;
+            vertex = index;
+        }
+    }
+    if (vertex < 0) throw new Error("Foot support has no contact surface.");
+    const position = new Vector3(...state.surface[vertex]);
+    position.y = 0;
+    return { mode, vertex, position };
 }
 
 export class FootPlantingTrial {
@@ -63,6 +91,7 @@ export class FootPlantingTrial {
         this.collect = collect;
         this.required = [];
         this.initial = initial;
+        this.previous = initial;
         if (initial) {
             for (const side of ["left", "right"])
                 if (initial[side].supporting)
@@ -98,11 +127,50 @@ export class FootPlantingTrial {
             );
             guides[side] = knee;
             const height = Math.min(...baseline[side].map((p) => p[1]));
-            const supporting = contacts[index * 2] || contacts[index * 2 + 1];
+            const heel = contacts[index * 2],
+                toe = contacts[index * 2 + 1];
+            const supporting = heel || toe;
+            const mode = heel && toe ? "sole" : toe ? "toe" : "heel";
             if (!supporting) delete this.anchors[side];
-            if (supporting && !this.anchors[side]) {
+            if (supporting && mode !== "sole") {
+                if (this.anchors[side]?.mode !== mode) {
+                    const previous = this.previous?.[side];
+                    this.anchors[side] = supportPivot(
+                        previous && this.anchors[side]
+                            ? previous
+                            : {
+                                  target: ankle,
+                                  toe: bone(side, "Toes").getWorldPosition(
+                                      new Vector3(),
+                                  ),
+                                  surface: baseline[side],
+                              },
+                        mode,
+                    );
+                }
+            }
+            const pivot =
+                this.anchors[side]?.vertex !== undefined
+                    ? this.anchors[side]
+                    : null;
+            // A heel/toe contact fixes a surface point, not the ankle or foot rotation.
+            // The animated offset also accounts for toe articulation in the skin.
+            const pivotTarget =
+                pivot &&
+                pivot.position
+                    .clone()
+                    .sub(
+                        new Vector3(...baseline[side][pivot.vertex]).sub(ankle),
+                    );
+            if (
+                supporting &&
+                mode === "sole" &&
+                (!this.anchors[side] || pivot)
+            ) {
                 this.anchors[side] = {
-                    target: ankle.clone().add(new Vector3(0, -height, 0)),
+                    target:
+                        pivotTarget ??
+                        ankle.clone().add(new Vector3(0, -height, 0)),
                     rotation: nodes[2].getWorldQuaternion(new Quaternion()),
                     toeRotation: bone(side, "Toes").getWorldQuaternion(
                         new Quaternion(),
@@ -110,6 +178,7 @@ export class FootPlantingTrial {
                 };
             }
             targets[side] =
+                pivotTarget ??
                 this.anchors[side]?.target.clone() ??
                 ankle
                     .clone()
@@ -159,7 +228,7 @@ export class FootPlantingTrial {
         }
         if (lowering > 0.05)
             throw new Error(
-                "VRM support requires more than 5 cm pelvis lowering.",
+                `VRM support requires more than 5 cm pelvis lowering at frame ${this.required.length - 1}: ${(lowering * 100).toFixed(3)} cm required.`,
             );
         if (
             !this.collect &&
@@ -223,6 +292,7 @@ export class FootPlantingTrial {
         }
         this.vrm.update(0);
         this.vrm.scene.updateMatrixWorld(true);
+        this.previous = captureFootState(this.vrm, this.geometry);
         return -settled;
     }
 }

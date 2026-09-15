@@ -18,6 +18,165 @@ import {
     FootPlantingTrial,
 } from "./foot-planting-trial.js";
 
+for (const [contact, footSide] of [
+    ["toe", "left"],
+    ["heel", "left"],
+    ["toe", "right"],
+    ["heel", "right"],
+]) {
+    test(`${footSide} ${contact} support rolls around the shoe surface without freezing the ankle`, () => {
+        const scene = new Object3D();
+        scene.position.set(2, 0, -1);
+        scene.rotation.y = 0.7;
+        const hips = new Object3D();
+        scene.add(hips);
+        const nodes = { hips };
+        for (const side of ["left", "right"]) {
+            let parent = hips;
+            for (const name of ["UpperLeg", "LowerLeg", "Foot", "Toes"]) {
+                const node = new Object3D();
+                parent.add(node);
+                nodes[side + name] = node;
+                if (name === "UpperLeg")
+                    node.position.x = side === "left" ? -0.12 : 0.12;
+                else if (name === "Toes") node.position.z = 0.2;
+                else node.position.y = -0.4;
+                parent = node;
+            }
+        }
+        const vrm = {
+            scene,
+            update() {},
+            humanoid: { getNormalizedBoneNode: (name) => nodes[name] },
+        };
+        const sole = [
+            [-0.03, -0.1, -0.1],
+            [0.03, -0.1, -0.1],
+            [-0.03, -0.1, 0.2],
+            [0.03, -0.1, 0.2],
+        ];
+        const geometry = {
+            sample: () =>
+                Object.fromEntries(
+                    ["left", "right"].map((side) => [
+                        side,
+                        sole.map((p) =>
+                            nodes[side + "Foot"]
+                                .localToWorld(new Vector3(...p))
+                                .toArray(),
+                        ),
+                    ]),
+                ),
+        };
+        const bend = Math.acos(0.75 / 0.8);
+        const retarget = {
+            apply(frame) {
+                scene.updateWorldMatrix(true, false);
+                hips.position.copy(
+                    scene.worldToLocal(new Vector3(...frame.positions[0])),
+                );
+                for (const side of ["left", "right"]) {
+                    nodes[side + "UpperLeg"].rotation.x = bend;
+                    nodes[side + "LowerLeg"].rotation.x = -2 * bend;
+                    nodes[side + "Foot"].rotation.x =
+                        bend + (side === footSide ? frame.pitch : 0);
+                }
+                scene.updateMatrixWorld(true);
+            },
+        };
+        const rootAt = (z) =>
+            new Vector3(0, 0.85, z).applyMatrix4(scene.matrixWorld).toArray();
+        scene.updateMatrixWorld(true);
+        retarget.apply({ positions: [rootAt(0)], pitch: 0 });
+        const initial = captureFootState(vrm, geometry);
+        const frozen = JSON.stringify(initial);
+        const pivotIndex = contact === "toe" ? 2 : 0;
+        const otherIndex = contact === "toe" ? 0 : 2;
+        const pivot = new Vector3(...geometry.sample()[footSide][pivotIndex]);
+        const originalAnkle = initial[footSide].target.clone();
+        const solver = new FootPlantingTrial(vrm, retarget, geometry, {
+            initial,
+        });
+        const direction = contact === "toe" ? 1 : -1;
+        for (let frame = 0; frame < 20; frame++) {
+            const angle =
+                frame < 6
+                    ? 0
+                    : frame < 11
+                      ? (frame - 5) * 0.1
+                      : Math.max(0, (15 - frame) * 0.1);
+            const pitch = direction * angle;
+            const flags =
+                angle === 0
+                    ? [true, true]
+                    : contact === "toe"
+                      ? [false, true]
+                      : [true, false];
+            solver.apply(
+                { positions: [rootAt(direction * angle * 0.2)], pitch },
+                footSide === "left"
+                    ? [...flags, true, true]
+                    : [true, true, ...flags],
+                [],
+            );
+            const foot = geometry.sample()[footSide];
+            assert.ok(
+                new Vector3(...foot[pivotIndex]).distanceTo(pivot) < 1e-6,
+                `fixed contact at frame ${frame}`,
+            );
+            assert.ok(
+                foot.every((p) => p[1] >= -1e-6),
+                `sole above floor at frame ${frame}`,
+            );
+            if (angle >= 0.4) {
+                assert.ok(
+                    foot[otherIndex][1] > 0.1,
+                    "opposite end rises during roll",
+                );
+                assert.ok(
+                    nodes[footSide + "Foot"]
+                        .getWorldPosition(new Vector3())
+                        .distanceTo(originalAnkle) > 0.04,
+                    "ankle must move while the contact stays fixed",
+                );
+            }
+            for (const side of ["left", "right"]) {
+                const positions = ["UpperLeg", "LowerLeg", "Foot"].map((name) =>
+                    nodes[side + name].getWorldPosition(new Vector3()),
+                );
+                assert.ok(
+                    Math.abs(positions[0].distanceTo(positions[1]) - 0.4) <
+                        1e-8,
+                );
+                assert.ok(
+                    Math.abs(positions[1].distanceTo(positions[2]) - 0.4) <
+                        1e-8,
+                );
+            }
+        }
+        const moved = { positions: [rootAt(direction * 0.3)], pitch: 0 };
+        solver.apply(
+            moved,
+            footSide === "left"
+                ? [false, false, true, true]
+                : [true, true, false, false],
+            [],
+        );
+        solver.apply(moved, [true, true, true, true], []);
+        assert.ok(
+            new Vector3(...geometry.sample()[footSide][pivotIndex]).distanceTo(
+                pivot,
+            ) > 0.2,
+            "a new stance must not reuse the contact from before the swing",
+        );
+        assert.equal(
+            JSON.stringify(initial),
+            frozen,
+            "initial checkpoint remains immutable",
+        );
+    });
+}
+
 test("a new support solve preserves an already bent supported leg pose", () => {
     const scene = new Object3D(),
         hips = new Object3D();
