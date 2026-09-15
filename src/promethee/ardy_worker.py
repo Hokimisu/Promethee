@@ -24,7 +24,12 @@ def serve(args, send):
     from ardy.skeleton.definitions import CoreSkeleton27
     from ardy.tools import seed_everything
     from ardy.viz.core_skin import CoreSkin
-    from ardy_contacts import measure_skin_contacts, stabilize_contacts, validate_sole_contacts
+    from ardy_contacts import (
+        measure_skin_contacts,
+        project_support,
+        stabilize_contacts,
+        validate_sole_contacts,
+    )
     from ardy_geometry import continue_from_pose, ground_motion, posture_goal
 
     args.output.mkdir(parents=True, exist_ok=True)
@@ -153,6 +158,7 @@ def serve(args, send):
                 raw[field] += offset
             processed = {key: value.copy() for key, value in raw.items()}
             contact_residual = None
+            support_projection = None
             for label, values in (("raw", raw), ("processed", processed)):
                 if not all(np.isfinite(value).all() for value in values.values()):
                     raise ValueError("Non-finite generated motion.")
@@ -160,7 +166,13 @@ def serve(args, send):
                     continue_from_pose(values, job["start_pose"], cpu_skin.skeleton)
                     if initial is not None:
                         contact_residual = stabilize_contacts(values, cpu_skin.skeleton)
-                    grounding = ground_motion(values, cpu_skin, settle=job["posture"] is not None)
+                    if initial is not None and job["posture"] is None:
+                        support_projection = project_support(values, cpu_skin)
+                        grounding = support_projection["grounding"]
+                    else:
+                        grounding = ground_motion(
+                            values, cpu_skin, settle=job["posture"] is not None
+                        )
                 with (args.output / f"{job_id}-{label}.npz").open("xb") as stream:
                     np.savez(
                         stream,
@@ -175,7 +187,7 @@ def serve(args, send):
                 json.dumps(skin_contacts, indent=2, allow_nan=False), encoding="utf-8"
             )
             if initial is not None:
-                validate_sole_contacts(skin_contacts)
+                validate_sole_contacts(skin_contacts, continuous_support=job["posture"] is None)
             send(
                 {
                     "type": "generated",
@@ -185,6 +197,7 @@ def serve(args, send):
                     "grounding": grounding,
                     "skin_contacts": skin_contacts,
                     "max_unreachable_foot_target_m": contact_residual,
+                    "support_projection": support_projection,
                     "max_start_error_m": (
                         float(np.linalg.norm(joints[0] - initial, axis=-1).max())
                         if initial is not None

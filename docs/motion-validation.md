@@ -348,6 +348,67 @@ Les chaussures du VRM ont une autre morphologie ; cette mesure Core ne prouve
 pas leur contact. T07 reste ouvert pour le glissement, la marche et les appuis
 de l'apparence finale.
 
+## Projection des appuis pendant la marche : critères version 4
+
+Le diagnostic de surface des déplacements 13–14 retrouve les trois pics refusés
+sur un pied déclaré libre par ARDY : 2,236, 1,078 et 1,735 m/s. Le correcteur
+d'ancrage suivait les contacts prédits, tandis que le maillage de ce pied libre
+touchait effectivement le sol. `diagnose_sole_sliding.py` utilise maintenant la
+même tolérance de surface que le pilote ; `--near-floor` conserve le diagnostic
+historique de proximité. Il mesure aussi l'extension de jambe et la vitesse de
+cheville aux images responsables.
+
+Le nouveau correcteur place le maillage du pied prédit en appui au sol et donne
+1 cm de dégagement au pied libre. Un raccord cubique sur les 16 premières poses
+préserve la continuité initiale. Une résolution des deux jambes conserve leurs
+longueurs, les coordonnées XZ des pieds et les rotations du haut du corps. Le
+bassin descend seulement si la portée des jambes l'exige, avec une enveloppe
+bornée. La correction totale de racine reste limitée à 5 cm et 15 mm par image ;
+la correction verticale de cheville à 5 cm et le résidu de portée à 1 mm.
+La projection itère trois fois sur le vrai maillage, puis applique la correction
+de hauteur signée. Tout dépassement est refusé avant lecture.
+
+Les quatre sorties brutes de marche 13–14 servent de calibration. Le rejeu du
+code final, archivé dans `.local/support-projection-production-01` à `04`, passe
+sur les quatre : maxima de glissement 0,03860, 0,10927, 0,11845 et 0,07270 m/s,
+P95 entre 0,00913 et 0,01865 m/s, contact sur 120 images sur 120. La correction
+maximale de cheville reste sous 27,89 mm et celle de racine sous 17,24 mm.
+Ces résultats ne sont pas des essais indépendants après calibration.
+
+Reproduction depuis une requête archivée, dans l'environnement ARDY :
+
+```sh
+python experiments/motion/support_projection_trial.py --request JOB-request.json --output NOUVEAU_DOSSIER
+```
+
+Le script archive sources, empreinte de la sortie brute, requête et mesures.
+La version 4 exige un appui prédit et un contact de surface mesuré à chaque
+image de marche. Les limites existantes de vitesse, cible, raccord, saut
+articulaire et pénétration restent inchangées. Le code et les critères ont été
+archivés avant les séries réelles nouvelles suivantes :
+
+| Série / déplacement | Glissement max / P95 (m/s) | Contact de surface | Résultat |
+|---|---:|---:|---|
+| 15 / vers `[0.6,0.5]` | 0,06649 / 0,01630 | 120 / 120 | Terminé en 8,85 s ; erreur cible 15,57 mm |
+| 15 / vers `[-0.4,-0.3]` | 0,04536 / 0,02764 | 120 / 120 | Terminé en 8,79 s ; erreur cible 31,95 mm |
+| 16 / vers `[-0.6,0.5]` | Non mesuré après projection | — | Refusé : phase prédite sans aucun appui |
+| 16 / vers `[0.4,-0.4]` | 0,16605 / 0,02061 | 120 / 120 | Terminé en 9,07 s ; erreur cible 25,36 mm |
+
+Les graines sont 2401–2405 et 2501–2505. Les trois déplacements acceptés restent
+sous les seuils géométriques ; la présence d'un contact par image ne garantit
+pas qu'un même sommet reste planté pendant tout le changement d'appui. Les
+postures terminent trois essais sur quatre : le retour debout de la série 15
+est refusé pour saut articulaire excessif. Le déplacement suivant part donc de
+la pose bras levés effectivement conservée, sans simuler une posture réussie.
+Les mondes et les refus restent archivés et exclus de la mémoire personnelle.
+
+Le rendu Core `.local/video-support-projection-15/motion.mp4` conserve le premier
+trajet de la série 15, sans correction supplémentaire du rendu. L'image du milieu
+montre encore un buste et une tête penchés vers l'avant. Cette amélioration des
+contacts ne valide ni la naturalité, ni l'équilibre physique, ni les chaussures
+du VRM. T07 reste ouvert. Vérification logicielle : 270 tests passent, deux sont
+ignorés sous Windows ; lint, format et construction du paquet passent.
+
 ## Stabilisation des appuis pendant les postures
 
 Le cas bras levés refusé dans la série 12 a ensuite servi à tester le correcteur

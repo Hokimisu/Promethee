@@ -113,6 +113,143 @@ def stabilize_contacts(values, skeleton):
     return max(residuals)
 
 
+def support_lowering(hips, targets, lengths):
+    """Smallest rate-bounded pelvis lowering that makes both ankle targets reachable."""
+    import numpy as np
+
+    if __package__:
+        from .ardy_geometry import floor_lift_envelope
+    else:  # The isolated ARDY worker imports this sibling as a standalone module.
+        from ardy_geometry import floor_lift_envelope
+
+    hips, targets, lengths = map(np.asarray, (hips, targets, lengths))
+    if (
+        hips.ndim != 3
+        or hips.shape[1:] != (2, 3)
+        or targets.shape != hips.shape
+        or lengths.shape != hips.shape[:2]
+        or not all(np.isfinite(value).all() for value in (hips, targets, lengths))
+        or (lengths <= 1e-5).any()
+    ):
+        raise ValueError("Expected finite pairs of hips, ankle targets and leg lengths.")
+    horizontal = np.linalg.norm(hips[..., [0, 2]] - targets[..., [0, 2]], axis=-1)
+    if (horizontal >= lengths - 1e-5).any():
+        raise ValueError("Ankle target exceeds horizontal leg reach.")
+    vertical = np.sqrt((lengths - 1e-5) ** 2 - horizontal**2)
+    required = np.maximum(0, (hips[..., 1] - targets[..., 1] - vertical).max(axis=1))
+    lower = np.asarray(floor_lift_envelope(required))
+    if lower.max() > 0.05:
+        raise ValueError("Required support lowering exceeds 5 cm.")
+    return lower
+
+
+def project_support(values, skin):
+    """Project predicted walking supports onto the actual skin-floor plane.
+
+    Keep root XZ, foot XZ, upper-body rotations and bone lengths. Lower the
+    pelvis only when needed for reach; free feet receive 1 cm clearance.
+    This remains kinematic and must pass the final measured surface gates.
+    """
+    import numpy as np
+    import torch
+
+    if __package__:
+        from .ardy_geometry import ground_motion
+    else:
+        from ardy_geometry import ground_motion
+
+    skeleton = skin.skeleton
+    names = (
+        ("LeftUpLeg", "LeftLeg", "LeftFoot", "LeftToeBase"),
+        ("RightUpLeg", "RightLeg", "RightFoot", "RightToeBase"),
+    )
+    legs = [[skeleton.bone_index[name] for name in side] for side in names]
+    indices, weights = skin.lbs_indices.numpy(), skin.lbs_weights.numpy()
+    masks = [(np.isin(indices, side[2:]) * weights).sum(-1) > 0.5 for side in legs]
+    base, rotations = values["posed_joints"].copy(), values["global_rot_mats"].copy()
+    root = values["root_positions"].copy()
+    ankles = [side[2] for side in legs]
+    hips = [side[0] for side in legs]
+    targets = base[:, ankles].copy()
+    support = (values["foot_contacts"].reshape(-1, 2, 2) > 0.5).any(-1)
+    if not support.any(-1).all():
+        raise ValueError("Walking has a predicted phase without foot support.")
+    lengths = np.stack(
+        [
+            np.linalg.norm(base[:, knee] - base[:, hip], axis=-1)
+            + np.linalg.norm(base[:, ankle] - base[:, knee], axis=-1)
+            for hip, knee, ankle, _ in legs
+        ],
+        axis=1,
+    )
+    phase = np.minimum(np.arange(len(base)) / 15, 1)
+    blend = 3 * phase**2 - 2 * phase**3
+    desired_heights = np.zeros((len(base), 2))
+    residuals = []
+    with torch.inference_mode():
+        for t, (points, matrices) in enumerate(zip(base, rotations, strict=True)):
+            mesh = skin.skin(
+                torch.from_numpy(matrices[None]), torch.from_numpy(points[None]), rot_is_global=True
+            )[0].numpy()
+            for side, mask in enumerate(masks):
+                height = float(mesh[mask, 1].min())
+                desired_heights[t, side] = (
+                    max(0, height * (1 - blend[t]))
+                    if support[t, side]
+                    else max(height, 0.01 * blend[t])
+                )
+        for _ in range(3):
+            for t, (points, matrices) in enumerate(
+                zip(values["posed_joints"], values["global_rot_mats"], strict=True)
+            ):
+                mesh = skin.skin(
+                    torch.from_numpy(matrices[None]),
+                    torch.from_numpy(points[None]),
+                    rot_is_global=True,
+                )[0].numpy()
+                for side, mask in enumerate(masks):
+                    targets[t, side, 1] += desired_heights[t, side] - float(mesh[mask, 1].min())
+            if np.abs(targets[..., 1] - base[:, ankles, 1]).max() > 0.05:
+                raise ValueError("Required ankle support correction exceeds 5 cm.")
+            lower = support_lowering(base[:, hips], targets, lengths)
+            corrected = rotations.copy()
+            for t in range(len(base)):
+                points = base[t].copy()
+                points[:, 1] -= lower[t]
+                for side, leg in enumerate(legs):
+                    updated, residual = solve_leg(
+                        points.astype(np.float64),
+                        corrected[t].astype(np.float64),
+                        leg,
+                        targets[t, side],
+                        rotations[t, leg[2]],
+                    )
+                    corrected[t] = updated
+                    residuals.append(residual)
+            values["root_positions"] = root.copy()
+            values["root_positions"][:, 1] -= lower
+            local = skeleton.global_rots_to_local_rots(torch.from_numpy(corrected))
+            matrices, points, _ = skeleton.fk(local, torch.from_numpy(values["root_positions"]))
+            values.update(
+                local_rot_mats=local.numpy(),
+                global_rot_mats=matrices.numpy(),
+                posed_joints=points.numpy(),
+            )
+    if max(residuals) > 0.001:
+        raise ValueError("Projected support still exceeds leg reach.")
+    grounding = ground_motion(values, skin, settle=True)
+    shift = values["root_positions"][:, 1] - root[:, 1]
+    if np.abs(shift).max() > 0.05 or np.abs(np.diff(shift)).max() > 0.015 + 1e-7:
+        raise ValueError("Combined support correction exceeds the root height bounds.")
+    return {
+        "max_root_shift_m": float(np.abs(shift).max()),
+        "max_root_shift_step_m": float(np.abs(np.diff(shift)).max()),
+        "max_ankle_shift_m": float(np.abs(targets[..., 1] - base[:, ankles, 1]).max()),
+        "max_reach_residual_m": max(residuals),
+        "grounding": grounding,
+    }
+
+
 def sole_contact_metrics(sole, fps=20):
     """Separate geometric surface contact from mere proximity to the floor.
 
@@ -151,7 +288,9 @@ def sole_contact_metrics(sole, fps=20):
     }
 
 
-def validate_sole_contacts(metrics):
+def validate_sole_contacts(metrics, *, continuous_support=False):
+    if continuous_support and metrics["frames_with_surface_contact"] != metrics["frames"]:
+        raise ValueError("Walking does not maintain measured foot support on every frame.")
     if not metrics["vertex_contact_pairs"]:
         raise ValueError("No geometric foot contact could be verified.")
     if metrics["speed_max_m_s"] > 0.2 or metrics["speed_p95_m_s"] > 0.05:

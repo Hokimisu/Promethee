@@ -1,7 +1,15 @@
 {
-  "version": 3,
+  "version": 4,
   "frozen_before_holdout": true,
-  "calibration": ["motion-transition-03", "posture-constraint-calibration-02", "ground-calibration-01"],
+  "calibration": [
+    "motion-transition-03",
+    "posture-constraint-calibration-02",
+    "ground-calibration-01",
+    "support-projection-calibration-02",
+    "support-projection-calibration-03",
+    "support-projection-calibration-04",
+    "support-projection-calibration-05"
+  ],
   "source": "kinematic Core with explicit mesh-floor projection",
   "target_error_max_m": 0.05,
   "initial_joint_error_max_m": 0.02,
@@ -18,5 +26,8 @@
   "geometric_contact_pairs_min": 1,
   "mesh_floor_penetration_max_m": 0.001,
   "posture_wrist_above_head_min_m": 0.15,
-  "notes": "Version 3 fixes two synthetic geometric counterexamples to v2: a planted foot plus a foot moving 2 mm above the plane, and a vertex submerged below it. Surface contact uses a symmetric 0.1 mm numerical tolerance. The former 5 mm proximity metric remains reported, separately from surface contact. Speed, target, continuity and penetration limits are unchanged. This does not certify physical balance or naturalness. Qualification prompts and worlds are excluded from agent context."
+  "notes": "Version 4 requires measured surface support on every walking frame after predicted-support projection and swing clearance. Speed, target, joint continuity and penetration limits are unchanged; combined root correction stays within 5 cm and 15 mm/frame. Surface contact retains the symmetric 0.1 mm tolerance. No force or balance claim. Qualification data stay outside agent context.",
+  "walking_surface_contact_frame_fraction_min": 1.0,
+  "walking_ankle_correction_max_m": 0.05,
+  "walking_free_foot_clearance_m": 0.01
 }

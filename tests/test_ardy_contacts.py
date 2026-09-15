@@ -87,3 +87,37 @@ def test_roundoff_at_floor_is_contact_but_submerged_vertices_are_not():
     assert sole_contact_metrics(sole)["vertex_contact_pairs"] == 9
     sole[:, :, 1] = -0.01
     assert sole_contact_metrics(sole)["vertex_contact_pairs"] == 0
+
+
+def test_walking_requires_surface_support_on_every_frame():
+    sole = np.zeros((10, 2, 3))
+    sole[4, :, 1] = 0.002
+    metrics = sole_contact_metrics(sole)
+    validate_sole_contacts(metrics)
+    with pytest.raises(ValueError, match="every frame"):
+        validate_sole_contacts(metrics, continuous_support=True)
+    sole[4, 0, 1] = 0
+    validate_sole_contacts(sole_contact_metrics(sole), continuous_support=True)
+
+
+def test_support_lowering_makes_targets_reachable_with_bounded_height_changes():
+    from promethee.ardy_contacts import support_lowering
+
+    hips = np.zeros((3, 2, 3))
+    hips[:, :, 1] = 0.98
+    targets = np.zeros_like(hips)
+    targets[1, 0, 0] = 0.3
+    lengths = np.ones((3, 2))
+    lower = support_lowering(hips, targets, lengths)
+    lowered = hips.copy()
+    lowered[:, :, 1] -= lower[:, None]
+    assert (np.linalg.norm(lowered - targets, axis=-1) < lengths).all()
+    assert np.abs(np.diff(lower)).max() <= 0.015 + 1e-9
+    assert 0 < lower[0] < lower[1] < 0.05
+    targets[1, 0, 0] = 1.1
+    with pytest.raises(ValueError, match="horizontal"):
+        support_lowering(hips, targets, lengths)
+    targets[:] = 0
+    hips[:, :, 1] = 1.1
+    with pytest.raises(ValueError, match="5 cm"):
+        support_lowering(hips, targets, lengths)
