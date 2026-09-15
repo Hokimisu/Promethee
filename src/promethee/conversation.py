@@ -92,6 +92,13 @@ class ConversationStore:
         with self.service._transaction() as (conn, now):
             return self._begin(conn, now, message, timeout=timeout, trigger=trigger)
 
+    def context(self):
+        """Read-only native context for a trusted frontend; never an agent tool."""
+        with self.service.runtime.connection() as conn:
+            conn.execute("BEGIN")
+            world = read_world(conn)
+            return {"world_id": world["world_id"], "messages": self._history(conn)}
+
     def _begin(self, conn, now, message, *, timeout=60, trigger="user"):
         """Open within a trusted host transaction, including any initiative reservation."""
         if not isinstance(message, str) or not message.strip() or len(message) > 16000:

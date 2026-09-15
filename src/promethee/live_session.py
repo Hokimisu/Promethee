@@ -15,6 +15,7 @@ from pathlib import Path
 from promethee.chat import configure, open_text_host
 from promethee.live_delegation import LiveDelegation
 from promethee.live_process import LiveProcess
+from promethee.live_startup import build_startup
 from promethee.live_worker import final_usage
 from promethee.voice import decode_pcm
 
@@ -243,6 +244,15 @@ def main():
             (output / "events.jsonl").open("w", encoding="utf-8") as events,
             (output / "output.pcm").open("wb") as audio,
         ):
+            startup = output / "startup.json"
+            startup.write_text(
+                json.dumps(
+                    build_startup(host.store, memory_enabled=args.vault is not None),
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            argv.extend(["--startup-file", str(startup)])
             bridge = LiveDelegation(host, call_budget=args.call_budget)
             transport = LiveProcess(argv)
             try:

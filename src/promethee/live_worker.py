@@ -15,9 +15,44 @@ import sys
 import threading
 import time
 from importlib.metadata import version
+from pathlib import Path
 from urllib.parse import urlsplit
 
 LIMIT = 1_048_576
+
+
+def startup(path):
+    if path is None:
+        return {}
+    with Path(path).open("rb") as stream:
+        raw = stream.read(20001)
+    if len(raw) > 20000:
+        raise ValueError("Live startup context exceeds its limit.")
+    value = json.loads(raw)
+    if not isinstance(value, dict) or set(value) != {"instructions", "input"}:
+        raise ValueError("Expected frontend instructions and initial history.")
+    if not isinstance(value["instructions"], str) or len(value["instructions"].encode()) > 10000:
+        raise ValueError("Frontend instructions exceed their byte limit.")
+    entries = value["input"]
+    if not isinstance(entries, list) or len(entries) > 128:
+        raise ValueError("Invalid startup messages.")
+    if len(json.dumps(entries, ensure_ascii=False, allow_nan=False).encode()) > 7000:
+        raise ValueError("Startup history exceeds its conservative byte limit.")
+    for entry in entries:
+        if not isinstance(entry, dict) or set(entry) != {"role", "content"}:
+            raise ValueError("Invalid startup message.")
+        if entry["role"] not in {"developer", "user"}:
+            raise ValueError("Unsupported Live startup role.")
+        parts = entry["content"]
+        if not isinstance(parts, list) or len(parts) != 1 or not isinstance(parts[0], dict):
+            raise ValueError("Expected one text part per startup message.")
+        if (
+            set(parts[0]) != {"type", "text"}
+            or parts[0]["type"] != "input_text"
+            or not isinstance(parts[0]["text"], str)
+        ):
+            raise ValueError("Expected a text startup part.")
+    return value
 
 
 def command(value):
@@ -88,6 +123,8 @@ def final_usage(event):
 async def run(args):
     from openai import AsyncOpenAI
 
+    initial = startup(args.startup_file)
+
     incoming = queue.Queue(maxsize=8)
 
     def read():
@@ -134,6 +171,7 @@ async def run(args):
         ) as connection:
             await connection.session.start(
                 session={
+                    **initial,
                     "model": args.model,
                     "delegation": {"type": "client"},
                     "store": False,
@@ -204,6 +242,9 @@ def main():
     parser.add_argument("--model", required=True)
     parser.add_argument("--voice", required=True)
     parser.add_argument("--max-seconds", type=int, required=True)
+    parser.add_argument(
+        "--startup-file", help="Bounded frontend instructions and sourced initial context."
+    )
     parser.add_argument(
         "--test-url", help="Loopback fixture only; uses dummy auth, never the account key."
     )

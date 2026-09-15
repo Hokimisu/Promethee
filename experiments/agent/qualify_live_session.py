@@ -6,6 +6,7 @@ Live server, transcripts and PCM are synthetic; no Live inference or devices.
 import argparse
 import json
 import shutil
+import sqlite3
 import subprocess
 import sys
 import time
@@ -20,7 +21,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ("output", "live-python", "hermes-python", "hermes-root", "hermes-auth-root"):
         parser.add_argument("--" + name, type=Path, required=True)
-    parser.add_argument("--fixture-mode", choices=["exchange", "expired"], default="exchange")
+    parser.add_argument(
+        "--fixture-mode", choices=["exchange", "expired", "startup"], default="exchange"
+    )
+    parser.add_argument(
+        "--history-world",
+        type=Path,
+        help="Clone a qualification database to verify startup context.",
+    )
     args = parser.parse_args()
     output = args.output.resolve()
     output.mkdir(exist_ok=False)
@@ -28,11 +36,35 @@ def main():
     source = Path(__file__).with_name("live_session_fixture.py")
     shutil.copyfile(source, output / "fixture-source.py")
     root = Path(__file__).resolve().parents[2]
-    for name in ("live_session", "live_process", "live_worker", "live_delegation", "chat"):
+    for name in (
+        "live_session",
+        "live_process",
+        "live_worker",
+        "live_delegation",
+        "live_startup",
+        "chat",
+        "conversation",
+    ):
         shutil.copyfile(root / "src/promethee" / f"{name}.py", output / f"{name}.py")
     world = output / "world"
     world.mkdir()
+    if args.history_world:
+        historical = Runtime(args.history_world, create=False)
+        if historical.require_session()["session_kind"] != "qualification":
+            raise ValueError("Only an explicitly classified qualification world can be cloned.")
+        target = sqlite3.connect(world / "world.sqlite3")
+        try:
+            with historical.connection() as source_db:
+                source_db.backup(target)
+        finally:
+            target.close()
     runtime = Runtime(world / "world.sqlite3", data_origin="session", session_kind="qualification")
+    with runtime.connection() as conn:
+        previous_executions = conn.execute("SELECT count(*) FROM executions").fetchone()[0]
+        previous_all_turns = conn.execute("SELECT count(*) FROM conversation_turns").fetchone()[0]
+        previous_turns = conn.execute(
+            "SELECT count(*) FROM conversation_turns WHERE status='completed'"
+        ).fetchone()[0]
     with wave.open(str(output / "input.wav"), "wb") as audio:
         audio.setparams((1, 2, 24000, 0, "NONE", "not compressed"))
         audio.writeframes(b"\0" * 4800)
@@ -110,13 +142,19 @@ def main():
                 raise TimeoutError("Fixture completion missing.")
             time.sleep(0.02)
         with runtime.connection() as conn:
-            assert conn.execute("SELECT count(*) FROM executions").fetchone()[0] == 0
+            assert (
+                conn.execute("SELECT count(*) FROM executions").fetchone()[0] == previous_executions
+            )
             expected_turns = 1 if args.fixture_mode == "exchange" else 0
+            assert (
+                conn.execute("SELECT count(*) FROM conversation_turns").fetchone()[0]
+                == previous_all_turns + expected_turns
+            )
             assert (
                 conn.execute(
                     "SELECT count(*) FROM conversation_turns WHERE status='completed'"
                 ).fetchone()[0]
-                == expected_turns
+                == previous_turns + expected_turns
             )
         report = json.loads((output / "session/report.json").read_text())
         wire = json.loads((output / "server.json").read_text())

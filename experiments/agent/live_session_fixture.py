@@ -21,6 +21,12 @@ async def main(output, mode):
             assert socket.request.path == "/v1/live/sessions"
             start = json.loads(await socket.recv())
             assert start["type"] == "session.start"
+            config = start["session"]
+            assert "Delegation policy:" in config["instructions"]
+            assert len(config["input"]) == 1
+            history = json.loads(config["input"][0]["content"][0]["text"].split("\n", 1)[1])
+            assert history["source"] == "existing_hermes_context"
+            report["startup_context"] = history
             await socket.send(
                 json.dumps(
                     {
@@ -38,8 +44,23 @@ async def main(output, mode):
                     report["audio_chunks"] += 1
                     report["audio_times"].append(time.monotonic() - started)
                     if report["audio_chunks"] == 1:
-                        if mode == "expired":
-                            await asyncio.sleep(0.1)
+                        if mode in {"expired", "startup"}:
+                            if mode == "startup":
+                                await socket.send(
+                                    json.dumps(
+                                        {
+                                            "type": "session.delegation.created",
+                                            "event_id": "startup-only",
+                                            "offset_ms": 0,
+                                            "delegation": {
+                                                "id": "item_startup_only",
+                                                "type": "delegation",
+                                                "target": "client",
+                                            },
+                                        }
+                                    )
+                                )
+                            await asyncio.sleep(0.3 if mode == "startup" else 0.1)
                             await socket.send(
                                 json.dumps(
                                     {
@@ -149,6 +170,6 @@ async def main(output, mode):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--report", type=Path, required=True)
-    parser.add_argument("--mode", choices=["exchange", "expired"], default="exchange")
+    parser.add_argument("--mode", choices=["exchange", "expired", "startup"], default="exchange")
     args = parser.parse_args()
     asyncio.run(main(args.report, args.mode))

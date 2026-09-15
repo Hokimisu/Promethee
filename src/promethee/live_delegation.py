@@ -149,6 +149,8 @@ class LiveDelegation:
             raise
 
     def _poll(self):
+        if not any(f["source"] == "user_transcript" and f["text"].strip() for f in self.fragments):
+            return []  # Startup history alone never authorizes resuming old work.
         if self.pending and self.turn_id is None and self.clock() - self.last_input >= 0.2:
             context = json.dumps(
                 {

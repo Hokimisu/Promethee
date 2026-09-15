@@ -103,6 +103,39 @@ toujours une clé factice, même si une clé de compte existe dans l'environneme
 
 ## Délégation au même hôte Hermes
 
+La session exécutable fournit désormais `session.instructions` et `session.input`
+au démarrage. Les consignes courtes de `live_startup.py` suivent le
+[guide officiel de prompting Live](https://developers.openai.com/api/docs/guides/live-prompting) :
+dialogue en français, interruption de la parole et conditions de délégation,
+sans scénario de vie ni procédure métier supplémentaire. Les capacités mémoire
+ne sont mentionnées que si le coffre est effectivement configuré.
+
+`ConversationStore.context()` lit le contexte natif existant sans modifier le
+monde. La voix reçoit une vue textuelle citée de cet historique, identifiée par
+le monde et sa provenance ; les détails d'outils et messages non textuels restent
+dans Hermes. Les textes du cerveau ne sont jamais déclarés entendus. Si la vue
+dépasse 6 000 octets UTF-8, elle indique explicitement que l'historique n'est pas
+fourni à la voix et qu'il faut consulter Hermes. Aucun résumé n'est inventé ;
+l'historique du cerveau reste intact. Ces données ne commandent aucune reprise.
+
+Une délégation issue du seul contexte de démarrage ne lance pas Hermes : un
+nouveau fragment de transcription utilisateur est requis. Le fichier généré
+`startup.json` reste dans le dossier local de l'essai. Le processus SDK vérifie
+sa forme et des limites en octets conservatrices avant toute connexion.
+
+L'essai `.local/live-startup-context-02` a cloné un monde de qualification contenant
+un échange Astra réel antérieur. Le vrai SDK a transmis les deux messages de
+dialogue, sans les détails d'outils, avec `heard_by_user: null`. Une délégation
+artificielle au démarrage n'a ajouté aucun tour, même interrompu, ni aucune action.
+Le processus s'est fermé normalement en 3,31 s. Le serveur Live était local ;
+l'interprétation des consignes et la voix distante restent à qualifier. Reproduction :
+`qualify_live_session.py --fixture-mode startup --history-world <base-de-qualification>`,
+avec les autres chemins requis par `--help`.
+
+Cette reprise concerne le contexte déjà connu de Hermes. Les fragments Live qui
+n'ont jamais été délégués restent dans le journal local de la session ; leur
+réintégration après panne reste à implémenter et à vérifier.
+
 `LiveDelegation` dans `src/promethee/live_delegation.py` reçoit les événements
 du transport et utilise le `TextHost` existant. L'appelant sérialise `accept`,
 `poll` et `close`. Chaque résultat contient un `event` destiné au transport et

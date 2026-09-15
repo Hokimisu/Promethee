@@ -166,3 +166,15 @@ def test_transport_error_drops_pending_output_and_does_not_replay(tmp_path):
     assert bridge.poll() == []
     assert store.service.get_world()["conversation"] is None
     assert workers[0].closed
+
+
+def test_startup_delegation_without_fresh_user_input_does_not_resume_old_work(tmp_path):
+    bridge, workers, now, _ = make_bridge(tmp_path)
+    bridge.accept(delegation())
+    now[0] = 1
+    assert bridge.poll() == []
+    assert not workers and bridge.remaining == 2
+    bridge.accept(fragment("Quelle est la situation actuelle ?"))
+    now[0] = 1.21
+    assert bridge.poll() == []
+    assert len(workers) == 1 and bridge.remaining == 1

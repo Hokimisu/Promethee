@@ -35,6 +35,11 @@ et la voix du service distant restent à raccorder et à qualifier.
 Une expiration imposée par le serveur local ferme désormais aussi le vrai SDK
 proprement : bilan conservé, commandes en attente abandonnées, zéro appel Hermes.
 Les erreurs du processus restent distinctes d'une fermeture confirmée.
+Les consignes de voix et une vue sourcée du contexte Hermes sont maintenant
+transmises au démarrage. Sur une copie de qualification, le vrai SDK reçoit
+l'historique antérieur sans le déclarer entendu ; une délégation sans nouvelle
+transcription utilisateur ne relance aucun travail. Les échanges Live non
+délégués ne sont pas encore réintégrés après panne.
 
 La branche [codex/execution-receipts-after-interruption](https://github.com/Hokimisu/Promethee/tree/codex/execution-receipts-after-interruption)
 rend les huit résultats d'exécution les plus récemment mis à jour consultables

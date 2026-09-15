@@ -21,7 +21,9 @@ ne fournit pas cet accès. Le budget compte les appels Hermes, pas le coût audi
 
 Le dossier de sortie doit être neuf. Il conserve `events.jsonl`, avec provenance
 Live/Hermes et identifiants corrélés, `output.pcm` en PCM16 mono à 24 kHz, et
-`report.json` avec échantillons et bilan d'usage. Les fichiers restent locaux,
+`report.json` avec échantillons et bilan d'usage. `startup.json` conserve les
+consignes de voix et la vue historique transmise au démarrage, issue du même
+contexte Hermes. Les fichiers restent locaux,
 peuvent contenir la conversation et ne sont pas des souvenirs personnels.
 Un bilan manquant reste inconnu, jamais assimilé à zéro coût. En cas d'erreur,
 les processus sont arrêtés et le rapport indique l'échec ; la finalisation
