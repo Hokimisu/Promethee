@@ -17,6 +17,12 @@ POSTURE_TEXT = {
     "standing": "A person stands still with both arms relaxed down at their sides.",
     "arms_raised": "A person stands still with both arms held straight above the head.",
 }
+UNSUPPORTED_PHASE = "ValueError: Walking has a predicted phase without foot support."
+RETRYABLE_MOTION_ERRORS = {
+    UNSUPPORTED_PHASE: "un appui prédit manquant",
+    "ValueError: Foot mesh slides beyond the geometric contact limits (": "un glissement des pieds",
+}
+MAX_MOTION_ATTEMPTS = 3
 
 
 def read_trajectory(path, *, start_pose, target):
@@ -129,6 +135,9 @@ class KinematicController:
         self.active = None
         self.sequence = 0
         self.job_id = None
+        self.motion_attempt = 0
+        self.motion_origin = None
+        self.motion_spec = None
         self.trajectory = None
         self.object_frames = None
         self.object_expected = None
@@ -182,6 +191,8 @@ class KinematicController:
             self.active = None
             self.trajectory = None
             self.job_id = None
+            self.motion_attempt = 0
+            self.motion_origin = self.motion_spec = None
             self.object_frames = None
             self.object_expected = None
 
@@ -260,6 +271,11 @@ class KinematicController:
             self._feedback("failed", str(exc))
 
     def _submit_motion(self, target, text, frames):
+        self.motion_attempt += 1
+        if self.motion_attempt == 1:
+            self.motion_origin = copy.deepcopy(self.observation)
+            self.motion_started_at = self.clock()
+        self.motion_spec = (copy.deepcopy(target), text, frames)
         self.job_id = uuid4().hex
         job = {
             "job_id": self.job_id,
@@ -282,6 +298,7 @@ class KinematicController:
                     "controller_session": self.handle.session_id,
                     "purpose": "body-initialization" if self.active is None else "body-action",
                     "source": "kinematic",
+                    "generation_attempt": self.motion_attempt,
                     "job": job,
                 },
                 stream,
@@ -291,9 +308,54 @@ class KinematicController:
         self.seed = (self.seed + 1) % (2**31)
         self.job_started = self.clock()
 
+    def _retry_motion_quality(self, item):
+        reason = next(
+            (
+                label
+                for prefix, label in RETRYABLE_MOTION_ERRORS.items()
+                if item.get("error", "").startswith(prefix)
+            ),
+            None,
+        )
+        if reason is None or not self.active or self.active["envelope"]["action"]["kind"] != "move":
+            return False
+        retry = (
+            self.motion_attempt < MAX_MOTION_ATTEMPTS
+            and self.observation == self.motion_origin
+            and self.clock() - self.motion_started_at < 60
+        )
+        with (self.worker.output / f"{self.job_id}-rejection.json").open(
+            "x", encoding="utf-8"
+        ) as stream:
+            json.dump(
+                {
+                    "request_id": self.active["request_id"],
+                    "job_id": self.job_id,
+                    "generation_attempt": self.motion_attempt,
+                    "error": item["error"],
+                    "retry": retry,
+                    "played": False,
+                },
+                stream,
+            )
+        if retry:
+            self._submit_motion(*self.motion_spec)
+            self.message = (
+                f"Nouvel essai du mouvement ({self.motion_attempt}/{MAX_MOTION_ATTEMPTS}) "
+                f"après {reason}."
+            )
+        return retry
+
     def _result(self, item):
         if item["job_id"] != self.job_id:
             return  # Cancelled generation: retained locally, never played later.
+        if self.clock() - self.motion_started_at > 60:
+            if not self.active:
+                raise TimeoutError("Motion initialization generation exceeded 60 seconds.")
+            self._feedback("failed", "Motion generation exceeded its 60-second budget.")
+            return
+        if item["type"] == "error" and self._retry_motion_quality(item):
+            return
         try:
             if item["type"] == "error":
                 raise ValueError(item["error"])
@@ -413,7 +475,7 @@ class KinematicController:
         now = self.clock()
         if not self.ready and now - self.started_at > 180:
             raise TimeoutError("Motion initialization exceeded 180 seconds.")
-        if self.worker.pending is not None and now - self.job_started > 60:
+        if self.worker.pending is not None and now - self.motion_started_at > 60:
             raise TimeoutError("Motion generation exceeded 60 seconds.")
         if self.trajectory is not None:
             if self.object_frames is not None and self.observation != self.object_expected:
@@ -451,6 +513,7 @@ class KinematicController:
         ):
             self.active = self.handle.claim_next()
             if self.active:
+                self.motion_attempt = 0
                 self.sequence = 0
                 self._feedback("running")
                 action = self.active["envelope"]["action"]

@@ -147,3 +147,35 @@ puis les postures bras levés et debout. Le retour vers `[0.14, -0.08]` reste
 refusé pour absence d'appui prédit. Le déplacement préparé conserve 120 contacts
 de surface sur 120 poses, une vitesse maximale de 0,038 m/s et une correction
 verticale maximale de 49,5 mm. T07 reste ouvert.
+
+## Propositions de mouvement refusées
+
+Pour un déplacement, le contrôleur peut demander jusqu'à trois propositions
+ARDY si la précédente échoue pour absence d'appui prédit ou glissement mesuré
+de la semelle. Il conserve exactement la même observation et la même cible,
+change la graine, et affiche la nouvelle tentative. Les propositions refusées
+ne sont jamais jouées. Les fichiers `*-request.json` portent le numéro de
+tentative ; `*-rejection.json` conserve sa cause et la décision de relance.
+
+Les autres erreurs restent terminales, notamment panne du modèle, fichier
+invalide et échec de préparation de l'apparence. La fenêtre de génération de
+60 secondes est commune aux tentatives. L'arrêt reste disponible, y compris
+pendant une relance ; un résultat reçu après l'arrêt est ignoré. Cette relance
+ne réouvre pas une action déjà terminée ou échouée.
+
+La reprise du cas de graine 87123 (`runtime-retry-calibration-01`) termine les
+deux déplacements et les deux postures : le retour passe à la deuxième
+proposition, en 13,6 s, avec environ 5 mm d'erreur à la cible. Un essai de graine
+98123 a révélé le refus pour glissement ; après extension à ce défaut mesuré
+(`runtime-retry-calibration-02`), son premier déplacement passe à la troisième
+proposition, en 16,8 s et avec 16 mm d'erreur. Les trois actions suivantes
+restent refusées par la continuité de l'apparence : environ 24,8 mm au lieu des
+20 mm autorisés. Ces essais de calibration ne suffisent pas à qualifier T07.
+
+L'essai indépendant suivant (`runtime-retry-holdout-02`, graine initiale 108123)
+termine le déplacement vers `[-0.24, -0.13]` avec 15 mm d'erreur, sans relance.
+La posture bras levés échoue pour glissement de surface ; la posture debout et
+le retour échouent pour une discontinuité initiale de l'apparence d'environ
+101 mm. Les observations antérieures restent conservées. L'enchaînement entre
+les poses préparées reste donc un défaut observé, distinct des propositions
+ARDY rejetées avant préparation.

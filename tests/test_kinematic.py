@@ -1,12 +1,13 @@
 """Deterministic driver tests; synthetic poses are not motor qualification."""
 
 import copy
+import json
 from collections import deque
 
 import pytest
 
 from promethee.execution import ExecutionService
-from promethee.kinematic import KinematicController
+from promethee.kinematic import UNSUPPORTED_PHASE, KinematicController
 from promethee.runtime import Runtime
 
 
@@ -64,6 +65,110 @@ def submit(service, rid="move-one", target=None):
         service.get_world()["revision"],
         {"kind": "move", "args": {"position": target or [0.5, 0.0]}},
     )
+
+
+def unsupported(worker):
+    worker.messages.append({"type": "error", "job_id": worker.pending, "error": UNSUPPORTED_PHASE})
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        UNSUPPORTED_PHASE,
+        "ValueError: Foot mesh slides beyond the geometric contact limits "
+        "(max=0.237790, p95=0.008236 m/s).",
+    ],
+)
+def test_support_retry_keeps_the_same_world_and_can_complete(driver, error):
+    controller, service, worker, clock, _ = driver
+    submit(service)
+    controller.tick()
+    original = copy.deepcopy(controller.observation)
+    first = worker.jobs[-1]
+    unsupported(worker)
+    worker.messages[-1]["error"] = error
+    controller.tick()
+    retry = worker.jobs[-1]
+    assert service.get("move-one")["status"] == "running"
+    assert controller.observation == original
+    assert controller.trajectory is None
+    assert retry["start_pose"] == first["start_pose"]
+    assert retry["target"] == first["target"]
+    assert retry["seed"] == first["seed"] + 1
+    rejection = json.loads((worker.output / f"{first['job_id']}-rejection.json").read_text())
+    assert rejection["retry"] and not rejection["played"]
+    assert rejection["generation_attempt"] == 1
+    worker.finish()
+    controller.tick()
+    clock[0] += 3
+    controller.tick()
+    assert service.get("move-one")["status"] == "completed"
+
+
+def test_support_retry_is_bounded_and_retains_every_rejection(driver):
+    controller, service, worker, _, _ = driver
+    submit(service)
+    controller.tick()
+    original = copy.deepcopy(controller.observation)
+    for _ in range(3):
+        unsupported(worker)
+        controller.tick()
+    assert service.get("move-one")["status"] == "failed"
+    assert len(worker.jobs) == 4  # Initialization plus exactly three candidates.
+    assert controller.observation == original
+    assert len(list(worker.output.glob("*-rejection.json"))) == 3
+
+
+def test_cancellation_during_support_retry_discards_late_candidate(driver):
+    controller, service, worker, _, _ = driver
+    submit(service)
+    controller.tick()
+    unsupported(worker)
+    controller.tick()
+    original = copy.deepcopy(controller.observation)
+    service.cancel("move-one")
+    worker.finish()
+    controller.tick()
+    assert service.get("move-one")["status"] == "cancelled"
+    assert controller.observation == original
+    assert controller.trajectory is None
+    assert len(worker.jobs) == 3
+
+
+def test_late_generation_does_not_bypass_the_shared_attempt_deadline(driver):
+    controller, service, worker, clock, _ = driver
+    submit(service)
+    controller.tick()
+    original = copy.deepcopy(controller.observation)
+    for _ in range(59):
+        clock[0] += 1
+        controller.tick()
+    clock[0] += 2
+    worker.finish()
+    controller.tick()
+    assert service.get("move-one")["status"] == "failed"
+    assert controller.observation == original
+    assert controller.trajectory is None
+
+
+@pytest.mark.parametrize("reason", ["other-error", "changed-body", "deadline"])
+def test_support_retry_does_not_cover_other_errors_or_changed_state(driver, reason):
+    controller, service, worker, clock, _ = driver
+    submit(service)
+    controller.tick()
+    if reason == "changed-body":
+        controller.observation["pose"]["positions"][10][0] += 0.001
+    elif reason == "deadline":
+        for _ in range(59):
+            clock[0] += 1
+            controller.tick()
+        clock[0] += 1
+    unsupported(worker)
+    if reason == "other-error":
+        worker.messages[-1]["error"] = "CUDA out of memory"
+    controller.tick()
+    assert service.get("move-one")["status"] == "failed"
+    assert len(worker.jobs) == 2
 
 
 def test_intention_does_not_teleport_and_playback_persists(driver):
