@@ -108,6 +108,7 @@ docs/            Vision, architecture, contrats et jalons
 - [Feuille de route et critères d'acceptation](docs/roadmap.md)
 - [Plan d'implémentation pour le développeur](docs/implementation-plan.md)
 - [Avancement vérifié des tickets](docs/progress.md)
+- [Recherche de solutions pour les mouvements, le visage, la voix et la caméra](docs/research/humanlike-solutions-2026-09-15.md)
 - [Pont Hermes et accès au modèle](docs/hermes-setup.md)
 - [Voix de diagnostic et interruptions](docs/voice.md)
 - [Initiative, budget et pause](docs/initiative.md)
