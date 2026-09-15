@@ -5,7 +5,7 @@ import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 
 def create_memory_tables(conn):
@@ -86,6 +86,9 @@ def _upgrade(conn, world):
         # Spatial object observations are optional. Never invent height,
         # orientation or a hand attachment for historical logical objects.
         world.update(schema_version=9)
+    if world["schema_version"] == 9:
+        # Historical Core poses do not establish an adapted visible pose.
+        world.update(schema_version=10, appearance=None)
 
 
 def read_world(conn):
@@ -115,7 +118,7 @@ def migrate(path, backup):
             version = world.get("schema_version")
             if version == SCHEMA_VERSION:
                 return {"schema_version": version, "migrated": False, "backup": None}
-            if type(version) is not int or version not in (1, 2, 3, 4, 5, 6, 7, 8):
+            if type(version) is not int or version not in (1, 2, 3, 4, 5, 6, 7, 8, 9):
                 raise ValueError(f"No migration available from schema {version!r}.")
             if path == backup:
                 raise ValueError("Backup must be a different, new file.")

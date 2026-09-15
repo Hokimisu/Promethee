@@ -263,3 +263,39 @@ pose visible restent à réaliser avant d'activer ce chemin dans la session.
 
 Vérifications de cette étape : 308 tests Python réussis, deux tests optionnels
 ignorés ; lint, formatage et construction du paquet réussis.
+
+## Sauvegarde de la pose visible
+
+Le schéma 10 peut conserver une seule pose d'apparence avec l'observation Core,
+les objets et le résultat d'exécution. `appearance_checkpoint` sélectionne
+l'image correspondante d'une séquence préalablement validée. Le checkpoint
+contient les 22 rotations normalisées, le décalage du bassin, l'asset, l'échelle,
+le mode et les mains alignées, ainsi que l'empreinte canonique de la pose Core.
+
+Le validateur de stockage vérifie format, bornes et correspondance avec Core.
+Il ne charge ni NumPy ni le VRM et ne refait pas la qualification des contacts.
+Une observation qui change Core sans actualiser son empreinte est refusée.
+Après le premier checkpoint adapté, le pilote ne peut plus omettre l'apparence
+ou l'effacer par `null`. Un objet tenu exige que sa main soit déclarée alignée.
+
+Les tests CPU couvrent refus sans modification de l'état confirmé, annulation,
+réouverture, absence de nouvelle émission de l'action et rollback commun du
+corps, de l'apparence et de l'événement après une panne d'écriture. La migration
+9 → 10 conserve une sauvegarde vérifiée et ajoute une apparence nulle, sans
+transformer les anciens checkpoints Core.
+
+Une copie SQLite de la session objets 07 a été migrée puis réconciliée avec sa
+pose réelle préparée par le VRM. Le corps tient la balle `sample` avec la main
+droite ; le décalage visible du bassin est de −17,290551 mm. Après libération
+du pilote de qualification et réouverture, la pose Core, l'apparence et les
+objets correspondent exactement à l'observation enregistrée. Le bail copié
+a été expiré uniquement dans cette réplique ; la session d'origine n'a pas
+été arrêtée ni modifiée. Le dossier `.local/appearance-checkpoint-qualification-01`
+conserve la copie, sa sauvegarde v9, les poses préparées et leurs empreintes.
+
+Il s'agit d'une qualification du stockage sur des données réelles. Le pilote
+et le lecteur en direct n'utilisent pas encore le checkpoint d'apparence ;
+leur raccord et les interruptions dans la session restent à vérifier.
+
+Vérifications de cette étape : 321 tests Python réussis, deux tests optionnels
+ignorés ; lint, formatage et construction du paquet réussis.

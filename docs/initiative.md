@@ -6,7 +6,7 @@ invite l'agent à consulter l'état courant ; il peut ne rien entreprendre.
 
 ## Activation et arrêt
 
-Le monde doit être une session au schéma 9. La migration conserve l'historique
+Le monde doit être une session au schéma 10. La migration conserve l'historique
 et ajoute `initiative: null` ; elle n'active aucun appel. Configurer explicitement
 un budget avant de lancer `chat` ou `voice` :
 

@@ -17,6 +17,7 @@ def old_database(tmp_path):
     world.pop("data_origin")
     world.pop("body")
     world.pop("pose")
+    world.pop("appearance")
     world.update(schema_version=1, world_id="historical-world")
     world["avatar"]["position"] = [1, 0]
     steps = [
@@ -154,11 +155,38 @@ def test_v2_upgrade_preserves_origin_revision_and_adds_execution_storage(tmp_pat
             conn.execute(f"DROP TABLE {table}")
     before = contents(path)
     backup = tmp_path / "before-v3.sqlite3"
-    assert migrate(path, backup)["schema_version"] == 9
+    assert migrate(path, backup)["schema_version"] == 10
     assert contents(backup) == before
     world = Runtime(path).require_session()
     assert world["revision"] == 7
     assert world["body"]["status"] == "unconfirmed"
+
+
+@pytest.mark.parametrize("fail", [False, True])
+def test_v9_migration_does_not_invent_an_appearance(tmp_path, articulated_pose, fail):
+    path, backup = tmp_path / "world.sqlite3", tmp_path / "backup.sqlite3"
+    runtime = Runtime(path)
+    with runtime.connection() as conn:
+        old = read_world(conn)
+        old.update(schema_version=9, pose=articulated_pose)
+        old.pop("appearance")
+        conn.execute("UPDATE world SET data=?", (json.dumps(old),))
+        if fail:
+            conn.execute(
+                "CREATE TRIGGER fail_v10 BEFORE UPDATE ON world "
+                "BEGIN SELECT RAISE(ABORT, 'rollback'); END"
+            )
+    before = contents(path)
+    with pytest.raises(ValueError, match="migrate"):
+        Runtime(path)
+    if fail:
+        with pytest.raises(sqlite3.IntegrityError, match="rollback"):
+            migrate(path, backup)
+        assert contents(path) == before
+    else:
+        assert migrate(path, backup)["schema_version"] == 10
+        assert Runtime(path).snapshot() == {**old, "schema_version": 10, "appearance": None}
+    assert contents(backup) == before
 
 
 @pytest.mark.parametrize("fail", [False, True])

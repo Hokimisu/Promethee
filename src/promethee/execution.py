@@ -97,6 +97,8 @@ class ExecutionService:
             raise ActionError("A real body observation requires an articulated pose.")
         world = read_world(conn)
         before = copy.deepcopy(world)
+        if world.get("appearance") is not None and observed.get("appearance") is None:
+            raise ActionError("A prepared appearance requires its matching observed checkpoint.")
         world.update(observed)
         world["body"] = {"status": "confirmed", "observed_at": timestamp(now), "source": source}
         if world != before:

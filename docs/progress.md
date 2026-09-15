@@ -29,7 +29,9 @@ reste hors session. Le [chargeur Python](avatar-foot-contact.md#vérification-py
 vérifie désormais leur provenance, les rotations non adaptées et les cibles de
 main. Le [préparateur annulable](avatar-foot-contact.md#préparation-annulable-en-arrière-plan)
 est vérifié hors session avec le vrai VRM et deux phases d'annulation. Son
-raccord au pilote et la persistance de la pose visible restent à faire.
+raccord au pilote reste à faire. Le [stockage de la pose visible](avatar-foot-contact.md#sauvegarde-de-la-pose-visible)
+est maintenant couvert par le schéma 10, les tests de rollback et une
+réouverture sur une copie de session contenant une pose VRM réelle.
 
 La [comparaison des réglages ARDY](motion-sampling.md) sur quatre requêtes
 archivées n'a pas identifié d'amélioration générale. Le checkpoint est limité

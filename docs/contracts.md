@@ -115,6 +115,32 @@ Les cinq derniers états sont terminaux. Les événements paginés portent `seq`
 
 ## Pilote et observations
 
+Le schéma 10 ajoute `appearance`, nul tant qu'aucune pose d'apparence préparée
+n'a été observée. Une valeur contient l'asset épinglé, son échelle, le mode
+d'adaptation, les mains alignées, les rotations normalisées et le décalage du
+bassin pour une seule image. L'empreinte canonique `core_pose_sha256` doit
+correspondre à la pose Core de la même observation. Ce contrat de stockage ne
+remplace pas les contrôles géométriques du préparateur.
+
+Le pilote peut omettre `appearance` lorsqu'aucun checkpoint visible n'existe.
+Une fois une apparence préparée enregistrée, un retour qui l'omet ou la remet
+à `null` est refusé : il ne peut laisser une correction ancienne associée à une
+nouvelle pose Core. Un objet tenu doit utiliser une main figurant dans les
+alignements du checkpoint. Corps, objets, apparence et événement sont écrits
+dans la même transaction. La validation de stockage reste utilisable sans NumPy.
+
+La migration 9 → 10 conserve une sauvegarde exclusive et ajoute seulement
+`appearance: null`. Elle n'invente pas l'apparence des poses historiques.
+Arrêter les processus utilisant une base avant de la migrer :
+
+```sh
+uv run promethee --data-dir .local/ma-session migrate --backup .local/ma-session-avant-v10.sqlite3
+```
+
+Le pilote en direct ne produit pas encore ces checkpoints. Le stockage et sa
+[qualification sur une copie de session](avatar-foot-contact.md#sauvegarde-de-la-pose-visible)
+préparent son raccord.
+
 Depuis le schéma 9, les objets peuvent aussi porter une
 [pose 3D et un attachement à la main](spatial-objects.md). Ces champs sont
 validés et persistés avec l'observation complète ; ils ne sont pas ajoutés

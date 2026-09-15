@@ -10,7 +10,7 @@ CATALOG = {
 }
 
 INITIAL_WORLD = {
-    "schema_version": 9,
+    "schema_version": 10,
     "initiative": None,
     "session_kind": None,
     "conversation": None,
@@ -18,6 +18,7 @@ INITIAL_WORLD = {
     "revision": 0,
     "body": {"status": "unconfirmed", "observed_at": None, "source": None},
     "pose": None,
+    "appearance": None,
     "avatar": {"position": [0.0, 0.0], "seated_on": None, "holding": None},
     "objects": {},
 }

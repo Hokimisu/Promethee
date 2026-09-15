@@ -4,6 +4,7 @@ import copy
 import math
 import re
 
+from promethee.appearance_checkpoint import validate_appearance
 from promethee.catalog import CATALOG
 from promethee.pose import validate_pose
 from promethee.spatial import validate_spatial
@@ -155,8 +156,11 @@ def validate_observation(observation):
         "avatar",
         "objects",
         "pose",
+        "appearance",
     }:
-        raise ActionError("An observation requires avatar, objects and optionally pose.")
+        raise ActionError(
+            "An observation requires avatar, objects and optionally pose and appearance."
+        )
     observed = copy.deepcopy(observation)
     avatar, objects = observed["avatar"], observed["objects"]
     if not isinstance(avatar, dict) or set(avatar) != {"position", "holding", "seated_on"}:
@@ -168,6 +172,8 @@ def validate_observation(observation):
             if observed.get("pose") is not None
             else None
         )
+        if "appearance" in observed:
+            observed["appearance"] = validate_appearance(observed["appearance"], observed["pose"])
     except ValueError as exc:
         raise ActionError(str(exc)) from exc
     if not isinstance(objects, dict) or len(objects) > 32:
@@ -192,6 +198,12 @@ def validate_observation(observation):
             attached = obj["spatial"]["attachment"] is not None
             if attached != (avatar["holding"] == object_id):
                 raise ActionError("Hand attachment and held object reference disagree.")
+            if attached and observed.get("appearance") is not None:
+                if (
+                    obj["spatial"]["attachment"]["joint"]
+                    not in observed["appearance"]["aligned_hands"]
+                ):
+                    raise ActionError("Held object hand is missing from the appearance checkpoint.")
         if "text" in obj and (
             not CATALOG[obj["asset"]].get("write")
             or not isinstance(obj["text"], str)
