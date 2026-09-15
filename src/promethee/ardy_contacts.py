@@ -114,10 +114,12 @@ def stabilize_contacts(values, skeleton):
 
 
 def sole_contact_metrics(sole, fps=20):
-    """Measure the same skin vertices near the floor in adjacent frames.
+    """Separate geometric surface contact from mere proximity to the floor.
 
-    This geometric proxy does not use the model's contact predictions. It catches
-    a sliding surface even if the model labels that foot as being in the air.
+    A 0.1 mm symmetric tolerance absorbs float32 skinning roundoff (observed
+    below 1e-8 m), without classifying a foot flying 2 mm above the plane as
+    contact. The old 5 mm proximity statistic remains visible for diagnostics.
+    Neither statistic establishes a physical support force or balance.
     """
     import numpy as np
 
@@ -126,12 +128,26 @@ def sole_contact_metrics(sole, fps=20):
         raise ValueError("Expected a finite sequence of foot mesh vertices.")
     if not np.isfinite(fps) or fps <= 0:
         raise ValueError("Expected a positive frame rate.")
-    contact = (sole[:-1, :, 1] <= 0.005) & (sole[1:, :, 1] <= 0.005)
-    sliding = (np.linalg.norm(np.diff(sole[..., [0, 2]], axis=0), axis=-1) * fps)[contact]
+    surface = np.abs(sole[:, :, 1]) <= 0.0001
+    contact = surface[:-1] & surface[1:]
+    near = (sole[:-1, :, 1] <= 0.005) & (sole[1:, :, 1] <= 0.005)
+    speed = np.linalg.norm(np.diff(sole[..., [0, 2]], axis=0), axis=-1) * fps
+    sliding = speed[contact]
+    nearby = speed[near]
     return {
+        "contact_tolerance_m": 0.0001,
         "vertex_contact_pairs": int(contact.sum()),
+        "frames_with_surface_contact": int(surface.any(axis=1).sum()),
+        "frame_pairs_with_surface_contact": int(contact.any(axis=1).sum()),
+        "frames": len(sole),
+        "minimum_foot_height_m": float(sole[..., 1].min()),
+        "maximum_lowest_foot_height_m": float(sole[..., 1].min(axis=1).max()),
         "speed_max_m_s": float(sliding.max()) if len(sliding) else None,
         "speed_p95_m_s": float(np.quantile(sliding, 0.95)) if len(sliding) else None,
+        "near_floor_tolerance_m": 0.005,
+        "near_floor_pairs": int(near.sum()),
+        "near_floor_speed_max_m_s": float(nearby.max()) if len(nearby) else None,
+        "near_floor_speed_p95_m_s": float(np.quantile(nearby, 0.95)) if len(nearby) else None,
     }
 
 

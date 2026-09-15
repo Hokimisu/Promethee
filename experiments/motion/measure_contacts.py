@@ -5,12 +5,16 @@ Run with the pinned ARDY environment. Predicted foot contacts are not collision 
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 import numpy as np
 import torch
 from ardy.skeleton.definitions import CoreSkeleton27
 from ardy.viz.core_skin import CoreSkin
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+from promethee.ardy_contacts import sole_contact_metrics  # noqa: E402
 
 
 def main():
@@ -60,6 +64,7 @@ def main():
                 "frames_mesh_below_floor_1cm": int((penetration > 0.01).sum()),
                 "contact_pairs": int(both_contact.sum()),
                 "geometric_vertex_contact_pairs": int(geometric_contact.sum()),
+                "surface_contact": sole_contact_metrics(sole, fps),
                 "geometric_contact_speed_max_m_s": float(geometric_sliding.max())
                 if len(geometric_sliding)
                 else None,

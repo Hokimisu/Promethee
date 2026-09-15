@@ -235,7 +235,8 @@ application avec `git apply --unidiff-zero --check` dans un checkout de recherch
 puis appliquer avec `git apply --unidiff-zero`
 et lancer `qualify_runtime.py` avec les paramètres ci-dessus. Pour isoler la
 première variante, appliquer uniquement la partie concernant `ardy_worker.py`.
-Ce patch n'est pas appliqué au pilote livré. Les critères restent en version 2.
+Ce patch n'est pas appliqué au pilote livré. Ces essais utilisaient les critères
+en version 2.
 
 Le diagnostic [diagnose_sole_sliding.py](../experiments/motion/diagnose_sole_sliding.py)
 localise les sommets et images responsables. Dans le premier déplacement de la
@@ -249,6 +250,43 @@ La vidéo `video-duration-calibration-01` conserve la séquence raccourcie du
 second déplacement, sans correction du rendu. Sa lecture a été lancée dans le
 navigateur ; les poses de début, milieu et fin ont été inspectées. Aucun de ces essais ne justifie
 de déclarer la marche qualifiée ni de lancer un entraînement complet.
+
+## Contact de surface et proximité : critères version 3
+
+Deux contre-exemples synthétiques ont fait échouer le vérificateur version 2 :
+un sommet planté accompagné d'un sommet qui se déplace à 2 mm **au-dessus** du
+sol, et un sommet situé à 1 cm **sous** le sol. La condition `Y <= 5 mm`
+confondait proximité, pénétration et contact de surface. La version 3 utilise
+`abs(Y) <= 0,1 mm` dans deux images consécutives pour le glissement de surface.
+Cette tolérance numérique dépasse largement les arrondis observés (< 10⁻⁸ m).
+Le diagnostic historique à 5 mm reste enregistré séparément. Les limites de
+vitesse, de cible, de continuité et de pénétration n'ont pas changé ; aucun
+ancien résultat n'est requalifié rétroactivement.
+
+Les critères ont été figés avant deux séries réelles nouvelles :
+
+| Série | Postures terminées | Déplacements terminés | Résultat |
+|---|---:|---:|---|
+| 09, graines 1801–1805, cibles `[0.7,0.5]`, `[-0.7,-0.1]` | 0 / 2 | 1 / 2 | Premier trajet accepté ; postures sans contact de surface ; retour refusé à 0,948 m/s maximum |
+| 10, graines 1901–1905, cibles `[-0.5,0.7]`, `[0.5,-0.2]` | 2 / 2 | 0 / 2 | Déplacements refusés à 2,513 et 0,810 m/s maximum |
+
+Une mesure indépendante du maillage confirme ces résultats dans
+`.local/surface-contact-measurements-01.json`. Elle conserve aussi le nombre
+d'images avec contact et la hauteur maximale du pied le plus bas. Le premier
+trajet de la série 09 atteint la cible à 24 mm près, avec 0,0109 m/s maximum
+de glissement de surface, mais seulement **48 images sur 120** présentent un
+contact de surface : le pied le plus bas monte jusqu'à 9,94 mm. Le critère
+actuel ne rejette pas cette couverture insuffisante ; `completed` signifie
+lecture achevée sous ces contrôles, pas marche qualifiée ni équilibre physique.
+Les deux postures rejetées ne touchent jamais le sol (minima respectifs
+1,19 et 3,78 mm). La correction verticale positive empêche la pénétration,
+mais ne ramène pas un corps déjà flottant au sol.
+
+Le rendu non corrigé `video-runtime-holdout-09/motion.mp4` et ses images
+conservent le premier trajet accepté. Les poses du milieu et de fin ont été
+inspectées : l'arrivée reste inclinée avec les pieds écartés. Ce résultat
+ne valide pas la naturalité. Les onze tests de géométrie et la suite complète
+de 124 tests passent ; la résolution des appuis demeure nécessaire.
 
 Les seuils incluent une erreur de cible ≤ 5 cm, une discontinuité initiale ≤ 2 cm,
 un saut de racine ≤ 12 cm par image, une racine dans la pièce et des rotations

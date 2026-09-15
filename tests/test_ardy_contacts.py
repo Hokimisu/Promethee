@@ -63,3 +63,27 @@ def test_airborne_vertices_do_not_prove_floor_contact():
         validate_sole_contacts(sole_contact_metrics(sole))
     sole[0, 0, 1] = 0
     assert sole_contact_metrics(sole)["vertex_contact_pairs"] == 0
+
+
+def test_one_planted_foot_and_one_clear_of_floor_is_not_sliding_contact():
+    # The first vertex is planted; the second moves 2 mm ABOVE a planar floor.
+    # Proximity alone must not label its horizontal flight as ground friction.
+    sole = np.zeros((10, 2, 3))
+    sole[:, 1, 1] = 0.002
+    sole[:, 1, 0] = np.arange(10) * 0.02
+    metrics = sole_contact_metrics(sole)
+    assert metrics["vertex_contact_pairs"] == 9
+    assert metrics["frames_with_surface_contact"] == 10
+    assert metrics["frame_pairs_with_surface_contact"] == 9
+    assert metrics["maximum_lowest_foot_height_m"] == 0
+    assert metrics["near_floor_pairs"] == 18
+    assert metrics["near_floor_speed_max_m_s"] == pytest.approx(0.4)
+    validate_sole_contacts(metrics)
+
+
+def test_roundoff_at_floor_is_contact_but_submerged_vertices_are_not():
+    sole = np.zeros((10, 1, 3))
+    sole[:, :, 1] = -4e-9
+    assert sole_contact_metrics(sole)["vertex_contact_pairs"] == 9
+    sole[:, :, 1] = -0.01
+    assert sole_contact_metrics(sole)["vertex_contact_pairs"] == 0

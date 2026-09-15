@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "frozen_before_holdout": true,
   "calibration": ["motion-transition-03", "posture-constraint-calibration-02", "ground-calibration-01"],
   "source": "kinematic Core with explicit mesh-floor projection",
@@ -13,9 +13,10 @@
   "contact_foot_speed_p95_max_m_s": 0.05,
   "geometric_sole_speed_max_m_s": 0.2,
   "geometric_sole_speed_p95_max_m_s": 0.05,
-  "geometric_contact_height_max_m": 0.005,
+  "geometric_contact_height_abs_max_m": 0.0001,
+  "diagnostic_near_floor_height_max_m": 0.005,
   "geometric_contact_pairs_min": 1,
   "mesh_floor_penetration_max_m": 0.001,
   "posture_wrist_above_head_min_m": 0.15,
-  "notes": "Version 2 adds a conservative skin-contact gate after holdouts 05/06 exposed false acceptance by predicted contacts alone. Same foot-weighted skin vertex within 5 mm of the floor in adjacent frames. Old thresholds are unchanged. This does not certify physical balance or naturalness. Qualification prompts and worlds are excluded from agent context."
+  "notes": "Version 3 fixes two synthetic geometric counterexamples to v2: a planted foot plus a foot moving 2 mm above the plane, and a vertex submerged below it. Surface contact uses a symmetric 0.1 mm numerical tolerance. The former 5 mm proximity metric remains reported, separately from surface contact. Speed, target, continuity and penetration limits are unchanged. This does not certify physical balance or naturalness. Qualification prompts and worlds are excluded from agent context."
 }
