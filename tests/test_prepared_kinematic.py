@@ -127,9 +127,11 @@ def test_prepared_playback_cancel_and_restore_keep_the_same_appearance(prepared_
         pytest.importorskip("numpy")
     controller, service, worker, preparation, now, poses = prepared_driver
     controller.continuous_motion = continuous
+    if continuous:
+        poses.append(copy.deepcopy(poses[-1]))
     for index, pose in enumerate(poses):
         for point in pose["positions"]:
-            point[0] = index / 78
+            point[0] += index / 80
     submit(service)
     controller.tick()
     worker.finish()

@@ -22,9 +22,8 @@ class ExecutedHistory:
         self.bucket = bucket
 
     def context(self, committed=()):
+        """Append strictly future samples; an equal pose can represent a later instant."""
         observed = list(self.samples)
-        if observed and committed and observed[-1] == committed[0]:
-            observed.pop()
         poses = (observed + list(committed))[-160:]
         count = len(poses) // 4 * 4
         return copy.deepcopy(poses[-count:]) if count else [], min(len(committed), count)

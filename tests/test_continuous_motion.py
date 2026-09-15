@@ -12,6 +12,7 @@ from promethee.kinematic import read_trajectory
 
 
 def path(poses, initial, start, end):
+    poses[:] = [copy.deepcopy(initial) for _ in range(41)]
     for index in range(len(poses)):
         pose = copy.deepcopy(initial)
         for joint in pose["positions"]:
@@ -35,6 +36,7 @@ def test_generation_overlaps_playback_and_only_final_segment_completes(driver):
     assert worker.jobs[-1]["stream_id"] == worker.jobs[-2]["stream_id"]
     assert worker.jobs[-1]["history"]["committed_frames"] == 40
     context = read_history(worker.output, worker.jobs[-1])
+    assert context["posed_joints"][0, 0, 0] == pytest.approx(0.005)
     assert context["posed_joints"][-1, 0, 0] == pytest.approx(0.2)
     assert controller.pose["positions"][0][0] == 0
     path(poses, initial, 0.2, 0.4)
@@ -57,6 +59,74 @@ def test_generation_overlaps_playback_and_only_final_segment_completes(driver):
     assert service.get("move-one")["status"] == "completed"
     assert service.get_world()["avatar"]["position"][0] == pytest.approx(0.5)
     assert len(worker.jobs) == 4  # Initial body plus three horizons.
+
+
+def test_three_prepared_horizons_preserve_all_120_future_intervals(driver):
+    pytest.importorskip("numpy")
+    controller, service, worker, now, poses = driver
+    controller.continuous_motion = True
+    initial = copy.deepcopy(controller.pose)
+    path(poses, initial, 0, 0.2)
+    submit(service)
+    controller.tick()
+    worker.finish()
+    controller.tick()
+    first_start = controller.play_started
+    endpoints = [(0, 0.2), (0.2, 0.4), (0.4, 0.5)]
+    for segment, (start, end) in enumerate(endpoints):
+        started = controller.play_started
+        assert controller.frame == 0
+        assert controller.pose["positions"][0][0] == pytest.approx(start)
+        if segment < 2:
+            path(poses, initial, *endpoints[segment + 1])
+            worker.finish()
+            controller.tick()
+        for frame in (1, 38, 39):
+            now[0] = started + frame / 20 + 1e-6
+            controller.tick()
+            assert controller.frame == frame
+            assert controller.pose["positions"][0][0] == pytest.approx(
+                start + (end - start) * frame / 40
+            )
+            assert service.get("move-one")["status"] == "running"
+        now[0] = started + 2 + 1e-6
+        controller.tick()
+        assert controller.pose["positions"][0][0] == pytest.approx(end)
+    assert service.get("move-one")["status"] == "completed"
+    assert now[0] - first_start == pytest.approx(6, abs=1e-5)
+
+
+def test_continuous_origin_cannot_replace_the_observed_core_pose(driver):
+    controller, service, worker, _, poses = driver
+    controller.continuous_motion = True
+    path(poses, controller.pose, 0, 0.2)
+    poses[0]["positions"][0][0] += 0.001
+    before = copy.deepcopy(controller.observation)
+    submit(service)
+    controller.tick()
+    worker.finish()
+    controller.tick()
+    assert service.get("move-one")["status"] == "failed"
+    assert "observed Core pose" in service.get("move-one")["error"]["message"]
+    assert controller.observation == before
+
+
+def test_continuous_origin_cannot_recalculate_the_observed_appearance(prepared_driver):
+    controller, service, worker, prep, _, poses = prepared_driver
+    controller.continuous_motion = True
+    path(poses, controller.pose, 0, 0.2)
+    before = copy.deepcopy(controller.observation)
+    submit(service)
+    controller.tick()
+    worker.finish()
+    controller.tick()
+    assert prep.jobs[-1]["observed_origin"] is True
+    prep.finish()
+    prep.messages[-1]["appearance"]["frames"][0]["root_y_offset"] += 0.001
+    controller.tick()
+    assert service.get("move-one")["status"] == "failed"
+    assert "observed appearance" in service.get("move-one")["error"]["message"]
+    assert controller.observation == before
 
 
 def test_future_quality_retry_keeps_the_same_committed_context_while_body_moves(driver):
@@ -253,11 +323,10 @@ def test_wrong_horizon_cannot_shift_the_committed_timeline(driver):
     controller.continuous_motion = True
     submit(service)
     controller.tick()
-    poses.append(copy.deepcopy(poses[-1]))
     worker.finish()
     controller.tick()
     assert service.get("move-one")["status"] == "failed"
-    assert "40 poses" in service.get("move-one")["error"]["message"]
+    assert "40 future poses" in service.get("move-one")["error"]["message"]
     assert controller.trajectory is None and controller.future_segment is None
 
 
@@ -287,4 +356,24 @@ def test_intermediate_chunk_still_checks_geometry_but_not_final_destination(
         fps=20,
     )
     with pytest.raises(ValueError, match="discontinuity"):
+        read_trajectory(archive, start_pose=articulated_pose, target=None)
+
+
+@pytest.mark.parametrize("shift,error", [(0.13, "discontinuity"), (0.02, "contact feet slide")])
+def test_observed_origin_does_not_hide_first_future_interval_violations(
+    tmp_path, articulated_pose, shift, error
+):
+    np = pytest.importorskip("numpy")
+    positions = np.array([articulated_pose["positions"]] * 41)
+    rotations = np.array([articulated_pose["rotations"]] * 41)
+    positions[1:, :, 0] += shift
+    archive = tmp_path / "anchored.npz"
+    np.savez(
+        archive,
+        posed_joints=positions,
+        global_rot_mats=rotations,
+        foot_contacts=np.ones((41, 4), dtype=bool),
+        fps=20,
+    )
+    with pytest.raises(ValueError, match=error):
         read_trajectory(archive, start_pose=articulated_pose, target=None)

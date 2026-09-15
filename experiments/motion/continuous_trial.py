@@ -8,6 +8,8 @@ It never counts the autoencoder's reconstructed history as newly executed motion
 import argparse
 import hashlib
 import json
+import math
+import shutil
 import sys
 import time
 from pathlib import Path
@@ -27,10 +29,29 @@ from ardy_contacts import (  # noqa: E402
     stabilize_contacts,
     validate_sole_contacts,
 )
-from ardy_continuation import encode_history  # noqa: E402
+from ardy_continuation import encode_history, generation_window  # noqa: E402
 from ardy_geometry import continue_from_pose  # noqa: E402
 
 FIELDS = ("posed_joints", "global_rot_mats", "root_positions")
+
+
+def arrival_stance(skeleton, skin, initial_rotations, heading, target):
+    """Experimental arrival constraint, never a replacement for generated poses."""
+    device = initial_rotations.device
+    local = skeleton.global_rots_to_local_rots(initial_rotations.clone())
+    c, s = math.cos(heading), math.sin(heading)
+    local[0, skeleton.bone_index["Hips"]] = torch.tensor(
+        [[c, 0, s], [0, 1, 0], [-s, 0, c]], device=device
+    )
+    for side in ("Left", "Right"):
+        for name in ("UpLeg", "Leg", "Foot", "ToeBase"):
+            local[0, skeleton.bone_index[side + name]] = torch.eye(3, device=device)
+    rotations, points, _ = skeleton.fk(
+        local, torch.tensor([[target[0], 0.0, target[1]]], device=device)
+    )
+    mesh = skin.skin(rotations, points, rot_is_global=True)
+    points[:, :, 1] -= mesh[..., 1].min()
+    return points, rotations
 
 
 def pose(values, index=-1):
@@ -56,22 +77,43 @@ def main():
     parser.add_argument("--target", type=float, nargs=2, required=True)
     parser.add_argument("--chunks", type=int, default=3)
     parser.add_argument("--history-frames", type=int, default=40)
+    parser.add_argument("--history-limit", type=int, default=160)
     parser.add_argument("--source-end", type=int, help="Exclusive end of the archived history.")
-    parser.add_argument(
+    arrival_group = parser.add_mutually_exclusive_group()
+    arrival_group.add_argument(
         "--arrival-pose",
         action="store_true",
         help="Constrain arrival to the translated source pose; requires a suitable source stance.",
+    )
+    arrival_group.add_argument(
+        "--arrival-stance",
+        action="store_true",
+        help="Constrain arrival to upright neutral legs, independently of the source stride.",
+    )
+    parser.add_argument(
+        "--root-path",
+        action="store_true",
+        help="Constrain the root along a smooth start-to-target path over the whole action.",
     )
     args = parser.parse_args()
     if not 1 <= args.chunks <= 8 or not 4 <= args.history_frames <= 160:
         parser.error("Use 1-8 chunks and 4-160 history frames.")
     if args.history_frames % 4 or not 0 <= args.seed < 2**31:
         parser.error("History must contain whole four-frame tokens; seed must fit int31.")
+    if not args.history_frames <= args.history_limit <= 160 or args.history_limit % 4:
+        parser.error(
+            "History limit must cover the source and contain whole tokens up to 160 poses."
+        )
     if not 1 <= len(args.text) <= 1000 or not np.isfinite(args.target).all():
         parser.error("Provide a bounded motion text and finite target.")
     if max(abs(value) for value in args.target) > 5:
         parser.error("Target must remain inside the room.")
     args.output.mkdir(parents=True, exist_ok=False)
+    shutil.copyfile(__file__, args.output / "trial-source.py")
+    for name in ("ardy_geometry.py", "ardy_contacts.py", "ardy_continuation.py"):
+        shutil.copyfile(
+            Path(__file__).resolve().parents[2] / "src/promethee" / name, args.output / name
+        )
     configuration = {
         key: str(value) if isinstance(value, Path) else value for key, value in vars(args).items()
     }
@@ -102,6 +144,7 @@ def main():
     if any(not np.isfinite(value).all() for value in history.values()):
         raise ValueError("History must contain finite values.")
     arrival = pose(history)
+    departure = np.asarray(arrival["positions"][0], dtype=np.float32)[[0, 2]].copy()
     arrival_points = np.asarray(arrival["positions"], dtype=np.float32)
     arrival_points[:, [0, 2]] += np.asarray(args.target) - arrival_points[0, [0, 2]]
     report = {
@@ -117,6 +160,29 @@ def main():
         )
         model.text_encoder = load_text_encoder(mode="api", url=args.encoder_url, device="cuda")
         skin = CoreSkin(CoreSkeleton27())
+        arrival_rotations = torch.tensor(arrival["rotations"], device="cuda").unsqueeze(0)
+        arrival_points = torch.tensor(arrival_points, device="cuda").unsqueeze(0)
+        if args.arrival_stance:
+            from ardy.motion_rep.tools import compute_heading_angle
+
+            heading = float(
+                compute_heading_angle(arrival_points.unsqueeze(0), model.skeleton)[0, 0]
+            )
+            arrival_points, arrival_rotations = arrival_stance(
+                model.skeleton,
+                CoreSkin(model.skeleton),
+                arrival_rotations,
+                heading,
+                args.target,
+            )
+        dump(
+            args.output / "arrival-constraint.json",
+            {
+                "applied": args.arrival_pose or args.arrival_stance,
+                "positions": arrival_points[0].cpu().tolist(),
+                "rotations": arrival_rotations[0].cpu().tolist(),
+            },
+        )
         horizon = model.gen_horizon_len
         if horizon != 40 or model.num_frames_per_token != 4:
             raise ValueError("This trial is pinned to Core Horizon40 with four-frame tokens.")
@@ -133,21 +199,39 @@ def main():
                 encoded, item["history_roundtrip_error_m"] = encode_history(model, history)
                 history_length = len(history["posed_joints"])
                 remaining = (args.chunks - index) * horizon
-                window = history_length + remaining
-                constraints = [
-                    Root2DConstraintSet(
-                        model.skeleton,
-                        torch.tensor([window - 1]),
-                        torch.tensor([args.target], device="cuda"),
+                window, target_frame = generation_window(history_length, remaining)
+                item["window_frames"] = window
+                item["target_frame"] = target_frame
+                constraints = []
+                if target_frame is not None:
+                    constraints.append(
+                        Root2DConstraintSet(
+                            model.skeleton,
+                            torch.tensor([target_frame]),
+                            torch.tensor([args.target], device="cuda"),
+                        )
                     )
-                ]
-                if args.arrival_pose:
+                if args.root_path:
+                    # Keep the same world-space plan when the history window is cropped.
+                    phase = (index * horizon + np.arange(1, window - history_length + 1)) / (
+                        args.chunks * horizon
+                    )
+                    blend = 10 * phase**3 - 15 * phase**4 + 6 * phase**5
+                    path = departure + blend[:, None] * (np.asarray(args.target) - departure)
+                    constraints = [
+                        Root2DConstraintSet(
+                            model.skeleton,
+                            torch.arange(history_length, window),
+                            torch.tensor(path, dtype=torch.float32, device="cuda"),
+                        )
+                    ]
+                if (args.arrival_pose or args.arrival_stance) and target_frame is not None:
                     constraints.append(
                         FullBodyConstraintSet(
                             model.skeleton,
-                            torch.tensor([window - 1]),
-                            torch.tensor(arrival_points, device="cuda").unsqueeze(0),
-                            torch.tensor(arrival["rotations"], device="cuda").unsqueeze(0),
+                            torch.tensor([target_frame]),
+                            arrival_points,
+                            arrival_rotations,
                         )
                     )
                 observed, mask = model.motion_rep.create_conditions_from_constraints_batched(
@@ -212,7 +296,8 @@ def main():
                 item["total_seconds"] = time.perf_counter() - started
                 # Keep the original corrected history. Discard its re-decoded approximation.
                 history = {
-                    key: np.concatenate((history[key], values[key]))[-160:] for key in FIELDS
+                    key: np.concatenate((history[key], values[key]))[-args.history_limit :]
+                    for key in FIELDS
                 }
                 print(
                     json.dumps(

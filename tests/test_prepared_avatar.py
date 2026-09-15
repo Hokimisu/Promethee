@@ -78,6 +78,48 @@ def test_prepared_record_matches_source_and_returns_independent_data(tmp_path):
         load_prepared_poses(path, payload + b" ")
 
 
+@pytest.mark.parametrize("change", [None, "flag", "pose", "offset", "rotation", "count"])
+def test_continuous_preparation_requires_exact_origin(tmp_path, change):
+    from promethee.appearance_checkpoint import appearance_checkpoint
+
+    payload, artifact = record()
+    document = json.loads(payload)
+    artifact.update(
+        version=2,
+        frame_alignment_weights=[{"RightHand": 1.0, "LeftHand": 0.0}] * 41,
+    )
+    document.update(
+        observed_origin=True,
+        initial_pose=copy.deepcopy(document["frames"][0]),
+        initial_appearance=appearance_checkpoint(artifact, 0, document["frames"][0]),
+        frames=[copy.deepcopy(document["frames"][0]) for _ in range(41)],
+        objects=[copy.deepcopy(document["objects"][0]) for _ in range(41)],
+    )
+    artifact["frames"] = [copy.deepcopy(artifact["frames"][0]) for _ in range(41)]
+    if change == "flag":
+        document["observed_origin"] = 1
+    if change == "pose":
+        document["frames"][0]["positions"][0][0] += 1e-10
+    if change == "offset":
+        artifact["frames"][0]["root_y_offset"] += 1e-10
+    if change == "rotation":
+        artifact["frames"][0]["rotations"]["leftFoot"][0] += 1e-10
+    if change == "count":
+        document["frames"].pop()
+        document["objects"].pop()
+        artifact["frames"].pop()
+        artifact["frame_alignment_weights"].pop()
+    payload = json.dumps(document).encode()
+    artifact["motion_sha256"] = hashlib.sha256(payload).hexdigest()
+    path = tmp_path / "poses.json"
+    path.write_text(json.dumps(artifact))
+    if change is None:
+        assert load_prepared_poses(path, payload) == artifact
+    else:
+        with pytest.raises(ValueError, match="exact observed origin"):
+            load_prepared_poses(path, payload)
+
+
 @pytest.mark.parametrize(
     "field,value",
     [

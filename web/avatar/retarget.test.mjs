@@ -11,7 +11,11 @@ import {
 import { ObjectVisuals } from "./objects.js";
 import { alignHand } from "./align-hand.js";
 import { footSurfaceSummary } from "./foot-geometry.js";
-import { capturePreparedPose, applyPreparedPose } from "./prepared-pose.js";
+import {
+    capturePreparedPose,
+    applyPreparedPose,
+    expectedHandTarget,
+} from "./prepared-pose.js";
 import {
     settledRootLowering,
     captureFootState,
@@ -257,6 +261,114 @@ test("a new support solve preserves an already bent supported leg pose", () => {
     }
 });
 
+test("first support preserves the visible foot across the strict contact threshold", () => {
+    for (const clearance of [0.000099, 0.000101, 0.00027872591963717036]) {
+        const scene = new Object3D();
+        scene.position.set(2, 0, -1);
+        scene.rotation.y = 0.7;
+        const hips = new Object3D();
+        scene.add(hips);
+        const nodes = { hips };
+        for (const side of ["left", "right"]) {
+            let parent = hips;
+            for (const name of ["UpperLeg", "LowerLeg", "Foot", "Toes"]) {
+                const node = new Object3D();
+                parent.add(node);
+                nodes[side + name] = node;
+                if (name === "UpperLeg")
+                    node.position.x = side === "left" ? -0.12 : 0.12;
+                else if (name === "Toes") node.position.z = 0.2;
+                else node.position.y = -0.4;
+                parent = node;
+            }
+        }
+        const vrm = {
+            scene,
+            update() {},
+            humanoid: { getNormalizedBoneNode: (name) => nodes[name] },
+        };
+        const geometry = {
+            sample: () =>
+                Object.fromEntries(
+                    ["left", "right"].map((side) => [
+                        side,
+                        [-0.1, 0.2].map((z) =>
+                            nodes[side + "Foot"]
+                                .localToWorld(new Vector3(0, -0.1, z))
+                                .toArray(),
+                        ),
+                    ]),
+                ),
+        };
+        const bend = Math.acos(0.75 / 0.8);
+        const retarget = {
+            apply(frame) {
+                hips.position.copy(
+                    scene.worldToLocal(new Vector3(...frame.positions[0])),
+                );
+                for (const side of ["left", "right"]) {
+                    nodes[side + "UpperLeg"].rotation.x = bend;
+                    nodes[side + "LowerLeg"].rotation.x = -2 * bend;
+                    nodes[side + "Foot"].rotation.set(bend, frame.yaw, 0);
+                    nodes[side + "Toes"].rotation.y = frame.yaw;
+                }
+                scene.updateMatrixWorld(true);
+            },
+        };
+        scene.updateMatrixWorld(true);
+        const rootAt = (x, z) =>
+            new Vector3(x, 0.85 + clearance, z)
+                .applyMatrix4(scene.matrixWorld)
+                .toArray();
+        retarget.apply({ positions: [rootAt(0, 0)], yaw: 0 });
+        const initial = captureFootState(vrm, geometry);
+        const frozen = JSON.stringify(initial);
+        for (const side of ["left", "right"])
+            assert.equal(initial[side].supporting, clearance <= 0.0001);
+        const solver = new FootPlantingTrial(vrm, retarget, geometry, {
+            initial,
+        });
+        let previousOffset = null;
+        for (let frame = 0; frame < 8; frame++) {
+            const offset = solver.apply(
+                { positions: [rootAt(0.008, 0.012)], yaw: 0.03 },
+                [true, true, true, true],
+                [],
+            );
+            const current = captureFootState(vrm, geometry);
+            for (const side of ["left", "right"]) {
+                assert.ok(current[side].supporting, "measured surface contact");
+                for (const axis of ["x", "z"])
+                    assert.ok(
+                        Math.abs(
+                            current[side].target[axis] -
+                                initial[side].target[axis],
+                        ) < 1e-8,
+                        `${side} ${axis} must not slide at frame ${frame}`,
+                    );
+                for (const name of ["rotation", "toeRotation"])
+                    assert.ok(
+                        current[side][name].angleTo(initial[side][name]) < 1e-7,
+                        `${side} ${name} must preserve the visible pose`,
+                    );
+                for (const [index, point] of current[side].surface.entries()) {
+                    assert.ok(Math.abs(point[1]) <= 0.0001);
+                    const before = initial[side].surface[index];
+                    assert.ok(
+                        Math.hypot(point[0] - before[0], point[2] - before[2]) <
+                            1e-8,
+                        "the same sole vertices remain fixed in XZ",
+                    );
+                }
+            }
+            if (previousOffset !== null)
+                assert.ok(Math.abs(offset - previousOffset) <= 0.015);
+            previousOffset = offset;
+        }
+        assert.equal(JSON.stringify(initial), frozen);
+    }
+});
+
 test("skin settling satisfies both root and contact budgets at their boundary", () => {
     assert.equal(settledRootLowering(0.02, 0.001), 0.021);
     for (const sign of [-1, 1]) {
@@ -464,7 +576,7 @@ test("hand alignment reaches a world target without stretching the arm", () => {
     );
 });
 
-test("live hand blend preserves its endpoints and does not accumulate", () => {
+test("live hand blend preserves endpoints and observed partial alignment without accumulating", () => {
     const scene = new Object3D(),
         bones = {};
     for (const name of Object.keys(BONE_MAP)) bones[name] = new Object3D();
@@ -485,7 +597,10 @@ test("live hand blend preserves its endpoints and does not accumulate", () => {
     const skeleton = { joint_names: Object.values(BONE_MAP) };
     const vrm = {
         scene,
-        humanoid: { getNormalizedBoneNode: (name) => bones[name] },
+        humanoid: {
+            getNormalizedBoneNode: (name) => bones[name],
+            getRawBoneNode: (name) => bones[name],
+        },
         update() {},
     };
     const retarget = new CoreRetarget(vrm, skeleton, 1);
@@ -505,12 +620,28 @@ test("live hand blend preserves its endpoints and does not accumulate", () => {
         target.toArray();
     retarget.apply(frame);
     const baseline = bones.rightHand.getWorldPosition(new Vector3());
-    for (const weight of [0, 0.1, 0.5, 1, 0.5, 0]) {
+    for (const weight of [0, 0.1, 0.4, 0.5, 1, 0.5, 0]) {
+        const expected = baseline.clone().lerp(target, weight);
+        retarget.apply(frame);
+        assert.ok(
+            expectedHandTarget(retarget, frame, "RightHand", weight).distanceTo(
+                expected,
+            ) < 1e-9,
+        );
         retarget.apply(frame, ["RightHand"], { RightHand: weight });
         assert.ok(
             bones.rightHand
                 .getWorldPosition(new Vector3())
-                .distanceTo(baseline.clone().lerp(target, weight)) < 1e-9,
+                .distanceTo(expected) < 1e-9,
+        );
+        const prepared = capturePreparedPose(retarget, 0);
+        retarget.apply(frame);
+        applyPreparedPose(retarget, frame, prepared);
+        assert.ok(
+            expectedHandTarget(retarget, frame, "RightHand", weight, {
+                observedOrigin: true,
+            }).distanceTo(expected) < 1e-9,
+            `the restored ${weight} alignment must not blend a second time`,
         );
     }
     assert.throws(

@@ -1,5 +1,27 @@
 import { Quaternion, Vector3 } from "three";
 
+export function expectedHandTarget(
+    retarget,
+    source,
+    hand,
+    weight,
+    { observedOrigin = false } = {},
+) {
+    const bone = hand === "RightHand" ? "rightHand" : "leftHand";
+    const position = retarget.vrm.humanoid
+        .getRawBoneNode(bone)
+        .getWorldPosition(new Vector3());
+    // The observed checkpoint already includes its alignment weight.
+    // Its replay must preserve that visible position without a second blend.
+    if (observedOrigin) return position;
+    return position.lerp(
+        new Vector3(
+            ...source.positions[retarget.skeleton.joint_names.indexOf(hand)],
+        ),
+        weight,
+    );
+}
+
 export function capturePreparedPose(retarget, rootOffset) {
     return {
         root_y_offset: rootOffset,

@@ -129,6 +129,14 @@ def load_prepared_poses(path, motion_bytes):
             },
         )
         expected_hands.update(hand for hand, weight in initial_weights.items() if weight > 0)
+    if "observed_origin" in document and (
+        document["observed_origin"] is not True
+        or len(document["frames"]) != 41
+        or not document.get("initial_appearance")
+        or document["frames"][0] != document.get("initial_pose")
+        or artifact["frames"][0] != document["initial_appearance"]["frame"]
+    ):
+        raise ValueError("Continuous preparation changed the exact observed origin.")
     if artifact["version"] == 2:
         if not isinstance(artifact["frame_alignment_weights"], list) or len(
             artifact["frame_alignment_weights"]

@@ -26,6 +26,7 @@ def main():
     parser.add_argument("--second-target", type=float, nargs=2, required=True)
     parser.add_argument("--avatar", type=Path, help="Prepare the pinned VRM before playback.")
     parser.add_argument("--continuous-motion", action="store_true")
+    parser.add_argument("--idle-before-actions", type=float, default=0)
     parser.add_argument(
         "--cancel-first-after",
         type=float,
@@ -34,6 +35,8 @@ def main():
     args = parser.parse_args()
     if args.cancel_first_after is not None and not 0 < args.cancel_first_after < 5:
         parser.error("Use a cancellation delay between zero and five seconds.")
+    if not 0 <= args.idle_before_actions <= 10:
+        parser.error("Use an initial idle duration between zero and ten seconds.")
     args.output.mkdir(parents=True, exist_ok=False)
     shutil.copyfile(
         Path(__file__).with_name("runtime-criteria.json"), args.output / "criteria.json"
@@ -129,11 +132,14 @@ def main():
                 sample_times.append(time.monotonic() - trial_started)
             if predicate():
                 return
-            time.sleep(0.05)
+            time.sleep(0.01)
         raise TimeoutError("Runtime qualification timed out.")
 
     try:
         spin_until(lambda: controller.ready, seconds=180)
+        if args.idle_before_actions:
+            idle_until = time.monotonic() + args.idle_before_actions
+            spin_until(lambda: time.monotonic() >= idle_until)
         actions = [
             {"kind": "move", "args": {"position": args.first_target}},
             {"kind": "posture", "args": {"name": "arms_raised"}},

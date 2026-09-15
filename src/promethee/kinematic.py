@@ -24,11 +24,19 @@ RETRYABLE_MOTION_ERRORS = {
     "ValueError: Foot mesh slides beyond the geometric contact limits (": "un glissement des pieds",
 }
 MAX_MOTION_ATTEMPTS = 3
+DEFAULT_TARGET_TOLERANCE_M = 0.05
+FREE_WALK_TARGET_TOLERANCE_M = 1.0
 
 
-def read_trajectory(path, *, start_pose, target):
+def read_trajectory(path, *, start_pose, target, target_tolerance_m=DEFAULT_TARGET_TOLERANCE_M):
     import numpy as np
 
+    if (
+        type(target_tolerance_m) not in (int, float)
+        or not math.isfinite(target_tolerance_m)
+        or target_tolerance_m <= 0
+    ):
+        raise ValueError("Target tolerance must be finite and positive.")
     with np.load(path, allow_pickle=False) as data:
         positions = data["posed_joints"].copy()
         rotations = data["global_rot_mats"].copy()
@@ -63,8 +71,13 @@ def read_trajectory(path, *, start_pose, target):
         distance = np.linalg.norm(positions[0] - np.asarray(start_pose["positions"]), axis=-1)
         if float(distance.max()) > 0.02:
             raise ValueError("Generated trajectory does not continue the current pose.")
-    if target is not None and np.linalg.norm(positions[-1, 0, [0, 2]] - target) > 0.05:
-        raise ValueError("Generated motion misses the target by more than 5 cm.")
+    if (
+        target is not None
+        and np.linalg.norm(positions[-1, 0, [0, 2]] - target) > target_tolerance_m
+    ):
+        raise ValueError(
+            f"Generated motion misses the target by more than {target_tolerance_m:g} m."
+        )
     if np.linalg.norm(np.diff(positions[:, 0], axis=0), axis=-1).max() > 0.12:
         raise ValueError("Generated root contains a discontinuity.")
     if np.linalg.norm(np.diff(positions, axis=0), axis=-1).max() > 0.3:
@@ -254,6 +267,8 @@ class KinematicController:
             document["foot_contacts"] = contacts
         if origin.get("appearance") is not None:
             document.update(initial_pose=origin["pose"], initial_appearance=origin["appearance"])
+        if remaining is not None:
+            document["observed_origin"] = True
         self.appearance_job = self.appearance_preparation.submit(
             document, mode="--plant" if contacts is not None else "--settle"
         )
@@ -284,6 +299,26 @@ class KinematicController:
                 raise ValueError("Prepared appearance frame count differs from the body.")
             appearances = [appearance_checkpoint(artifact, i, pose) for i, pose in enumerate(poses)]
             if pending["remaining"] is not None:
+                initial = pending["expected"]["appearance"]
+
+                def weights(value):
+                    return value.get(
+                        "alignment_weights",
+                        {
+                            hand: float(hand in value["aligned_hands"])
+                            for hand in ("RightHand", "LeftHand")
+                        },
+                    )
+
+                if appearances[0]["frame"] != initial["frame"] or weights(
+                    appearances[0]
+                ) != weights(initial):
+                    raise ValueError(
+                        "Prepared continuous origin differs from the observed appearance."
+                    )
+                # Its visual contents were checked above. Preserve the original checkpoint
+                # provenance rather than claiming that the origin was generated again.
+                appearances[0] = copy.deepcopy(initial)
                 self._stream_event(
                     "appearance_ready",
                     job_id=item["job_id"],
@@ -350,7 +385,7 @@ class KinematicController:
                 text,
                 self.segment_remaining,
                 origin=self._segment_boundary(),
-                context=self.history.context(self.trajectory),
+                context=self.history.context(self.trajectory[1:]),
             )
 
     def _segment_boundary(self):
@@ -503,6 +538,9 @@ class KinematicController:
                 target = self.motion_spec[0]
             if self.active and self.active["envelope"]["action"]["kind"] == "move":
                 target = self.active["envelope"]["action"]["args"]["position"]
+                target_tolerance = FREE_WALK_TARGET_TOLERANCE_M
+            else:
+                target_tolerance = DEFAULT_TARGET_TOLERANCE_M
             poses = read_trajectory(
                 self.worker.output / expected_file,
                 start_pose=self.motion_origin["pose"]
@@ -511,9 +549,15 @@ class KinematicController:
                 target=None
                 if self.motion_remaining is not None and self.motion_remaining > 40
                 else target,
+                target_tolerance_m=target_tolerance,
             )
-            if self.motion_remaining is not None and len(poses) != 40:
-                raise ValueError("Continuous generation must return exactly 40 poses.")
+            if self.motion_remaining is not None:
+                if len(poses) != 41:
+                    raise ValueError(
+                        "Continuous playback requires an origin and exactly 40 future poses."
+                    )
+                if poses[0] != self.motion_origin["pose"]:
+                    raise ValueError("Continuous origin differs from the observed Core pose.")
             if self.observation["objects"]:
                 from promethee.object_actions import check_clearance
                 from promethee.spatial import follow_attachment

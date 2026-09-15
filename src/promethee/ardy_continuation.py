@@ -4,6 +4,12 @@ import hashlib
 import io
 
 
+def generation_window(history_frames, future_frames):
+    """Match Core20's ten-second context budget without pulling a distant goal closer."""
+    total = history_frames + future_frames
+    return min(total, 200), total - 1 if total <= 200 else None
+
+
 class ActionTextEncoding:
     """One encoding for one action in one fixed worker/model lifetime."""
 
@@ -101,9 +107,13 @@ def generate_chunk(model, job, history, goal_skin, text_encoding):
         raise ValueError("Continuous requests emit 40 poses with 40-320 future poses remaining.")
     encoded, error = encode_history(model, history) if history is not None else (None, None)
     history_length = 0 if history is None else len(history["posed_joints"])
-    window = history_length + remaining
+    window, target_frame = generation_window(history_length, remaining)
     target = torch.tensor([job["target"]], device=model.device)
-    constraints = [Root2DConstraintSet(model.skeleton, torch.tensor([window - 1]), target)]
+    constraints = (
+        [Root2DConstraintSet(model.skeleton, torch.tensor([target_frame]), target)]
+        if target_frame is not None
+        else []
+    )
     points = torch.tensor(job["start_pose"]["positions"], device=model.device).unsqueeze(0)
     rotations = torch.tensor(job["start_pose"]["rotations"], device=model.device).unsqueeze(0)
     heading = compute_heading_angle(points.unsqueeze(0), model.skeleton)[:, 0]
@@ -111,7 +121,7 @@ def generate_chunk(model, job, history, goal_skin, text_encoding):
         constraints.append(
             FullBodyConstraintSet(model.skeleton, torch.tensor([0]), points, rotations)
         )
-    if job["posture"] is not None:
+    if job["posture"] is not None and target_frame is not None:
         goal_points, goal_rotations = posture_goal(
             model.skeleton,
             goal_skin,
@@ -123,7 +133,7 @@ def generate_chunk(model, job, history, goal_skin, text_encoding):
         )
         constraints.append(
             FullBodyConstraintSet(
-                model.skeleton, torch.tensor([window - 1]), goal_points, goal_rotations
+                model.skeleton, torch.tensor([target_frame]), goal_points, goal_rotations
             )
         )
     observed, mask = model.motion_rep.create_conditions_from_constraints_batched(
@@ -147,4 +157,9 @@ def generate_chunk(model, job, history, goal_skin, text_encoding):
     raw = {key: value[0, history_length:].cpu().numpy() for key, value in decoded.items()}
     if len(raw["posed_joints"]) != 40 or any(not np.isfinite(x).all() for x in raw.values()):
         raise ValueError("Invalid autoregressive output horizon.")
-    return raw, {"history_frames": history_length, "history_roundtrip_error_m": error}
+    return raw, {
+        "history_frames": history_length,
+        "history_roundtrip_error_m": error,
+        "window_frames": window,
+        "target_frame": target_frame,
+    }

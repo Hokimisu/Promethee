@@ -1,13 +1,18 @@
 // Geometry qualification only: omit textures, but load the same VRM skin and constraints.
 import { readFileSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import { Box3, Texture, Vector3 } from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { VRMLoaderPlugin } from "@pixiv/three-vrm";
 import { CoreRetarget, validateArmProfile } from "./retarget.js";
 import { FootGeometry, footSurfaceSummary } from "./foot-geometry.js";
 import { FootPlantingTrial, captureFootState } from "./foot-planting-trial.js";
-import { capturePreparedPose, applyPreparedPose } from "./prepared-pose.js";
+import {
+    capturePreparedPose,
+    applyPreparedPose,
+    expectedHandTarget,
+} from "./prepared-pose.js";
 
 const [avatarPath, motionPath, outputPath, mode, exportOption, preparedPath] =
     process.argv.slice(2);
@@ -28,6 +33,17 @@ if (
     throw new Error("Use the qualified pixiv asset.");
 const motionBytes = readFileSync(motionPath);
 const data = JSON.parse(motionBytes);
+const observedOrigin = data.observed_origin === true;
+if (
+    data.observed_origin !== undefined &&
+    (!observedOrigin ||
+        data.frames?.length !== 41 ||
+        !data.initial_appearance ||
+        !isDeepStrictEqual(data.frames[0], data.initial_pose))
+)
+    throw new Error(
+        "Continuous preparation requires an exact observed origin and 40 future poses.",
+    );
 if (
     data.fps !== 20 ||
     !Array.isArray(data.frames) ||
@@ -120,8 +136,10 @@ try {
             collect: true,
             initial: initialFeet,
         });
-        for (const [index, frame] of data.frames.entries())
+        for (const [index, frame] of data.frames.entries()) {
+            if (observedOrigin && index === 0) continue;
             collect.apply(frame, data.foot_contacts?.[index], []);
+        }
         const plan = [...collect.required];
         if (data.initial_appearance)
             plan[0] = Math.max(
@@ -138,7 +156,10 @@ try {
         });
     }
     for (const [index, frame] of data.frames.entries()) {
+        const isOrigin = observedOrigin && index === 0;
         retarget.apply(frame);
+        if (isOrigin)
+            applyPreparedPose(retarget, frame, data.initial_appearance.frame);
         const weights = Object.fromEntries(
             Object.entries(initialWeights).map(([name, start]) => [
                 name,
@@ -148,10 +169,10 @@ try {
             ]),
         );
         frameWeights.push(weights);
-        let offset = 0;
-        if (mode === "--plant")
+        let offset = isOrigin ? data.initial_appearance.frame.root_y_offset : 0;
+        if (!isOrigin && mode === "--plant")
             offset = planting.apply(frame, data.foot_contacts?.[index], []);
-        if (mode === "--settle") {
+        if (!isOrigin && mode === "--settle") {
             const before = geometry.sample();
             offset = -Math.min(
                 ...Object.values(before).flatMap((foot) =>
@@ -170,25 +191,14 @@ try {
             retarget.apply({ ...frame, positions });
         }
         const targets = Object.fromEntries(
-            hands.map((hand) => {
-                const bone = hand === "RightHand" ? "rightHand" : "leftHand";
-                return [
-                    hand,
-                    vrm.humanoid
-                        .getRawBoneNode(bone)
-                        .getWorldPosition(new Vector3())
-                        .lerp(
-                            new Vector3(
-                                ...frame.positions[
-                                    data.skeleton.joint_names.indexOf(hand)
-                                ],
-                            ),
-                            weights[hand],
-                        ),
-                ];
-            }),
+            hands.map((hand) => [
+                hand,
+                expectedHandTarget(retarget, frame, hand, weights[hand], {
+                    observedOrigin: isOrigin,
+                }),
+            ]),
         );
-        retarget.alignHands(frame, hands, weights);
+        if (!isOrigin) retarget.alignHands(frame, hands, weights);
         offsets.push(offset);
         if (
             offsets.length > 1 &&
@@ -198,7 +208,11 @@ try {
                 "Combined VRM root correction exceeds 15 mm/frame.",
             );
         const prepared = JSON.parse(
-            JSON.stringify(capturePreparedPose(retarget, offset)),
+            JSON.stringify(
+                isOrigin
+                    ? data.initial_appearance.frame
+                    : capturePreparedPose(retarget, offset),
+            ),
         );
         // Discard the solver state, then measure only the serialized replay.
         retarget.apply(frame);
@@ -253,6 +267,10 @@ try {
                 throw new Error(
                     "Prepared appearance does not continue the visible pose within 2 cm.",
                 );
+            if (isOrigin && maximumInitialJointStep > 1e-10)
+                throw new Error(
+                    "Continuous origin does not restore the exact observed appearance.",
+                );
         }
         if (previousJoints)
             maximumJointStep = Math.max(
@@ -285,6 +303,7 @@ const report = {
     error: failure,
     frames_requested: data.frames.length,
     frames_measured: samples.length,
+    observed_origin_preserved: observedOrigin && maximumInitialJointStep === 0,
     avatar_sha256: sha256(bytes),
     motion_sha256: sha256(motionBytes),
     measurement_source_sha256: sha256(readFileSync(new URL(import.meta.url))),

@@ -167,14 +167,25 @@ export class FootPlantingTrial {
                 mode === "sole" &&
                 (!this.anchors[side] || pivot)
             ) {
+                // A newly predicted support starts at the visible checkpoint,
+                // even when that shoe was just outside the contact tolerance.
+                // Project only Y; do not blend its XZ toward the raw retarget.
+                const start =
+                    this.required.length === 0 ? this.initial?.[side] : null;
+                const origin = start?.target ?? ankle;
+                const surfaceHeight = start
+                    ? Math.min(...start.surface.map((point) => point[1]))
+                    : height;
                 this.anchors[side] = {
                     target:
                         pivotTarget ??
-                        ankle.clone().add(new Vector3(0, -height, 0)),
-                    rotation: nodes[2].getWorldQuaternion(new Quaternion()),
-                    toeRotation: bone(side, "Toes").getWorldQuaternion(
-                        new Quaternion(),
-                    ),
+                        origin.clone().add(new Vector3(0, -surfaceHeight, 0)),
+                    rotation:
+                        start?.rotation.clone() ??
+                        nodes[2].getWorldQuaternion(new Quaternion()),
+                    toeRotation:
+                        start?.toeRotation.clone() ??
+                        bone(side, "Toes").getWorldQuaternion(new Quaternion()),
                 };
             }
             targets[side] =

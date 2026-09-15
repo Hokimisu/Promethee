@@ -2,8 +2,19 @@ import copy
 
 import pytest
 
-from promethee.ardy_continuation import ActionTextEncoding, read_history
+from promethee.ardy_continuation import ActionTextEncoding, generation_window, read_history
 from promethee.motion_history import ExecutedHistory, write_history
+
+
+@pytest.mark.parametrize("history", range(0, 161, 4))
+def test_window_retains_history_and_one_horizon_without_pulling_future_constraints_forward(history):
+    for remaining in range(40, 321, 40):
+        window, target = generation_window(history, remaining)
+        assert history + 40 <= window <= 200
+        if history + remaining <= 200:
+            assert target == history + remaining - 1
+        else:
+            assert target is None
 
 
 def test_observed_history_is_bounded_and_drops_unobserved_time(articulated_pose):
@@ -27,7 +38,8 @@ def test_committed_future_is_separate_and_immutable(articulated_pose):
     future = [copy.deepcopy(articulated_pose) for _ in range(40)]
     future[-1]["positions"][0][0] = 0.1
     poses, committed = history.context(future)
-    assert len(poses) == 44 and committed == 40
+    # Equal consecutive poses still represent distinct instants during stillness.
+    assert len(poses) == 48 and committed == 40
     assert history.samples[-1] == articulated_pose
     assert poses[-1] == future[-1]
     poses[-1]["positions"][0][0] = 0.2
