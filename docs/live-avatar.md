@@ -179,3 +179,26 @@ le retour échouent pour une discontinuité initiale de l'apparence d'environ
 101 mm. Les observations antérieures restent conservées. L'enchaînement entre
 les poses préparées reste donc un défaut observé, distinct des propositions
 ARDY rejetées avant préparation.
+
+## Continuité des appuis entre mouvements
+
+La préparation suivante repart maintenant des positions et orientations des
+pieds affichés, des genoux et de la correction du bassin sauvegardée. Les pieds
+mesurés au contact initialisent les points d'appui ; la transition vers les
+nouvelles cibles et directions de flexion s'étale sur 0,25 s. Le calcul conserve
+les limites de correction, de continuité et de contact existantes. Le rapport
+de préparation détaille aussi l'écart initial par articulation.
+
+Sur cinq transitions archivées (`appearance-transition-calibration-01`), quatre
+passent désormais les 120 poses et le contrôle indépendant des fichiers. Leur
+écart initial maximal passe de 24,8–101,2 mm à moins de 0,2 mm. La cinquième reste
+refusée pour dépassement des 5 cm d'abaissement du bassin. La transition de
+101,2 mm a été inspectée dans le navigateur en incluant sa pose précédente :
+elle conserve notamment la position croisée des jambes de cette pose. Ce test
+ne valide ni l'équilibre ni les collisions entre les jambes.
+
+Un nouvel essai (`runtime-transition-holdout-01`, graine initiale 118123)
+termine les deux postures et le retour vers `[0.28, -0.07]`, à 9 mm de la cible.
+Les trois préparations acceptées ont 120 contacts de surface sur 120 poses et
+un écart initial inférieur à 0,02 mm. Le premier déplacement vers `[-0.17, 0.19]`
+reste refusé par la limite d'abaissement. T07 n'est pas clôturé par cette correction.

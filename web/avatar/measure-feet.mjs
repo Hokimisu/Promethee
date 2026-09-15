@@ -6,7 +6,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { VRMLoaderPlugin } from "@pixiv/three-vrm";
 import { CoreRetarget, validateArmProfile } from "./retarget.js";
 import { FootGeometry, footSurfaceSummary } from "./foot-geometry.js";
-import { FootPlantingTrial } from "./foot-planting-trial.js";
+import { FootPlantingTrial, captureFootState } from "./foot-planting-trial.js";
 import { capturePreparedPose, applyPreparedPose } from "./prepared-pose.js";
 
 const [avatarPath, motionPath, outputPath, mode, exportOption, preparedPath] =
@@ -97,11 +97,13 @@ let maximumHandError = 0;
 let maximumHipError = 0;
 let maximumJointStep = 0;
 let maximumInitialJointStep = null;
+let initialJointSteps = null;
 let previousJoints = null;
 let failure = null;
 let planting;
 try {
     let initialJoints = null;
+    let initialFeet = null;
     if (data.initial_appearance) {
         applyPreparedPose(
             retarget,
@@ -111,19 +113,29 @@ try {
         initialJoints = retarget.bones.map(({ node }) =>
             node.getWorldPosition(new Vector3()),
         );
+        initialFeet = captureFootState(vrm, geometry);
     }
     if (mode === "--plant") {
         const collect = new FootPlantingTrial(vrm, retarget, geometry, {
             collect: true,
+            initial: initialFeet,
         });
         for (const [index, frame] of data.frames.entries())
             collect.apply(frame, data.foot_contacts?.[index], []);
         const plan = [...collect.required];
+        if (data.initial_appearance)
+            plan[0] = Math.max(
+                plan[0],
+                -data.initial_appearance.frame.root_y_offset,
+            );
         for (let i = 1; i < plan.length; i++)
             plan[i] = Math.max(plan[i], plan[i - 1] - 0.013);
         for (let i = plan.length - 2; i >= 0; i--)
             plan[i] = Math.max(plan[i], plan[i + 1] - 0.013);
-        planting = new FootPlantingTrial(vrm, retarget, geometry, { plan });
+        planting = new FootPlantingTrial(vrm, retarget, geometry, {
+            plan,
+            initial: initialFeet,
+        });
     }
     for (const [index, frame] of data.frames.entries()) {
         retarget.apply(frame);
@@ -228,6 +240,12 @@ try {
             node.getWorldPosition(new Vector3()),
         );
         if (index === 0 && initialJoints) {
+            initialJointSteps = Object.fromEntries(
+                joints.map((point, i) => [
+                    retarget.bones[i].name,
+                    point.distanceTo(initialJoints[i]),
+                ]),
+            );
             maximumInitialJointStep = Math.max(
                 ...joints.map((point, i) => point.distanceTo(initialJoints[i])),
             );
@@ -279,6 +297,7 @@ const report = {
     uniform_scale: scale,
     maximum_joint_step_m: samples.length > 1 ? maximumJointStep : null,
     maximum_initial_joint_step_m: maximumInitialJointStep,
+    initial_joint_steps_m: initialJointSteps,
     maximum_hip_error_m: samples.length ? maximumHipError : null,
     maximum_attached_hand_error_m: fullHandSamples ? maximumHandError : null,
     maximum_alignment_target_error_m: maximumAlignmentError,

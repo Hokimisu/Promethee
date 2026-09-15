@@ -12,7 +12,91 @@ import { ObjectVisuals } from "./objects.js";
 import { alignHand } from "./align-hand.js";
 import { footSurfaceSummary } from "./foot-geometry.js";
 import { capturePreparedPose, applyPreparedPose } from "./prepared-pose.js";
-import { settledRootLowering } from "./foot-planting-trial.js";
+import {
+    settledRootLowering,
+    captureFootState,
+    FootPlantingTrial,
+} from "./foot-planting-trial.js";
+
+test("a new support solve preserves an already bent supported leg pose", () => {
+    const scene = new Object3D(),
+        hips = new Object3D();
+    scene.add(hips);
+    const nodes = { hips };
+    for (const side of ["left", "right"]) {
+        let parent = hips;
+        for (const name of ["UpperLeg", "LowerLeg", "Foot", "Toes"]) {
+            const node = new Object3D();
+            parent.add(node);
+            nodes[side + name] = node;
+            if (name === "UpperLeg")
+                node.position.x = side === "left" ? -0.1 : 0.1;
+            else node.position.y = name === "Toes" ? -0.1 : -0.4;
+            parent = node;
+        }
+    }
+    const vrm = {
+        scene,
+        update() {},
+        humanoid: { getNormalizedBoneNode: (name) => nodes[name] },
+    };
+    const geometry = {
+        sample: () =>
+            Object.fromEntries(
+                ["left", "right"].map((side) => [
+                    side,
+                    [
+                        nodes[side + "Foot"]
+                            .localToWorld(new Vector3(0, -0.1, 0))
+                            .toArray(),
+                    ],
+                ]),
+            ),
+    };
+    hips.position.y = 0.86;
+    const bend = Math.acos(0.76 / 0.8);
+    for (const side of ["left", "right"]) {
+        nodes[side + "UpperLeg"].rotation.x = bend;
+        nodes[side + "LowerLeg"].rotation.x = -2 * bend;
+        nodes[side + "Foot"].rotation.x = bend;
+    }
+    scene.updateMatrixWorld(true);
+    const expected = Object.fromEntries(
+        Object.entries(nodes).map(([name, node]) => [
+            name,
+            node.getWorldPosition(new Vector3()),
+        ]),
+    );
+    const initial = captureFootState(vrm, geometry);
+    const frozen = JSON.stringify(initial);
+    const retarget = {
+        apply(frame) {
+            hips.position.set(...frame.positions[0]);
+            for (const node of Object.values(nodes)) node.quaternion.identity();
+            scene.updateMatrixWorld(true);
+        },
+    };
+    for (let run = 0; run < 2; run++) {
+        const solve = new FootPlantingTrial(vrm, retarget, geometry, {
+            initial,
+            plan: [0.04],
+        });
+        const offset = solve.apply(
+            { positions: [[0, 0.9, 0]] },
+            [true, true, true, true],
+            [],
+        );
+        assert.ok(Math.abs(offset + 0.04) < 1e-8);
+        for (const [name, node] of Object.entries(nodes))
+            assert.ok(
+                node
+                    .getWorldPosition(new Vector3())
+                    .distanceTo(expected[name]) < 1e-6,
+                name,
+            );
+        assert.equal(JSON.stringify(initial), frozen);
+    }
+});
 
 test("skin settling satisfies both root and contact budgets at their boundary", () => {
     assert.equal(settledRootLowering(0.02, 0.001), 0.021);

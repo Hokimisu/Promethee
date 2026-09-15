@@ -23,12 +23,36 @@ export function settledRootLowering(lowering, skinHeight) {
     return bounded;
 }
 
+export function captureFootState(vrm, geometry) {
+    const surfaces = geometry.sample();
+    const bone = (side, name) =>
+        vrm.humanoid.getNormalizedBoneNode(side + name);
+    return Object.fromEntries(
+        ["left", "right"].map((side) => [
+            side,
+            {
+                target: bone(side, "Foot").getWorldPosition(new Vector3()),
+                rotation: bone(side, "Foot").getWorldQuaternion(
+                    new Quaternion(),
+                ),
+                toeRotation: bone(side, "Toes").getWorldQuaternion(
+                    new Quaternion(),
+                ),
+                knee: bone(side, "LowerLeg").getWorldPosition(new Vector3()),
+                supporting:
+                    Math.abs(Math.min(...surfaces[side].map((p) => p[1]))) <=
+                    0.0001,
+            },
+        ]),
+    );
+}
+
 export class FootPlantingTrial {
     constructor(
         vrm,
         retarget,
         geometry,
-        { plan = null, collect = false } = {},
+        { plan = null, collect = false, initial = null } = {},
     ) {
         this.vrm = vrm;
         this.retarget = retarget;
@@ -38,6 +62,12 @@ export class FootPlantingTrial {
         this.plan = plan;
         this.collect = collect;
         this.required = [];
+        this.initial = initial;
+        if (initial) {
+            for (const side of ["left", "right"])
+                if (initial[side].supporting)
+                    this.anchors[side] = initial[side];
+        }
     }
 
     apply(frame, contacts, hands) {
@@ -90,6 +120,20 @@ export class FootPlantingTrial {
             toeRotations[side] =
                 this.anchors[side]?.toeRotation ??
                 bone(side, "Toes").getWorldQuaternion(new Quaternion());
+            if (this.initial && this.required.length < 5) {
+                const blend = this.required.length / 5;
+                const start = this.initial[side];
+                targets[side].copy(
+                    start.target.clone().lerp(targets[side], blend),
+                );
+                rotations[side] = start.rotation
+                    .clone()
+                    .slerp(rotations[side], blend);
+                toeRotations[side] = start.toeRotation
+                    .clone()
+                    .slerp(toeRotations[side], blend);
+                guides[side] = start.knee.clone().lerp(knee, blend);
+            }
             const length = hip.distanceTo(knee) + knee.distanceTo(ankle) - 1e-5;
             const horizontal = Math.hypot(
                 hip.x - targets[side].x,
