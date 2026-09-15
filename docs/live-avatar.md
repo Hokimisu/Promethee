@@ -89,7 +89,10 @@ le seul fichier du navigateur ne suffit pas. Une base existante doit être au
 schéma 10, avec sauvegarde vérifiée lors de sa migration.
 
 Le contrôleur prépare la géométrie puis la fait vérifier dans deux processus
-annulables. Le corps conserve sa dernière observation pendant cette préparation.
+annulables. En mode par séquence, le corps conserve sa dernière observation
+pendant cette préparation. L'option expérimentale
+[`--continuous-motion`](continuous-motion.md) permet de préparer le bloc suivant
+pendant la lecture d'un bloc validé ; les attentes et les refus restent visibles.
 Chaque pose jouée persiste ensemble le corps Core, les objets, les rotations VRM
 et la correction verticale. Le navigateur applique cet instantané sans refaire
 l'alignement des mains. Après un arrêt ou un redémarrage, la même apparence est

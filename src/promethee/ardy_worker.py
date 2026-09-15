@@ -30,6 +30,7 @@ def serve(args, send):
         stabilize_contacts,
         validate_sole_contacts,
     )
+    from ardy_continuation import ActionTextEncoding, generate_chunk, read_history
     from ardy_geometry import continue_from_pose, ground_motion, posture_goal
 
     args.output.mkdir(parents=True, exist_ok=True)
@@ -39,6 +40,7 @@ def serve(args, send):
     model.text_encoder = load_text_encoder(mode="api", url=args.encoder_url, device="cuda")
     cpu_skin = CoreSkin(CoreSkeleton27())
     goal_skin = CoreSkin(model.skeleton)
+    action_text = ActionTextEncoding(model)
     send(
         {
             "type": "ready",
@@ -65,7 +67,9 @@ def serve(args, send):
         if not isinstance(job_id, str) or not re.fullmatch(r"[a-f0-9]{32}", job_id):
             raise ValueError("Invalid worker job ID.")
         try:
-            if set(job) != {"job_id", "target", "text", "seed", "frames", "start_pose", "posture"}:
+            fields = {"job_id", "target", "text", "seed", "frames", "start_pose", "posture"}
+            continuous = set(job) == fields | {"history", "future_frames", "stream_id"}
+            if set(job) != fields and not continuous:
                 raise ValueError("Invalid worker request fields.")
             frames, seed, text = job["frames"], job["seed"], job["text"]
             if type(frames) is not int or not 40 <= frames <= 320 or frames % 4:
@@ -139,23 +143,43 @@ def serve(args, send):
             )
             seed_everything(seed)
             started = time.perf_counter()
+            continuation = None
             with torch.inference_mode():
-                motion = model(
-                    [text],
-                    frames,
-                    10,
-                    length_to_mask(lengths),
-                    heading,
-                    mask,
-                    observed,
-                    cfg_weight=(2.0, 2.0),
-                    crop_history_length=160,
-                    progress_bar=lambda values: values,
-                )
-                output = model.motion_rep.inverse(motion, is_normalized=True)
-                raw = {key: value[0].detach().cpu().numpy() for key, value in output.items()}
-            for field in ("root_positions", "posed_joints"):
-                raw[field] += offset
+                if continuous:
+                    if initial is None:
+                        raise ValueError(
+                            "Continuous generation requires an observed starting pose."
+                        )
+                    if not isinstance(job["stream_id"], str) or not re.fullmatch(
+                        r"[a-f0-9]{32}", job["stream_id"]
+                    ):
+                        raise ValueError("Invalid motion stream identity.")
+                    encode_started = time.perf_counter()
+                    text_encoding, cached = action_text.get(job["stream_id"], text)
+                    encode_seconds = time.perf_counter() - encode_started
+                    raw, continuation = generate_chunk(
+                        model, job, read_history(args.output, job), goal_skin, text_encoding
+                    )
+                    continuation.update(
+                        text_encoding_reused=cached, text_encode_seconds=encode_seconds
+                    )
+                else:
+                    motion = model(
+                        [text],
+                        frames,
+                        10,
+                        length_to_mask(lengths),
+                        heading,
+                        mask,
+                        observed,
+                        cfg_weight=(2.0, 2.0),
+                        crop_history_length=160,
+                        progress_bar=lambda values: values,
+                    )
+                    output = model.motion_rep.inverse(motion, is_normalized=True)
+                    raw = {key: value[0].detach().cpu().numpy() for key, value in output.items()}
+                    for field in ("root_positions", "posed_joints"):
+                        raw[field] += offset
             processed = {key: value.copy() for key, value in raw.items()}
             contact_residual = None
             support_projection = None
@@ -194,6 +218,7 @@ def serve(args, send):
                     "job_id": job_id,
                     "file": f"{job_id}-processed.npz",
                     "elapsed_seconds": time.perf_counter() - started,
+                    "continuation": continuation,
                     "grounding": grounding,
                     "skin_contacts": skin_contacts,
                     "max_unreachable_foot_target_m": contact_residual,

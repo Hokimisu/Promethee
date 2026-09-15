@@ -121,8 +121,12 @@ def test_preparation_waits_and_late_cancelled_poses_are_never_played(prepared_dr
     assert controller.observation == before and controller.trajectory is None
 
 
-def test_prepared_playback_cancel_and_restore_keep_the_same_appearance(prepared_driver):
+@pytest.mark.parametrize("continuous", [False, True])
+def test_prepared_playback_cancel_and_restore_keep_the_same_appearance(prepared_driver, continuous):
+    if continuous:
+        pytest.importorskip("numpy")
     controller, service, worker, preparation, now, poses = prepared_driver
+    controller.continuous_motion = continuous
     for index, pose in enumerate(poses):
         for point in pose["positions"]:
             point[0] = index / 78
@@ -143,12 +147,18 @@ def test_prepared_playback_cancel_and_restore_keep_the_same_appearance(prepared_
         KinematicController(service, Worker(worker.output))
     fresh = Preparation()
     restored = KinematicController(
-        service, Worker(worker.output), clock=lambda: now[0], appearance_preparation=fresh
+        service,
+        Worker(worker.output),
+        clock=lambda: now[0],
+        appearance_preparation=fresh,
+        continuous_motion=continuous,
     )
     try:
         restored.tick()
         assert restored.ready and restored.observation == last
         assert fresh.jobs == []
+        assert restored.future_segment is None
+        assert restored.history.context() == ([], 0)
         assert service.get("move-one")["status"] == "cancelled"
     finally:
         restored.close()

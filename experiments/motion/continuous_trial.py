@@ -27,26 +27,10 @@ from ardy_contacts import (  # noqa: E402
     stabilize_contacts,
     validate_sole_contacts,
 )
+from ardy_continuation import encode_history  # noqa: E402
 from ardy_geometry import continue_from_pose  # noqa: E402
 
 FIELDS = ("posed_joints", "global_rot_mats", "root_positions")
-
-
-def encode_history(model, values):
-    """Rebuild model features from corrected world rotations, not stale latents."""
-    matrices = torch.as_tensor(values["global_rot_mats"], device="cuda").unsqueeze(0)
-    root = torch.as_tensor(values["root_positions"], device="cuda").unsqueeze(0)
-    local = matrices.clone()
-    for joint, parent in enumerate(model.skeleton.joint_parents.tolist()):
-        if parent >= 0:
-            local[:, :, joint] = matrices[:, :, parent].transpose(-1, -2) @ matrices[:, :, joint]
-    encoded = model.motion_rep(local_joint_rots=local, root_positions=root, to_normalize=True)
-    restored = model.motion_rep.inverse(encoded, is_normalized=True)
-    expected = torch.as_tensor(values["posed_joints"], device="cuda")
-    error = torch.linalg.vector_norm(restored["posed_joints"][0] - expected, dim=-1).max().item()
-    if not torch.isfinite(encoded).all() or error > 0.002:
-        raise ValueError(f"History reconstruction changes corrected joints by {error:.6f} m.")
-    return encoded, error
 
 
 def pose(values, index=-1):

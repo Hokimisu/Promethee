@@ -19,6 +19,12 @@ préparation VRM, avec les mêmes poses. Les nouvelles séries confirment toutef
 que d'autres déplacements restent refusés. Les mesures ci-dessus décrivent
 l'état initial de la recherche ; le guide lié présente ce correctif et ses limites.
 
+Le [mode continu expérimental](../continuous-motion.md) intègre ensuite cette
+continuation au runtime : blocs validés, futur distinct de l'historique exécuté,
+réutilisation du texte pendant une action et annulation. Les premiers essais
+réels confirment ce raccord, mais conservent attentes et refus de marche.
+Les propositions ci-dessous restent la feuille de recherche initiale.
+
 ## Décisions proposées
 
 | Blocage | Solution à essayer en premier | Alternative si elle échoue | Nature du travail |

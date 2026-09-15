@@ -25,7 +25,15 @@ def main():
     parser.add_argument("--first-target", type=float, nargs=2, required=True)
     parser.add_argument("--second-target", type=float, nargs=2, required=True)
     parser.add_argument("--avatar", type=Path, help="Prepare the pinned VRM before playback.")
+    parser.add_argument("--continuous-motion", action="store_true")
+    parser.add_argument(
+        "--cancel-first-after",
+        type=float,
+        help="Cancel the first action this many seconds after playback starts.",
+    )
     args = parser.parse_args()
+    if args.cancel_first_after is not None and not 0 < args.cancel_first_after < 5:
+        parser.error("Use a cancellation delay between zero and five seconds.")
     args.output.mkdir(parents=True, exist_ok=False)
     shutil.copyfile(
         Path(__file__).with_name("runtime-criteria.json"), args.output / "criteria.json"
@@ -35,6 +43,8 @@ def main():
     for name in (
         "kinematic.py",
         "ardy_worker.py",
+        "ardy_continuation.py",
+        "motion_history.py",
         "ardy_geometry.py",
         "ardy_contacts.py",
         "motion_process.py",
@@ -92,7 +102,11 @@ def main():
         )
     try:
         controller = KinematicController(
-            service, worker, seed=args.seed, appearance_preparation=preparation
+            service,
+            worker,
+            seed=args.seed,
+            appearance_preparation=preparation,
+            continuous_motion=args.continuous_motion,
         )
     except Exception:
         worker.close()
@@ -104,10 +118,12 @@ def main():
     sample_times = []
     trial_started = time.monotonic()
 
-    def spin_until(predicate, seconds=90):
+    def spin_until(predicate, seconds=90, on_tick=None):
         deadline = time.monotonic() + seconds
         while time.monotonic() < deadline:
             controller.tick()
+            if on_tick is not None:
+                on_tick()
             if controller.ready:
                 observations.append(copy.deepcopy(controller.observation))
                 sample_times.append(time.monotonic() - trial_started)
@@ -129,11 +145,35 @@ def main():
             state = service.get_world()
             service.submit(request_id, state["revision"], action)
             started = time.monotonic()
+            first_playback = None
+            cancellation = None
+
+            def maybe_cancel(index=index, request_id=request_id):
+                nonlocal first_playback, cancellation
+                if index != 0 or args.cancel_first_after is None or cancellation is not None:
+                    return
+                if first_playback is None and controller.trajectory is not None:
+                    first_playback = time.monotonic()
+                if (
+                    first_playback is not None
+                    and time.monotonic() - first_playback >= args.cancel_first_after
+                ):
+                    cancellation = {
+                        "seconds_after_first_pose": time.monotonic() - first_playback,
+                        "observation": copy.deepcopy(controller.observation),
+                        "generation_pending": worker.pending is not None,
+                        "appearance_pending": preparation is not None
+                        and preparation.pending is not None,
+                        "buffered_future": controller.future_segment is not None,
+                    }
+                    service.cancel(request_id)
+
             spin_until(
                 lambda request_id=request_id: (
                     service.get(request_id)["status"]
-                    in {"completed", "failed", "interrupted", "rejected"}
-                )
+                    in {"completed", "failed", "interrupted", "rejected", "cancelled"}
+                ),
+                on_tick=maybe_cancel,
             )
             item = service.get(request_id)
             result = {
@@ -144,6 +184,18 @@ def main():
                 "error": item.get("error"),
                 "observed_position": service.get_world()["avatar"]["position"],
             }
+            if args.cancel_first_after is not None and index == 0:
+                result["cancellation"] = (
+                    None
+                    if cancellation is None
+                    else {key: value for key, value in cancellation.items() if key != "observation"}
+                )
+                result["cancelled_pose_preserved"] = (
+                    cancellation is not None
+                    and item["status"] == "cancelled"
+                    and controller.observation == cancellation["observation"]
+                    and item["observation"] == cancellation["observation"]
+                )
             results.append(result)
             print(json.dumps(result), flush=True)
     finally:

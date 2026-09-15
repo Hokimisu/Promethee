@@ -30,6 +30,12 @@ ARDY Core produit désormais les poses du premier contrôleur cinématique. `ard
 
 Les tickets T03–T05 du [plan d'implémentation](implementation-plan.md) précisent cette évolution, les rejets, l'état `interrupted` après perte de confirmation, les migrations et la compatibilité avec le socle logique.
 
+Le mode optionnel [`--continuous-motion`](continuous-motion.md) génère et
+prépare des blocs de 40 poses pendant la lecture du bloc engagé. Son contexte
+distingue les poses observées du futur validé ; une annulation retire ce futur.
+Il reste expérimental : le débit, les transitions et la marche ne sont pas
+qualifiés pour une présence naturelle continue.
+
 ## Voix et agent
 
 `chat.py` lance la boucle native Hermes avec un historique persistant et des
