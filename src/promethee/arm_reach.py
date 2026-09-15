@@ -32,8 +32,46 @@ def forward_positions(rotations, root, skeleton):
     return points
 
 
-def reach_arm(pose, skeleton, target, *, side="right", frames=61):
-    """Move the wrist on a smooth path, preserving the original hand orientation.
+def interpolate_rotation(start, end, phase):
+    """Shortest SO(3) arc; choose a deterministic axis for an exact half turn."""
+    import numpy as np
+
+    # Stored float32 poses accumulate small orthogonality errors. Project only
+    # the interpolation endpoints onto SO(3), so acos/skew do not amplify them
+    # near a half turn. Input pose validation rejects malformed rotations first.
+    def proper(matrix):
+        u, _, vt = np.linalg.svd(matrix)
+        return u @ np.diag([1, 1, np.linalg.det(u @ vt)]) @ vt
+
+    start, end = proper(start), proper(end)
+    delta = start.T @ end
+    angle = np.arccos(np.clip((np.trace(delta) - 1) / 2, -1, 1))
+    if angle < 1e-8:
+        return start.copy()
+    if np.pi - angle < 1e-5:
+        # The rotation axis is the eigenvector with eigenvalue one. Symmetrizing
+        # avoids complex eigenvectors due to roundoff at a half turn.
+        _, vectors = np.linalg.eigh((delta + delta.T) / 2)
+        axis = vectors[:, -1]
+        skew = np.array(
+            [delta[2, 1] - delta[1, 2], delta[0, 2] - delta[2, 0], delta[1, 0] - delta[0, 1]]
+        )
+        if np.linalg.norm(skew) > 1e-10:
+            axis *= 1 if axis @ skew >= 0 else -1
+        elif axis[np.argmax(np.abs(axis))] < 0:
+            axis *= -1
+    else:
+        axis = np.array(
+            [delta[2, 1] - delta[1, 2], delta[0, 2] - delta[2, 0], delta[1, 0] - delta[0, 1]]
+        ) / (2 * np.sin(angle))
+    x, y, z = axis
+    cross = np.array([[0, -z, y], [z, 0, -x], [-y, x, 0]])
+    value = phase * angle
+    return start @ (np.eye(3) + np.sin(value) * cross + (1 - np.cos(value)) * cross @ cross)
+
+
+def reach_arm(pose, skeleton, target, *, side="right", frames=61, hand_rotation=None):
+    """Move the wrist while preserving its local pose or reaching a hand orientation.
 
     Reject unreachable targets instead of projecting them and declaring arrival.
     Finger articulation, joint limits, self-collision and object contact are not
@@ -56,6 +94,15 @@ def reach_arm(pose, skeleton, target, *, side="right", frames=61):
         raise ValueError("Expected 27 joint positions.")
     validate_pose(pose, points[0, [0, 2]].tolist())
     rotations = np.asarray(pose["rotations"], dtype=float)
+    if hand_rotation is not None:
+        hand_rotation = np.asarray(hand_rotation, dtype=float)
+        if (
+            hand_rotation.shape != (3, 3)
+            or not np.isfinite(hand_rotation).all()
+            or not np.allclose(hand_rotation.T @ hand_rotation, np.eye(3), atol=1e-6)
+            or abs(np.linalg.det(hand_rotation) - 1) > 1e-6
+        ):
+            raise ValueError("Hand orientation must be a proper global rotation matrix.")
     reconstructed = forward_positions(rotations, points[0], skeleton)
     if np.max(np.linalg.norm(reconstructed - points, axis=-1)) > 0.001:
         raise ValueError("Observed positions do not agree with the supplied Core skeleton.")
@@ -106,6 +153,21 @@ def reach_arm(pose, skeleton, target, *, side="right", frames=61):
             raise ValueError("Forward kinematics did not reach the requested wrist point.")
         positions.append(actual)
         matrices.append(updated)
+    local_hand = rotations[elbow].T @ rotations[wrist]
+    local_target = local_hand if hand_rotation is None else matrices[-1][elbow].T @ hand_rotation
+    descendants = {wrist}
+    for joint, parent in enumerate(parents):
+        if parent in descendants:
+            descendants.add(joint)
+    for index in range(1, frames):
+        phase = index / (frames - 1)
+        blend = phase * phase * (3 - 2 * phase)
+        updated = matrices[index]
+        new_hand = updated[elbow] @ interpolate_rotation(local_hand, local_target, blend)
+        change = new_hand @ rotations[wrist].T
+        for joint in descendants:
+            updated[joint] = change @ rotations[joint]
+        positions[index] = forward_positions(updated, points[0], skeleton)
     return {
         "posed_joints": np.asarray(positions),
         "global_rot_mats": np.asarray(matrices),
