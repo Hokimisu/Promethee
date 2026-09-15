@@ -170,9 +170,9 @@ class TextHost:
         self.initiative_turn = None
         store.recover()
 
-    def start(self, message):
+    def start(self, message, *, source="user"):
         started = time.monotonic()
-        opened = self.store.begin(message, timeout=self.timeout)
+        opened = self.store.begin(message, timeout=self.timeout, trigger=source)
         self.initiative_turn = None
         return self._launch(opened, message, started)
 

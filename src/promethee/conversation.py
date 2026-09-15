@@ -86,9 +86,11 @@ class ConversationStore:
             history.append({"role": "user", "content": json.loads(data)["message"]})
         return bounded_history(history)
 
-    def begin(self, message, *, timeout=60):
+    def begin(self, message, *, timeout=60, trigger="user"):
+        if trigger not in {"user", "live"}:
+            raise ValueError("Unknown conversation source.")
         with self.service._transaction() as (conn, now):
-            return self._begin(conn, now, message, timeout=timeout)
+            return self._begin(conn, now, message, timeout=timeout, trigger=trigger)
 
     def _begin(self, conn, now, message, *, timeout=60, trigger="user"):
         """Open within a trusted host transaction, including any initiative reservation."""

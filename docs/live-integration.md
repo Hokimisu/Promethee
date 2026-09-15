@@ -99,8 +99,55 @@ de l'attente finale. Chacun des cinq cas ouvre une seule connexion. Le mode
 `--test-url` refuse toute adresse hors `ws://127.0.0.1:<port>/v1` et emploie
 toujours une clé factice, même si une clé de compte existe dans l'environnement.
 
-Restent à implémenter et vérifier : le raccord au même hôte Hermes, le transport
-audio continu avec coupure des buffers, la gestion des corrections et la reprise
-de contexte. Restent ensuite à qualifier avec le compte : accès effectif,
+## Délégation au même hôte Hermes
+
+`LiveDelegation` dans `src/promethee/live_delegation.py` reçoit les événements
+du transport et utilise le `TextHost` existant. L'appelant sérialise `accept`,
+`poll` et `close`. Chaque résultat contient un `event` destiné au transport et
+le texte complet destiné à l'affichage ; sa présence ne prouve ni envoi ni lecture
+audio. Le lancement de bout en bout et les périphériques restent à raccorder.
+
+Le contexte distingue `user_transcript` de `live_output_transcript`, conserve
+l'ordre d'arrivée et les horodatages, et indique explicitement que la phrase
+n'est pas garantie complète et que les mots entendus sont inconnus. Ces données
+sont transmises dans un message balisé de l'hôte, conservé par l'historique natif
+Hermes. Le tour porte la provenance `live`. Aucune transcription de sortie ne
+devient une instruction utilisateur ni une preuve d'action.
+
+Une fenêtre de regroupement de 200 ms limite les lancements entre fragments ;
+elle ne prouve pas une fin de phrase. Après lancement, un nouveau fragment
+utilisateur invalide le tour avant fermeture du processus. Le raccord retourne
+alors un avis d'interruption au même ID opaque et ne relance pas ce travail.
+Une nouvelle délégation est nécessaire. Une nouvelle délégation concurrente
+remplace aussi l'ancienne. Cette règle peut interrompre une demande dont la
+transcription arrive tard ; sa fluidité reste à mesurer avec GPT-Live réel.
+
+Le budget de session est explicite, entre 1 et 100 appels Hermes. Les doublons
+d'ID sont ignorés, les IDs réutilisés avec un événement différent sont refusés,
+et une erreur ferme le contexte en invalidant les outils. Les limites de contexte
+échouent explicitement sans tronquer l'historique. Un résultat de plus de
+500 octets UTF-8 reste disponible intégralement en texte ; la voix reçoit un
+avis de dépassement, jamais une affirmation tronquée. Cette borne conservatrice
+est volontairement plus restrictive que les 500 tokens du service.
+
+L'essai `.local/astra-live-delegation-01` a utilisé deux vrais appels à
+`gpt-6-astra` via l'authentification native ChatGPT de Hermes. Les événements
+Live étaient simulés, sans service vocal ni périphérique :
+
+| Cas | Observation |
+|---|---|
+| Demande divisée par une délégation | Monde relu, zéro objet rapporté ; réponse en 20,10 s, ID opaque conservé |
+| Sortie vocale affirmant une création inexistante | Monde et registre relus ; Astra refuse de confirmer la balle, en 19,95 s |
+
+Deux tours seulement sont enregistrés malgré les retransmissions de délégation,
+avec zéro exécution. Les tests CPU couvrent aussi l'arrivée tardive d'une
+correction, l'invalidation avant nettoyage, le budget, le résultat trop long et
+la perte du transport. L'essai se reproduit avec
+`experiments/agent/qualify_live_delegation.py --help` et les chemins Hermes
+documentés dans le [guide de configuration](hermes-setup.md).
+
+Restent à implémenter et vérifier : la boucle qui raccorde transport, délégation
+et périphériques, l'audio continu avec coupure des buffers et la reprise du
+contexte vocal après perte de session. Restent ensuite à qualifier avec le compte : accès effectif,
 conversation française, latence, coût, périphériques et mouvements réels.
 La [voix de diagnostic](voice.md) reste le seul mode vocal exécutable de Promethee.

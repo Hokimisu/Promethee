@@ -25,8 +25,11 @@ Le [processus GPT-Live](live-integration.md#processus-de-transport) utilise un
 environnement SDK séparé. Cinq essais locaux du vrai processus vérifient
 l'échange PCM, le retour au même ID de délégation, le rejet d'une entrée invalide,
 la coupure réseau et les bilans finaux absents ou incomplets. Il ne se reconnecte
-pas automatiquement. Ce transport n'est pas encore raccordé à Hermes ni aux
-périphériques ; l'accès et la voix du service distant restent à qualifier.
+pas automatiquement. Le [raccord de délégation](live-integration.md#délégation-au-même-hôte-hermes)
+transmet désormais des fragments sourcés au même Hermes. Deux appels Astra réels
+sur événements Live simulés distinguent une affirmation vocale d'une action
+confirmée ; zéro exécution. La boucle transport/périphériques et la voix du
+service distant restent à qualifier.
 
 La branche [codex/execution-receipts-after-interruption](https://github.com/Hokimisu/Promethee/tree/codex/execution-receipts-after-interruption)
 rend les huit résultats d'exécution les plus récemment mis à jour consultables
