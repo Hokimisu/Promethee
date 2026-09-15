@@ -164,7 +164,9 @@ traitent les buffers sans NumPy.
 GPT-Live propose une [délégation client](https://developers.openai.com/api/docs/guides/live-delegation)
 pour garder Hermes en backend. L'événement de délégation ne contient pas le
 texte de la demande : transcriptions et chronologie doivent être conservées.
-Le SDK 2.24.0 installé dans Hermes n'expose pas `live` ; le futur raccord devra
-utiliser un client compatible sans modifier implicitement cet environnement.
+Le SDK 2.24.0 installé dans Hermes n'expose pas `live`. Le SDK 3.14.0 a maintenant
+été vérifié dans un environnement distinct contre un serveur WebSocket local :
+[versions, essais et contrats du transport](live-integration.md). Il n'est pas
+encore relié au mode vocal de Promethee et l'environnement Hermes reste inchangé.
 Les [corrections Live](https://developers.openai.com/api/docs/guides/live-migration#route-updates-and-corrections)
 doivent invalider les anciens résultats avant leur retour au modèle vocal.
