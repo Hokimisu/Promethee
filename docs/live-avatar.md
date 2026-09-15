@@ -107,3 +107,24 @@ La relecture des 408 poses du doudou conserve les instantanés VRM : le maillage
 affiché a été inspecté dans le navigateur, avec contact du pied gauche sur les
 408 poses et le pied droit à environ 3,5 mm du sol. Les doigts et l'équilibre
 physique ne sont pas validés. Ce mode ne clôt pas T07.
+
+Le premier essai avec nouvelles générations ARDY et apparence préparée
+(`.local/runtime-prepared-holdout-01`, graines 77123–77127) donne deux changements
+de posture terminés et deux déplacements échoués. Le déplacement vers
+`[0.25, 0.15]` est refusé pour absence d'appui prédit aux images 76 et 93 ; celui
+vers `[-0.12, 0.08]` dépasse les 5 cm de correction verticale de l'apparence.
+Aucun des deux déplacements refusés n'est joué ni déclaré terminé.
+
+Les deux postures durent environ 10,3 s chacune, génération et préparation
+comprises, avec 120 poses jouées par posture. Chaque pose a au moins un contact
+de surface mesuré ; la vitesse maximale des points de contact est de 0,017 m/s
+et la discontinuité initiale maximale de 19,35 mm. La relecture de 533 observations
+échantillonnées dans le temps a été inspectée dans le navigateur, bras levés puis
+retour debout. Elle conserve les poses préparées, y compris pendant les attentes.
+Le contrôle des appuis prédit et la limite de correction restent donc deux causes
+d'échec à résoudre ; ces résultats ne valident pas encore les déplacements.
+
+`experiments/motion/qualify_runtime.py --avatar <fichier.vrm>` reproduit cette voie
+avec des cibles et une graine choisies avant l'essai. Le dossier de sortie doit
+être neuf. Il conserve les sources, la configuration, les résultats et les
+observations horodatées ; ces dernières ne sont pas une vidéo à cadence garantie.

@@ -1,6 +1,8 @@
 """Exercise the real Windows/Linux runtime; outputs are technical qualification only."""
 
 import argparse
+import copy
+import hashlib
 import json
 import shutil
 import time
@@ -22,6 +24,7 @@ def main():
     parser.add_argument("--seed", type=int, required=True)
     parser.add_argument("--first-target", type=float, nargs=2, required=True)
     parser.add_argument("--second-target", type=float, nargs=2, required=True)
+    parser.add_argument("--avatar", type=Path, help="Prepare the pinned VRM before playback.")
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=False)
     shutil.copyfile(
@@ -35,8 +38,27 @@ def main():
         "ardy_geometry.py",
         "ardy_contacts.py",
         "motion_process.py",
+        "appearance_process.py",
+        "appearance_checkpoint.py",
+        "prepared_avatar.py",
+        "avatar_reach.py",
+        "avatar_rotation.py",
+        "pixiv_arm_profile.json",
     ):
         shutil.copyfile(source_folder / name, args.output / name)
+    if args.avatar:
+        web_source = Path(__file__).resolve().parents[2] / "web/avatar"
+        web_archive = args.output / "web-sources"
+        web_archive.mkdir()
+        for path in [
+            *web_source.glob("*.js"),
+            *web_source.glob("*.mjs"),
+            web_source / "package-lock.json",
+        ]:
+            shutil.copyfile(path, web_archive / path.name)
+        (args.output / "avatar-sha256.txt").write_text(
+            hashlib.sha256(args.avatar.read_bytes()).hexdigest(), encoding="utf-8"
+        )
     (args.output / "purpose.json").write_text(
         json.dumps(
             {
@@ -59,16 +81,39 @@ def main():
         output=args.output / "motions",
         wsl=args.wsl,
     )
-    controller = KinematicController(service, worker, seed=args.seed)
+    preparation = None
+    if args.avatar:
+        from promethee.appearance_process import AppearancePreparation
+
+        preparation = AppearancePreparation(
+            avatar=args.avatar,
+            script=Path(__file__).resolve().parents[2] / "web/avatar/measure-feet.mjs",
+            output=args.output / "appearance",
+        )
+    try:
+        controller = KinematicController(
+            service, worker, seed=args.seed, appearance_preparation=preparation
+        )
+    except Exception:
+        worker.close()
+        if preparation is not None:
+            preparation.close()
+        raise
     results = []
+    observations = []
+    sample_times = []
+    trial_started = time.monotonic()
 
     def spin_until(predicate, seconds=90):
         deadline = time.monotonic() + seconds
         while time.monotonic() < deadline:
             controller.tick()
+            if controller.ready:
+                observations.append(copy.deepcopy(controller.observation))
+                sample_times.append(time.monotonic() - trial_started)
             if predicate():
                 return
-            time.sleep(0.025)
+            time.sleep(0.05)
         raise TimeoutError("Runtime qualification timed out.")
 
     try:
@@ -104,6 +149,10 @@ def main():
     finally:
         controller.close()
         (args.output / "results.json").write_text(json.dumps(results, indent=2), encoding="utf-8")
+        (args.output / "observations.json").write_text(
+            json.dumps({"sample_times_seconds": sample_times, "observations": observations}),
+            encoding="utf-8",
+        )
 
 
 if __name__ == "__main__":
