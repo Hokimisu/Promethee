@@ -115,6 +115,11 @@ Les cinq derniers états sont terminaux. Les événements paginés portent `seq`
 
 ## Pilote et observations
 
+Depuis le schéma 9, les objets peuvent aussi porter une
+[pose 3D et un attachement à la main](spatial-objects.md). Ces champs sont
+validés et persistés avec l'observation complète ; ils ne sont pas ajoutés
+aux objets logiques historiques par la migration.
+
 Seul le pilote appelle `acquire_controller(source=..., supported_actions=[...], lease_seconds=5.0)`. `logical-test` exige une fixture ; `kinematic` et `physics` exigent une session. Ces étiquettes décrivent la provenance déclarée par le code du pilote ; elles ne prouvent pas à elles seules la validité d'une intégration. Le handle retourné et ses opérations ne doivent jamais être exposés à un modèle comme outils.
 
 - `heartbeat()` renouvelle la propriété exclusive. Un second propriétaire est refusé ; une ancienne session ne peut pas renouveler la nouvelle.

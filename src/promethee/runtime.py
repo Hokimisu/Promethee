@@ -100,7 +100,12 @@ class Runtime:
 
     @staticmethod
     def _require_logical(conn):
-        if read_world(conn)["data_origin"] == "session":
+        world = read_world(conn)
+        if any("spatial" in obj for obj in world["objects"].values()):
+            raise ActionError(
+                "Spatial objects require the body controller; logical actions are disabled."
+            )
+        if world["data_origin"] == "session":
             raise ActionError(
                 "Session worlds require the body controller; logical actions are disabled."
             )

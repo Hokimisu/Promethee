@@ -6,6 +6,7 @@ import re
 
 from promethee.catalog import CATALOG
 from promethee.pose import validate_pose
+from promethee.spatial import validate_spatial
 
 ACTION_FIELDS = {
     "spawn": {"object_id", "asset", "position"},
@@ -163,11 +164,20 @@ def validate_observation(observation):
             "asset",
             "position",
             "text",
+            "spatial",
         }:
             raise ActionError("Invalid observed object fields.")
         if not isinstance(obj["asset"], str) or obj["asset"] not in CATALOG:
             raise ActionError("Unknown observed asset.")
         obj["position"] = position(obj["position"])
+        if "spatial" in obj:
+            try:
+                obj["spatial"] = validate_spatial(obj["spatial"], obj["position"], observed["pose"])
+            except ValueError as exc:
+                raise ActionError(str(exc)) from exc
+            attached = obj["spatial"]["attachment"] is not None
+            if attached != (avatar["holding"] == object_id):
+                raise ActionError("Hand attachment and held object reference disagree.")
         if "text" in obj and (
             not CATALOG[obj["asset"]].get("write")
             or not isinstance(obj["text"], str)
@@ -180,6 +190,8 @@ def validate_observation(observation):
             identifier(target)
             if target not in objects or not CATALOG[objects[target]["asset"]].get(capability):
                 raise ActionError(f"Invalid observed {field} reference.")
+            if field == "holding" and "spatial" in objects[target]:
+                continue  # The full hand transform was checked above, not the hips projection.
             if math.dist(avatar["position"], objects[target]["position"]) > 1e-6:
                 raise ActionError(f"Observed {field} object is detached from avatar.")
     if avatar["holding"] is not None and avatar["holding"] == avatar["seated_on"]:

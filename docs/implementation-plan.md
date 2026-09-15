@@ -231,6 +231,10 @@ Préparation livrée : [portée géométrique du bras Core](arm-reaching.md), av
 douze essais locaux et inspection VRM d'une cible haute. Ce calcul n'est pas
 une prise et n'est pas exposé au contrôleur. T08 reste ouvert.
 
+Le [contrat d'observation des objets en 3D](spatial-objects.md) persiste aussi
+les attachements à la main et vérifie leur cohérence après interruption dans
+des tests CPU. Le contrôleur et le rendu d'interaction restent à raccorder.
+
 **À modifier :** catalogue, validation, contrôleur et rendu.
 **À créer :** tests des interactions et fiche de provenance pour chaque asset introduit.
 
