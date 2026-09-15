@@ -69,7 +69,7 @@ def alive(pid):
         try:
             if status.read_text().split()[2] == "Z":
                 return False
-        except FileNotFoundError:
+        except (FileNotFoundError, ProcessLookupError):
             return False
     try:
         os.kill(pid, 0)
@@ -83,6 +83,16 @@ def read_pid(path):
         return int(path.read_text())
     except (FileNotFoundError, ValueError):
         return None
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="Linux /proc process-exit race")
+@pytest.mark.parametrize("error", [FileNotFoundError, ProcessLookupError])
+def test_process_disappearing_during_proc_read_is_terminal(monkeypatch, error):
+    def vanished(*args, **kwargs):
+        raise error("Process exited between opening and reading /proc/PID/stat")
+
+    monkeypatch.setattr(Path, "read_text", vanished)
+    assert not alive(123)
 
 
 def make_host(tmp_path, *, timeout=5):
