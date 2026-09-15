@@ -83,8 +83,50 @@ son registre contient exactement les cinq outils préfixés `mcp__promethee__`.
 L'essai utilise un `HERMES_HOME` neuf, un répertoire courant séparé du dépôt et un
 coffre vide. Il n'a importé ni profil existant, ni souvenirs, ni `AGENTS.md`, ni
 scénario. Ce profil sert uniquement au diagnostic : il n'est pas une identité
-personnelle de l'avatar. La restriction des outils natifs de la future boucle de
-conversation reste à vérifier avant de l'activer.
+personnelle de l'avatar. La restriction des outils natifs a été vérifiée à la
+construction du véritable agent ; la boucle conversationnelle reste à raccorder.
+
+## Construction de l'agent restreint
+
+`hermes_adapter.py` appelle le vrai constructeur `AIAgent` de la version locale
+qualifiée, après `discover_mcp_tools()`. Il utilise uniquement le groupe
+`mcp-promethee`, vérifie les cinq noms effectivement transmis à l'agent, et
+refuse une configuration qui introduirait d'autres outils ou un modèle de secours.
+Il ne recrée pas la boucle de raisonnement de Hermes.
+
+Le profil doit aussi contenir :
+
+```yaml
+tools:
+  tool_search:
+    enabled: "off"
+```
+
+Sans découverte préalable, le constructeur ne reçoit aucun outil. Avec la
+découverte mais sans ce réglage, Hermes remplace les cinq schémas par ses trois
+outils de recherche et d'appel différés. Le réglage ci-dessus permet de vérifier
+directement la liste exposée. `skip_context_files=True`, `load_soul_identity=False`,
+`skip_memory=True` et `skip_background_review=True` empêchent les injections de
+contexte, identité et mémoire existantes dans cet adaptateur initial. La future
+mémoire Promethee devra être raccordée explicitement. La boucle est limitée à
+huit itérations par appel et aucun repli vers un autre modèle n'est configuré.
+
+Le script [qualify_hermes_scope.py](../experiments/agent/qualify_hermes_scope.py)
+construit cet agent sans appeler `run_conversation`. Il requiert le Python de
+Hermes, son répertoire d'installation, le Python du pont MCP, un monde `session`
+existant et un identifiant de tour ouvert par l'hôte. Exemple de commande :
+
+```sh
+HERMES_PYTHON experiments/agent/qualify_hermes_scope.py --output .local/hermes-scope-neuf --hermes-root CHEMIN_HERMES --mcp-python CHEMIN_PYTHON_PROMETHEE --data-dir CHEMIN_SESSION --turn-id IDENTIFIANT_DU_TOUR
+```
+
+Remplacer les chemins et l'identifiant ; le dossier de sortie doit être neuf.
+L'essai réalisé avec le script est conservé dans `.local/hermes-scope-qualification-02`.
+Son rapport confirme les cinq outils, l'exclusion du contexte projet et l'absence
+de modèle de secours. Le nom `gpt-6-astra`, la clé factice et le mode
+`chat_completions` servent uniquement à construire l'objet sans inférence :
+ils ne prouvent ni accès à Astra ni compatibilité effective de ce modèle avec
+ce mode d'API. Une connexion réelle exige encore ces vérifications.
 
 ## Résultats et limites
 
