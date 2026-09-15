@@ -9,7 +9,12 @@ from pathlib import Path
 from uuid import uuid4
 
 from promethee.catalog import INITIAL_WORLD
-from promethee.migrations import check_version, create_execution_tables, read_world
+from promethee.migrations import (
+    check_version,
+    create_conversation_tables,
+    create_execution_tables,
+    read_world,
+)
 from promethee.world import ActionError, apply, identifier
 
 
@@ -48,6 +53,7 @@ class Runtime:
                 )""")
             conn.execute("CREATE TABLE activities (id TEXT PRIMARY KEY, data TEXT NOT NULL)")
             create_execution_tables(conn)
+            create_conversation_tables(conn)
             conn.execute(
                 "INSERT INTO world VALUES (1, ?)",
                 (

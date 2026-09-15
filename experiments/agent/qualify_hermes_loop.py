@@ -15,6 +15,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from promethee.conversation import ConversationStore
 from promethee.execution import ExecutionService
 from promethee.runtime import Runtime
 from promethee.world import ActionError
@@ -28,9 +29,16 @@ root = Path(__file__).resolve().parents[2]
 output = args.output.resolve()
 output.mkdir(exist_ok=False)
 shutil.copyfile(__file__, output / "qualification-source.py")
-for source in ("hermes_worker.py", "hermes_adapter.py", "mcp_server.py", "execution.py"):
+for source in (
+    "hermes_worker.py",
+    "hermes_adapter.py",
+    "mcp_server.py",
+    "execution.py",
+    "conversation.py",
+):
     shutil.copyfile(root / "src/promethee" / source, output / source)
 service = ExecutionService(Runtime(output / "world.sqlite3", data_origin="session"))
+conversation = ConversationStore(service)
 calls = []
 auxiliary = []
 
@@ -132,11 +140,19 @@ class Provider(BaseHTTPRequestHandler):
 server = ThreadingHTTPServer(("127.0.0.1", 0), Provider)
 thread = threading.Thread(target=server.serve_forever, daemon=True)
 thread.start()
-history = []
 results = []
 try:
     for index in range(4):
-        turn = service.begin_turn(timeout=90)
+        user_message = f"Developer diagnostic {index}: read world."
+        opened = conversation.begin(user_message, timeout=90)
+        turn = opened["turn_id"]
+        if index == 1:
+            assert opened["history"] == results[0]["messages"]
+        if index == 3:
+            assert opened["history"] == [
+                *results[1]["messages"],
+                {"role": "user", "content": "Developer diagnostic 2: read world."},
+            ]
         profile = output / f"profile-{index}"
         profile.mkdir()
         config = {
@@ -170,12 +186,12 @@ try:
         (profile / "config.yaml").write_text(json.dumps(config))
         request = {
             "turn_id": turn,
-            "message": f"Developer diagnostic {index}: read world.",
-            "history": history,
+            "message": user_message,
+            "history": opened["history"],
             "model": "diagnostic-fixture",
             "base_url": f"http://127.0.0.1:{server.server_port}/v1",
             "api_mode": "chat_completions",
-            "session_id": "promethee-loop-qualification",
+            "session_id": opened["session_id"],
         }
         env = {**os.environ, "PROMETHEE_OPENAI_API_KEY": "diagnostic-placeholder"}
         started = time.monotonic()
@@ -204,19 +220,19 @@ try:
         assert result["type"] == "result"
         if index == 3:
             assert result["failed"]
-            service.end_turn(turn)
+            conversation.abort(turn)
             results[-1]["delivered"] = False
             continue
         assert not result["failed"]
         assert result["text"] == "Diagnostic fixture: world read."
         if index < 2:
-            service.end_turn(turn)
-            history = result["messages"]
+            conversation.finish(turn, result)
             results[-1]["delivered"] = True
         else:
             try:
-                service.end_turn(turn)
+                conversation.finish(turn, result)
             except ActionError:
+                conversation.abort(turn, status="interrupted")
                 results[-1]["delivered"] = False
             else:
                 raise AssertionError("A superseded reply was accepted for delivery.")

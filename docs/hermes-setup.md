@@ -138,9 +138,15 @@ vérifie que le profil MCP est lié au même tour. La clé vient uniquement de
 `PROMETHEE_OPENAI_API_KEY`, jamais du message JSON ; les erreurs d'entrée et les
 exceptions retournent une catégorie sans reproduire leur texte brut.
 
+`ConversationStore` conserve maintenant les messages utilisateur et l'historique
+natif dans la même base que les tours, sous le schéma 6. L'ouverture d'une
+correction et la validation d'une réponse sont transactionnelles : un ancien
+résultat ne peut pas remplacer l'historique après une nouvelle demande. Un
+redémarrage retrouve le dernier contexte terminé et les messages restés sans
+réponse, sans réémettre une action. Les résultats échoués sont exclus du contexte.
+
 L'hôte doit encore gérer le lancement, l'échéance, l'arrêt du processus et la
-persistance de l'historique. Il doit fermer le tour avant de diffuser une réponse
-et écarter les résultats obsolètes ou échoués. Le worker seul n'est donc pas une
+diffusion sérialisée des réponses. Le worker seul n'est donc pas une
 interface de conversation prête à utiliser. Il ne crée pas de monde, n'ouvre pas
 de tour et ne décide pas qu'une action corporelle a réussi.
 
@@ -163,6 +169,10 @@ de qualification sont exclues de toute mémoire personnelle. La première série
 réussie avec historique, `.local/hermes-loop-qualification-02`, a pris environ
 10,7 secondes par appel, incluant un nouveau processus et l'initialisation de
 Hermes. Ce délai ne mesure pas la vitesse d'Astra et reste trop élevé pour la voix.
+La série `.local/hermes-loop-qualification-06` utilise le stockage transactionnel
+du schéma 6 : deux tours terminés, réponse obsolète exclue de l'historique suivant
+et erreur fournisseur conservée comme échec. Elle utilise toujours le fournisseur
+de test local, pas Astra.
 Hermes sonde aussi `/api/show` sur cet endpoint local ; le doublon répond 404 et
 les appels de conversation restent sur le protocole explicitement choisi.
 

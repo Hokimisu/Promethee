@@ -5,7 +5,14 @@ import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
+
+
+def create_conversation_tables(conn):
+    conn.execute(
+        "CREATE TABLE conversation_turns (seq INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "turn_id TEXT NOT NULL UNIQUE, status TEXT NOT NULL, data TEXT NOT NULL)"
+    )
 
 
 def create_execution_tables(conn):
@@ -60,6 +67,11 @@ def _upgrade(conn, world):
         world["body"]["status"] = "unconfirmed"
     if world["schema_version"] == 4:
         world.update(schema_version=5, conversation=None)
+    if world["schema_version"] == 5:
+        create_conversation_tables(conn)
+        # No old prompt or personal profile is imported. Fence an in-flight
+        # pre-migration conversation, preserving every body observation/action.
+        world.update(schema_version=6, conversation=None)
 
 
 def read_world(conn):
@@ -89,7 +101,7 @@ def migrate(path, backup):
             version = world.get("schema_version")
             if version == SCHEMA_VERSION:
                 return {"schema_version": version, "migrated": False, "backup": None}
-            if type(version) is not int or version not in (1, 2, 3, 4):
+            if type(version) is not int or version not in (1, 2, 3, 4, 5):
                 raise ValueError(f"No migration available from schema {version!r}.")
             if path == backup:
                 raise ValueError("Backup must be a different, new file.")

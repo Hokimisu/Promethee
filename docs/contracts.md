@@ -1,4 +1,4 @@
-# Contrats exécutables — monde version 5
+# Contrats exécutables — monde version 6
 
 Ces exemples décrivent l'API Python locale. Le rendu utilise HTTP/WebSocket sur l'interface de boucle locale. `run` propose des boutons de pilotage qui passent par le service d'exécution. Le [pont MCP stdio](hermes-setup.md) expose cinq opérations de ce même service ; aucune API REST d'action n'est livrée.
 
@@ -80,10 +80,11 @@ serveur MCP utilise cette option et exige ensuite `require_session()`.
 
 ## Migration explicite
 
-Ouvrir une ancienne base v1, v2 ou v3 ne la modifie pas. Pour la migrer, arrêter le pilote et choisir une sauvegarde qui n'existe pas :
+Ouvrir une ancienne base v1 à v5 ne la modifie pas. Pour la migrer, arrêter tous
+les processus qui utilisent la base et choisir une sauvegarde qui n'existe pas :
 
 ```sh
-uv run promethee --data-dir .local/ancien-monde migrate --backup .local/sauvegardes/avant-v4.sqlite3
+uv run promethee --data-dir .local/ancien-monde migrate --backup .local/sauvegardes/avant-v6.sqlite3
 ```
 
 La sauvegarde SQLite est copiée et vérifiée pendant que les écritures sont exclues, avant la migration transactionnelle. Les données sans origine deviennent `legacy`, leur révision commence à zéro ; leur ID de monde, historique et plans sont préservés. Une nouvelle migration d'une base déjà à jour ne fait rien. Une sauvegarde existante n'est jamais écrasée et une version inconnue reste refusée.
@@ -147,11 +148,36 @@ pas à un ancien pont de récupérer le droit d'agir. La retransmission exacte
 d'une soumission existante reste une lecture idempotente de son résultat ;
 elle n'est jamais réémise. Une annulation déjà demandée reste idempotente.
 Les opérations manuelles et le pont de diagnostic sans tour restent disponibles.
-La boucle Hermes qui crée et termine réellement ces tours reste à raccorder.
+Le script de qualification raccorde ces tours à la boucle native Hermes ;
+l'interface conversationnelle et la gestion des processus restent à terminer.
 
 La migration v4 → v5 ajoute uniquement `conversation: null` et conserve poses,
 requêtes et observations ; sauvegarde et rollback restent obligatoires. Fermer
 les anciens processus avant de migrer, puis les relancer avec le même code.
+
+La version 6 ajoute `conversation_turns`, vide lors de la migration, et invalide
+l'éventuel tour conversationnel précédent. Elle conserve les observations,
+exécutions et la propriété du contrôleur corporel ; elle n'importe aucun ancien
+profil ni historique externe. La sauvegarde et le rollback couvrent aussi cette
+création de table.
+
+`ConversationStore(service)` est réservé à l'hôte et exige une base `session`.
+`begin(message, timeout=60)` conserve le message, marque les appels précédents
+inachevés comme `interrupted` et ouvre le nouveau tour atomiquement. Il retourne
+l'identifiant de tour, l'identifiant stable du monde utilisé comme session Hermes,
+et le dernier contexte natif terminé, suivi des messages utilisateur restés sans
+réponse. `finish(turn_id, result)` exige une réponse native réussie, non interrompue
+et liée au tour encore valide ; l'historique et la fermeture du tour sont commis
+ensemble. `abort` ferme uniquement cet appel, sans annuler une action du corps ni
+modifier un tour plus récent. Les résultats natifs échoués ou périmés ne passent
+pas dans le contexte suivant ; les messages utilisateur sont conservés.
+
+Chaque enregistrement conserve le monde, l'origine, le message et sa date. Ce
+stockage n'effectue ni résumé, ni entraînement, ni export automatique vers Obsidian.
+Le contexte transmis est limité à 512 Kio UTF-8 ; un dépassement échoue sans
+troncature implicite. Une future gestion du contexte devra respecter les sources
+de T10. La diffusion réelle du texte ou de l'audio doit encore être sérialisée par
+l'hôte avec l'arrivée d'une correction ; le commit ne signifie pas « entendu ».
 
 `cancel` termine immédiatement une demande non envoyée. Après envoi, il pose `cancel_requested` et une échéance (deux secondes par défaut, configurable à la création du service). Répéter l'appel ne repousse pas cette échéance. La dernière pose confirmée est conservée pendant l'attente. Une fin et une annulation concurrentes produisent un seul résultat terminal selon l'ordre enregistré.
 
