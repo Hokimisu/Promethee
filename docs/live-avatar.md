@@ -116,7 +116,7 @@ vers `[-0.12, 0.08]` dépasse les 5 cm de correction verticale de l'apparence.
 Aucun des deux déplacements refusés n'est joué ni déclaré terminé.
 
 Les deux postures durent environ 10,3 s chacune, génération et préparation
-comprises, avec 120 poses jouées par posture. Chaque pose a au moins un contact
+comprises, avec 120 poses préparées par posture. Chaque pose a au moins un contact
 de surface mesuré ; la vitesse maximale des points de contact est de 0,017 m/s
 et la discontinuité initiale maximale de 19,35 mm. La relecture de 533 observations
 échantillonnées dans le temps a été inspectée dans le navigateur, bras levés puis
