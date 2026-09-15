@@ -12,7 +12,7 @@ from uuid import uuid4
 
 
 class LiveDelegation:
-    def __init__(self, text_host, *, call_budget, clock=time.monotonic):
+    def __init__(self, text_host, *, call_budget, clock=time.monotonic, before_invalidate=None):
         if type(call_budget) is not int or not 1 <= call_budget <= 100:
             raise ValueError("Configure a Live session budget of 1-100 Hermes calls.")
         self.host, self.remaining, self.clock = text_host, call_budget, clock
@@ -22,6 +22,7 @@ class LiveDelegation:
         self.revision, self.last_input = 0, clock()
         self.results = []
         self.closed = False
+        self.before_invalidate = before_invalidate
 
     @staticmethod
     def _identifier(value):
@@ -55,7 +56,11 @@ class LiveDelegation:
 
     def _interrupt(self, reason):
         if self.pending is not None:
-            self.host.close()  # TextHost fences tools before waiting for process cleanup.
+            try:
+                if self.before_invalidate:
+                    self.before_invalidate()
+            finally:
+                self.host.close()  # Fences tools before waiting for process cleanup.
             self._result(
                 "interrupted",
                 "Le contexte vocal a changé. Cette délégation est interrompue ; "
@@ -196,5 +201,9 @@ class LiveDelegation:
 
     def close(self):
         self.closed = True
-        self.host.close()
-        self.pending, self.turn_id, self.results = None, None, []
+        try:
+            if self.before_invalidate:
+                self.before_invalidate()
+        finally:
+            self.host.close()
+            self.pending, self.turn_id, self.results = None, None, []

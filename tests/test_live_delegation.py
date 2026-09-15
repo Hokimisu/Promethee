@@ -178,3 +178,33 @@ def test_startup_delegation_without_fresh_user_input_does_not_resume_old_work(tm
     now[0] = 1.21
     assert bridge.poll() == []
     assert len(workers) == 1 and bridge.remaining == 1
+
+
+@pytest.mark.parametrize("fail", [False, True])
+def test_audio_is_cleared_before_backend_cleanup_even_on_audio_failure(tmp_path, fail):
+    bridge, workers, now, store = make_bridge(tmp_path)
+    bridge.accept(fragment("Bonjour"))
+    bridge.accept(delegation())
+    now[0] = 1
+    bridge.poll()
+    order = []
+
+    def clear():
+        order.append("audio")
+        if fail:
+            raise ValueError("device failure")
+
+    def cleanup():
+        assert order[0] == "audio"
+        assert store.service.get_world()["conversation"] is None
+        order.append("backend")
+
+    bridge.before_invalidate = clear
+    workers[0].close = cleanup
+    if fail:
+        with pytest.raises(ValueError, match="device failure"):
+            bridge.close()
+    else:
+        bridge.close()
+    assert order == ["audio", "backend"]
+    assert bridge.pending is None and bridge.turn_id is None

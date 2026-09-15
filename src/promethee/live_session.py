@@ -1,4 +1,4 @@
-"""Executable file-audio Live/Hermes diagnostic; no microphone or speaker opened.
+"""Bounded Live/Hermes diagnostic with file audio or explicitly selected devices.
 
 Input is paced PCM from a WAV file, followed by silence until the chosen session
 duration. Output PCM and source-tagged events remain in a new local directory.
@@ -6,6 +6,7 @@ duration. Output PCM and source-tagged events remain in a new local directory.
 
 import argparse
 import base64
+import contextlib
 import json
 import threading
 import time
@@ -74,6 +75,7 @@ def run_session(
     record,
     *,
     duration,
+    audio_device=None,
     clock=time.monotonic,
     sleep=time.sleep,
 ):
@@ -90,13 +92,20 @@ def run_session(
             clock=clock,
             sleep=sleep,
             pacers=pacers,
+            audio_device=audio_device,
         )
     finally:
-        for pacer in pacers:
-            pacer.close()
+        try:
+            if audio_device:
+                audio_device.close()  # Silence output before waiting on backend cleanup.
+        finally:
+            for pacer in pacers:
+                pacer.close()
 
 
-def _run_session(transport, bridge, read_pcm, write_pcm, record, *, duration, clock, sleep, pacers):
+def _run_session(
+    transport, bridge, read_pcm, write_pcm, record, *, duration, clock, sleep, pacers, audio_device
+):
     if type(duration) is not int or not 1 <= duration <= 900:
         raise ValueError("Choose a duration between 1 and 900 seconds.")
     started = clock()
@@ -107,6 +116,8 @@ def _run_session(transport, bridge, read_pcm, write_pcm, record, *, duration, cl
         if not ready and now - started >= 20:
             raise TimeoutError("Live startup deadline exceeded.")
         if ready and closing is None and now - started >= duration:
+            if audio_device:
+                audio_device.close()
             pacers[0].close()
             bridge.close()
             transport.finish()
@@ -121,6 +132,8 @@ def _run_session(transport, bridge, read_pcm, write_pcm, record, *, duration, cl
                 break
             kind = event["type"]
             if kind == "transport.input_closed":
+                if audio_device:
+                    audio_device.close()
                 if pacers:
                     pacers[0].close()
                 bridge.close()
@@ -138,6 +151,8 @@ def _run_session(transport, bridge, read_pcm, write_pcm, record, *, duration, cl
                     "output_samples": received_samples,
                     "elapsed_seconds": clock() - started,
                     "playback_verified": False,
+                    "playback_requested": audio_device is not None,
+                    "rendered_samples": audio_device.rendered_samples if audio_device else 0,
                 }
             if receipt is not None:
                 raise ValueError("Live provider event arrived after its final receipt.")
@@ -154,19 +169,38 @@ def _run_session(transport, bridge, read_pcm, write_pcm, record, *, duration, cl
                 pcm = decode_pcm(event.get("delta"), 48000)
                 write_pcm(pcm)
                 received_samples += len(pcm) // 2
+                if audio_device and closing is None:
+                    audio_device.write(pcm)
             elif kind == "session.closed":
                 final_usage(event)
                 if event.get("session", {}).get("id") != bridge.session:
                     raise ValueError("Final usage belongs to a different Live session.")
                 receipt = event
+                if audio_device:
+                    audio_device.close()
                 pacers[0].close()
                 if not getattr(transport, "input_failed", False):
                     transport.finish(discard=True)
                 bridge.close()
                 closing = clock() if closing is None else closing
             elif closing is None:
+                if audio_device and kind == "session.input_transcript.delta" and event.get("delta"):
+                    discarded = audio_device.clear_output()
+                    record(
+                        {
+                            "source": "playback",
+                            "event": {
+                                "type": "playback.buffer_cleared",
+                                "trigger": "input_transcript",
+                                "discarded_samples": discarded,
+                                "heard_by_user": None,
+                            },
+                        }
+                    )
                 bridge.accept(event)
                 if kind == "session.started":
+                    if audio_device:
+                        audio_device.start()
                     pacers.append(
                         PacedInput(
                             transport,
@@ -202,7 +236,15 @@ def main():
     parser.add_argument("--live-voice", required=True)
     parser.add_argument("--duration", type=int, required=True)
     parser.add_argument("--call-budget", type=int, required=True)
-    parser.add_argument("--input-wav", type=Path, required=True)
+    inputs = parser.add_mutually_exclusive_group(required=True)
+    inputs.add_argument("--input-wav", type=Path)
+    inputs.add_argument(
+        "--microphone",
+        action="store_true",
+        help="Explicitly open microphone and speaker after Live startup.",
+    )
+    parser.add_argument("--input-device", type=int)
+    parser.add_argument("--output-device", type=int)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument(
         "--test-url", help="Loopback fixture URL; worker enforces dummy authentication."
@@ -213,16 +255,28 @@ def main():
         parser.error("Choose a bounded duration (1-900 s) and Hermes budget (1-100).")
     if not args.live_python.is_file():
         parser.error("The isolated Live Python must exist.")
-    with wave.open(str(args.input_wav), "rb") as source:
-        if (
-            source.getnchannels(),
-            source.getsampwidth(),
-            source.getframerate(),
-            source.getcomptype(),
-        ) != (1, 2, 24000, "NONE"):
-            parser.error("Input must be uncompressed mono PCM16 at 24 kHz.")
-        if source.getnframes() > args.duration * 24000:
-            parser.error("The input audio exceeds the session duration.")
+    with contextlib.ExitStack() as resources:
+        audio_device = None
+        if args.microphone:
+            from promethee.live_audio import LiveAudio
+
+            audio_device = source = LiveAudio(
+                input_device=args.input_device, output_device=args.output_device
+            )
+            resources.callback(audio_device.close)
+        else:
+            if args.input_device is not None or args.output_device is not None:
+                parser.error("Device selection requires --microphone.")
+            source = resources.enter_context(wave.open(str(args.input_wav), "rb"))
+            if (
+                source.getnchannels(),
+                source.getsampwidth(),
+                source.getframerate(),
+                source.getcomptype(),
+            ) != (1, 2, 24000, "NONE"):
+                parser.error("Input must be uncompressed mono PCM16 at 24 kHz.")
+            if source.getnframes() > args.duration * 24000:
+                parser.error("The input audio exceeds the session duration.")
         output = args.output.resolve()
         output.mkdir(exist_ok=False)
         argv = [
@@ -253,7 +307,11 @@ def main():
                 encoding="utf-8",
             )
             argv.extend(["--startup-file", str(startup)])
-            bridge = LiveDelegation(host, call_budget=args.call_budget)
+            bridge = LiveDelegation(
+                host,
+                call_budget=args.call_budget,
+                before_invalidate=audio_device.clear_output if audio_device else None,
+            )
             transport = LiveProcess(argv)
             try:
 
@@ -268,6 +326,7 @@ def main():
                     audio.write,
                     record,
                     duration=args.duration,
+                    audio_device=audio_device,
                 )
                 (output / "report.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
                 print(json.dumps(result), flush=True)

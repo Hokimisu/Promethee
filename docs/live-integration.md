@@ -183,9 +183,9 @@ la perte du transport. L'essai se reproduit avec
 documentés dans le [guide de configuration](hermes-setup.md).
 
 La [session sur fichier](live-file-session.md) relie le transport à la délégation.
-Restent à implémenter et vérifier : le raccord aux périphériques, l'audio continu
-avec coupure des buffers de lecture et la reprise du
+Le raccord explicite `--microphone` et la coupure des buffers locaux sont
+couverts avec des périphériques simulés. Restent à implémenter et vérifier :
+la coupure acoustique sans reprise de parole obsolète et la reprise du
 contexte vocal après perte de session. Restent ensuite à qualifier avec le compte : accès effectif,
 conversation française, latence, coût, périphériques et mouvements réels.
-La [chaîne de diagnostic](voice.md) reste le mode prévu pour le microphone ;
-la session GPT-Live ci-dessus travaille actuellement sur fichier audio.
+La [chaîne de diagnostic](voice.md) reste disponible séparément.

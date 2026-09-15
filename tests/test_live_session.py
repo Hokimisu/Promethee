@@ -175,6 +175,86 @@ def test_incomplete_or_mismatched_final_usage_is_not_success(options):
     assert len(transport.sent) == count  # Input thread stopped despite validation failure.
 
 
+def test_device_starts_after_provider_and_silences_before_backend_shutdown():
+    order = []
+
+    class Device:
+        rendered_samples = 0
+
+        def start(self):
+            order.append("start")
+
+        def write(self, pcm):
+            order.append("write")
+
+        def clear_output(self):
+            order.append("clear")
+            return 480
+
+        def close(self):
+            order.append("close")
+
+    class DeviceBridge(Bridge):
+        def accept(self, event):
+            if event["type"] == "session.started":
+                assert order == []
+            else:
+                assert order[-1] == "clear"
+
+        def close(self):
+            assert order[-1] == "close"
+
+    transport = Transport()
+    transport.events.extend(
+        [
+            {"type": "session.output_audio.delta", "delta": "AAA="},
+            {"type": "session.input_transcript.delta", "delta": "Attends"},
+        ]
+    )
+    records = []
+    result = run_session(
+        transport,
+        DeviceBridge(),
+        lambda frames: b"",
+        lambda pcm: None,
+        records.append,
+        duration=5,
+        audio_device=Device(),
+    )
+    assert order[:3] == ["start", "write", "clear"]
+    assert result["playback_requested"] and not result["playback_verified"]
+    assert result["rendered_samples"] == 0
+    assert (
+        next(e for e in records if e["source"] == "playback")["event"]["discarded_samples"] == 480
+    )
+
+
+def test_provider_failure_never_opens_microphone():
+    class Device:
+        closed = False
+
+        def start(self):
+            raise AssertionError("Microphone must remain closed")
+
+        def close(self):
+            self.closed = True
+
+    transport, device = Transport(), Device()
+    transport.events.clear()
+    transport.events.append({"type": "transport.error"})
+    with pytest.raises(ValueError, match="provider or transport"):
+        run_session(
+            transport,
+            Bridge(),
+            lambda frames: b"",
+            lambda pcm: None,
+            lambda event: None,
+            duration=5,
+            audio_device=device,
+        )
+    assert device.closed
+
+
 @pytest.mark.parametrize("late_result", [False, True])
 def test_provider_expiry_keeps_final_receipt_despite_inflight_pipe_writes(late_result):
     script = """

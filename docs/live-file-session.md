@@ -1,8 +1,9 @@
-# Session GPT-Live sur fichier audio
+# Session GPT-Live bornée
 
 `python -m promethee.live_session` relie le processus SDK, le même hôte Hermes,
-un fichier WAV entrant et un fichier PCM sortant. Ce diagnostic n'ouvre ni
-microphone ni haut-parleur. Il requiert une session du monde existante et les
+un fichier WAV entrant et un fichier PCM sortant. Le mode fichier n'ouvre ni
+microphone ni haut-parleur ; `--microphone` sélectionne explicitement les
+périphériques. Il requiert une session du monde existante et les
 [environnements indépendants](live-integration.md) de Promethee, Hermes et du SDK Live.
 
 ## Lancer
@@ -41,6 +42,28 @@ arrêts de Hermes. Les files de communication sont bornées ; une saturation
 arrêtables même si une entrée reste bloquée. Les corrections reçues sont traitées
 avant de demander un résultat à Hermes. Ce chemin enregistre l'audio reçu ;
 il ne valide pas l'interruption acoustique ou une voix entendue.
+
+## Périphériques explicites
+
+Remplacer `--input-wav .local/entree.wav` par `--microphone` dans la commande
+ci-dessus. L'environnement Promethee doit contenir l'extra `voice`, dont
+`sounddevice==0.5.3`. Les options `--input-device N` et `--output-device N`
+sélectionnent les indices PortAudio ; sans elles, les périphériques par défaut
+sont utilisés. Ils doivent accepter du PCM16 mono à 24 kHz.
+
+La vérification du format n'ouvre aucun flux. Capture et lecture commencent
+après `session.started` et se ferment à l'échéance, à la fermeture distante
+ou sur erreur. La capture est bornée à 500 ms et la lecture à une seconde ;
+un débordement échoue explicitement. Une transcription entrante non vide vide
+la lecture locale avant le nettoyage Hermes. Cette coupure n'annule pas le corps.
+
+`playback_requested` distingue ce mode du fichier. `rendered_samples` compte
+les échantillons copiés au périphérique, sans prouver leur audition ;
+`playback_verified` reste faux. Le journal indique les buffers vidés.
+Les tests utilisent des périphériques simulés : aucun matériel audio réel
+n'est qualifié. Le délai de transcription, l'écho et les fragments audio
+distants arrivant après une interruption restent à qualifier ; cette version
+ne garantit pas encore l'absence de parole obsolète exigée par T11.
 
 ## Essai du parcours complet
 
