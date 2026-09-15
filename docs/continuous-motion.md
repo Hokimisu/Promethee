@@ -2,7 +2,8 @@
 
 Le mode expérimental `--continuous-motion` relie désormais la continuation ARDY
 au contrôleur en direct. Une action motrice de 120 poses est préparée en trois
-blocs de 40 poses à 20 Hz. Le corps commence après validation du premier bloc ;
+blocs de 40 poses futures à 20 Hz. Chaque bloc de lecture conserve aussi sa pose
+d'origine observée, soit 41 poses couvrant exactement deux secondes. Le corps commence après validation du premier bloc ;
 le suivant est généré et, si demandé, adapté au VRM pendant cette lecture.
 
 Le mode est désactivé par défaut. Il améliore la continuité de la chaîne de
@@ -50,6 +51,14 @@ inclut le corps, les objets attachés et l'apparence. Avant son démarrage, elle
 doit correspondre exactement à l'état observé à la fin du bloc précédent.
 Les contraintes de cible finale ne sont vérifiées qu'au dernier bloc ; les
 contrôles de géométrie et de continuité s'appliquent à chacun.
+
+La fenêtre totale du modèle est limitée à 200 poses. Une cible située au-delà
+n'est transmise que lorsqu'elle entre dans cette fenêtre, à son véritable
+instant. La pose d'origine du bloc n'est ni une nouvelle proposition, ni un
+échantillon supplémentaire du futur engagé. Les 40 poses brutes restent
+archivées séparément ; le bloc corrigé ajoute l'origine pour la lecture.
+Ses contacts sont mesurés sur le maillage observé et leur provenance est
+indiquée par `anchor_contact_source=observed_skin_geometry`.
 
 Les tentatives supplémentaires conservent ce contexte engagé, une nouvelle
 graine et un nouvel ID de travail, avec les limites existantes de trois essais
@@ -113,3 +122,19 @@ La prochaine étape est de traiter les trajectoires et transitions encore
 refusées, puis de mesurer une réserve adaptée à toute la chaîne et son
 interruption. Le rendu interpolé, la voix réelle, le visage et le téléphone
 restent des capacités distinctes à qualifier.
+
+## Recherches du 16 septembre
+
+La [comparaison avec la démo officielle](research/07-official-reference.md)
+documente les expériences suivantes : plafond de contexte, conservation des
+caractéristiques explicites, commande de vitesse et repos généré, corrections
+Core et VRM séparées. Une correction d'ancrage permet aux trois blocs d'un
+ancien essai de passer la validation VRM avec les mêmes poses et tolérances.
+Le profil de trajectoire améliore le départ brut, mais reste refusé par les
+contrôles Core sur les deux graines testées ; il n'est pas activé dans le runtime.
+
+Le contrat de lecture évolue également de 40 poses sur 39 intervalles à une
+origine suivie de 40 poses futures. Le test d'orchestration exige désormais six
+secondes pour trois blocs préchargés. Ce correctif préserve l'origine Core et
+son apparence exacte ; il ne garantit pas que les blocs suivants soient prêts
+assez tôt pour éviter toute attente.

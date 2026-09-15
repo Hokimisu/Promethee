@@ -25,6 +25,12 @@ réutilisation du texte pendant une action et annulation. Les premiers essais
 réels confirment ce raccord, mais conservent attentes et refus de marche.
 Les propositions ci-dessous restent la feuille de recherche initiale.
 
+La [comparaison de référence du 16 septembre](07-official-reference.md) approfondit
+ces résultats avec trois recherches parallèles, une erreur de fenêtre corrigée,
+une correction vérifiée du glissement de transition et des essais de commande
+de trajectoire. Elle distingue les mouvements bruts, leurs corrections et les
+refus de validation.
+
 ## Décisions proposées
 
 | Blocage | Solution à essayer en premier | Alternative si elle échoue | Nature du travail |

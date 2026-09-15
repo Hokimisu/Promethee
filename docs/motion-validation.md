@@ -452,3 +452,22 @@ L'extension améliore les gestes sur place ; les déplacements terminent toujour
 seulement un essai sur quatre dans ces deux séries, et le contact du VRM reste
 à adapter. Ni équilibre physique ni fiabilité générale de la marche ne sont
 validés par ces résultats. T07 reste ouvert.
+
+## Précision d’arrivée de la marche libre — critères runtime v5
+
+À la demande de l’utilisateur, une action `move` accepte désormais une erreur
+d’arrivée allant jusqu’à **1 mètre**. Le contrôleur conserve la position
+effectivement observée ; il ne déplace jamais le corps vers la cible pour
+annoncer une réussite. La tolérance par défaut reste de **5 cm** pour les
+postures et les autres usages de `read_trajectory`.
+
+Les [critères runtime v5](../experiments/motion/runtime-criteria.json) séparent
+cette précision d’arrivée des exigences de stabilité. Les limites de
+glissement, de continuité, de correction verticale, de pénétration et de
+contact sont inchangées. Les qualifications précédentes gardent leurs critères
+archivés ; cette nouvelle politique n’est pas une nouvelle qualification moteur.
+
+Les tests CPU vérifient notamment une arrivée à 6,059 cm de la cible, la
+persistance de sa position réelle, le refus au-delà d’un mètre et le maintien
+de la limite de 5 cm pour une posture. Ils couvrent les modes continu et par
+séquence, sans prétendre qualifier visuellement une marche.
