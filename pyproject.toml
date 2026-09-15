@@ -11,8 +11,12 @@ requires-python = ">=3.12"
 license = "MIT"
 dependencies = []
 
+[project.optional-dependencies]
+viewer = ["numpy==2.4.6", "viser @ git+https://github.com/nv-tlabs/kimodo-viser.git@7c82ad8f8640bad9dff8ded5c5eee908eeb08f11"]
+
 [project.scripts]
 promethee = "promethee.cli:main"
+promethee-view = "promethee.viewer:main"
 
 [dependency-groups]
 dev = ["pytest>=8,<10", "ruff>=0.12,<1"]

@@ -6,7 +6,7 @@ Un avatar IA doté d'un corps, d'une mémoire et de capacités d'action dans un 
 
 Le projet fournit un espace que l'avatar peut percevoir et modifier, des objets utilisables et une mémoire consultable dans Obsidian. Un agent peut former et réviser ses intentions ; le monde lui renvoie ce qui s'est effectivement passé. Aucun scénario de vie, routine ou préférence d'objet n'est prescrit.
 
-**État actuel : socle local exécutable.** La démonstration est un scénario déterministe dans un monde logique. L'avatar 3D, les modèles IA, la voix, Hermes et la génération de mouvements ne sont pas encore intégrés. Aucun appel réseau, aucune clé API et aucun GPU ne sont nécessaires pour lancer ce socle.
+**État actuel : socle local et rendu en lecture seule.** La démonstration reste une fixture déterministe dans un monde logique. Un visualiseur optionnel affiche le monde et rejoue les mouvements ARDY réellement mesurés. Le contrôle continu du corps, la voix et Hermes restent à intégrer. Aucun appel réseau, aucune clé API et aucun GPU ne sont nécessaires pour lancer le socle logique.
 
 ## Essayer
 
@@ -55,10 +55,12 @@ Cette commande réalise une transition instantanée, sans activité préécrite 
 | Journal Markdown lisible dans Obsidian | Export exécutable ; recherche mémoire à connecter |
 | Contrôles automatiques et tests de comportement | Fournis |
 | Astra dans Hermes, voix GPT-Live | Architecture proposée ; adaptateurs à développer |
-| ARDY, modèle 3D, contacts, rendu | Intégration à évaluer et développer |
+| ARDY Core et rendu Viser | Modèle réel qualifié ; monde et squelette visibles en lecture seule ; contrôleur et contacts à intégrer |
 | Initiative autonome et services externes | Jalons ultérieurs |
 
 ## Architecture cible
+
+Le [guide de rendu](docs/rendering.md) donne l'installation optionnelle et les commandes pour consulter un monde existant ou lire un enregistrement moteur. Les repères d'objets ne représentent pas encore des géométries utilisables.
 
 ```mermaid
 flowchart LR

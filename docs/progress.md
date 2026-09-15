@@ -10,9 +10,12 @@ Ce registre distingue le code livré des intégrations réellement vérifiées. 
 | T03 | Implémenté et vérifié sur CPU | Schéma v2, migration avec sauvegarde vérifiée, origine immuable et révisions ; 37 tests passent |
 | T04 | Implémenté et vérifié sur CPU | Suivi séparé, observation atomique, révision, `busy`, doublons et provenance du pilote ; contrôleur factice explicite |
 | T05 | Implémenté et vérifié sur CPU | Annulation, bail exclusif, réconciliation et coupures réelles de processus ; 60 tests passent, lint, format et construction réussis |
-| T06–T13 | À réaliser | Aucune intégration réelle revendiquée |
+| T06 | Implémenté et vérifié avec le vrai squelette | Viser en lecture seule, deux dispositions, mise à jour d'un objet, lecture/scrutation d'un NPZ ARDY, contrôle d'échelle et de rotation ; 69 tests CPU passent. [Guide de rendu](rendering.md) |
+| T07–T13 | À réaliser | Aucune intégration réelle revendiquée |
 
 Les journaux de test et données locales restent dans `.local/` et ne sont pas publiés.
+
+T06 est livré sur la branche [codex/world-viewer](https://github.com/Hokimisu/Promethee/tree/codex/world-viewer). Le rendu optionnel a été lancé sous Windows 11/Python 3.13.12 et inspecté dans le navigateur intégré : lecture et pause d'une séquence de 120 poses, déplacement d'objet visible à la révision 6, seconde disposition avec pose neutre tournée de 90°, puis réouverture. Les contrôles sur Core confirment 27 articulations, échelle de 1,684 m, conservation exacte des positions NPZ et absence d'écriture SQLite. Les objets restent des repères explicitement sans asset ; aucune assise, prise ou collision n'est revendiquée.
 
 T02 est livré sur la branche [codex/motion-qualification](https://github.com/Hokimisu/Promethee/tree/codex/motion-qualification). Les scripts reproduisent les environnements séparés, les poids épinglés, le service d'encodage et les mesures brutes/post-traitées. Les erreurs de coordonnées initiales restent conservées et sont rejetées par le vérificateur ; les trois cas réservés passent. L'installation neuve génère également trois séquences de 40 poses. Le rendu officiel a été inspecté, mais l'analyse détaillée des contacts, l'annulation et le raccord au monde restent dans T06–T08.
 

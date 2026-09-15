@@ -6,6 +6,8 @@ Décision du 15 septembre 2026, ticket T02. Les scripts et la procédure sont da
 
 Utiliser ARDY Core, checkpoint `ARDY-Core-RP-20FPS-Horizon40`, et le visualiseur Viser du dépôt officiel. Le visualiseur charge le squelette, anime son maillage et permet d'inspecter des poses enregistrées. Aucun besoin constaté ne justifie un autre moteur pour T06.
 
+L'adaptateur Promethee est `src/promethee/viewer.py`, lancé avec `uv run --extra viewer promethee-view --database <base.sqlite3> --skeleton <conventions.json>`, éventuellement `--motion <poses.npz>`. La [procédure de rendu](../rendering.md) décrit son installation, ses repères et son fonctionnement en lecture seule.
+
 Conserver deux environnements Python 3.11 : ARDY et l'encodeur LLM2Vec. Les versions compatibles de Transformers diffèrent. L'API Gradio locale déjà prévue par ARDY assure leur liaison ; le socle Python 3.12+ garde ses dépendances indépendantes. Le moteur devra recevoir des contraintes et retourner les poses observées, sans écrire un succès à partir du seul texte.
 
 ## Conventions relevées
@@ -18,7 +20,7 @@ Conserver deux environnements Python 3.11 : ARDY et l'encodeur LLM2Vec. Les vers
 - Le modèle produit 20 poses/s, par blocs de 40 poses dans cet essai. La cadence d'affichage n'est pas une mesure de vitesse d'inférence.
 - L'appel batch essayé part d'une origine XZ nulle. Les contraintes doivent être relatives au départ ; on translate ensuite **toute** la trajectoire observée dans le monde. L'essai fautif et sa correction restent conservés. L'interface autorégressive possède une translation initiale à vérifier lors de T07.
 
-Sources de ces conventions : `ardy/motion_rep/tools.py`, `ardy/skeleton/`, `ardy/viz/characters.py` et exports du modèle, au commit `693f74d13b3d04a0a22ce127ee79c929dd89756b`.
+Sources de ces conventions : `ardy/motion_rep/tools.py`, `ardy/skeleton/`, `ardy/viz/viser_utils.py` et exports du modèle, au commit `693f74d13b3d04a0a22ce127ee79c929dd89756b`.
 
 ## Mesures et portée
 

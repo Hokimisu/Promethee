@@ -2,7 +2,7 @@
 
 ## Socle présent
 
-Un paquet Python sans dépendance d'exécution, une base SQLite locale et une interface en ligne de commande. Le scénario est déterministe. Il ne simule ni gravité, ni collision, ni mouvement continu. Ses transitions sont instantanées et servent à vérifier le contrat de persistance avant de connecter des modèles et un moteur graphique.
+Un paquet Python sans dépendance d'exécution obligatoire, une base SQLite locale et une interface en ligne de commande. Un visualiseur Viser optionnel lit ce monde et les mouvements ARDY enregistrés. Le scénario logique est déterministe. Il ne simule ni gravité, ni collision, ni mouvement continu. Ses transitions sont instantanées et servent à vérifier le contrat de persistance avant de connecter le contrôleur.
 
 `world.py` valide les actions et leurs préconditions. `runtime.py` persiste un snapshot, les résultats des commandes et les plans d'activité. `journal.py` exporte les actions logiques réussies en Markdown. `demo.py` contient une fixture de sept actions ; ce fichier n'est pas un cerveau autonome.
 
@@ -41,11 +41,11 @@ Les événements d'interruption doivent parvenir à la conversation et au corps.
 - **Un processus local pour le socle.** Aucun bus de messages, conteneur, service réseau ou système de plugins n'est nécessaire à ce jalon.
 - **SQLite pour l'état et les résultats ; Markdown pour les notes.** Les exports sont dérivés et ne remplacent pas la base.
 - **Pas de fork de Hermes ni de modèles NVIDIA vendoriés.** Intégrer leurs interfaces au moment du besoin ; fixer les révisions validées à ce moment-là.
-- **Moteur graphique à sélectionner par un essai de mouvement.** Valider import du squelette, contraintes spatiales, animation et GPU avant de figer Unity, Unreal ou une autre solution.
+- **ARDY Core et Viser retenus après l'essai T02.** Le rendu T06 reste en lecture seule ; voir la [décision et ses mesures](decisions/001-motion-stack.md).
 - **Aucun entraînement RL dans ce dépôt initial.** Commencer par vérifier ce que les modèles préentraînés permettent. Introduire un contrôleur physique ou un entraînement ciblé si les interactions demandées le justifient.
 
 ## Limites du socle
 
-Les positions sont sur un plan de sol de 10 × 10 mètres. La portée d'un mètre est une règle logique arbitraire pour les tests, pas une mesure anatomique. Il n'y a pas de serveur, de rendu, d'agent externe ni de synchronisation vocale. Le schéma v3 distingue l'origine des données, la révision du monde et la confirmation du corps, et stocke séparément les exécutions asynchrones. Les migrations sont explicites, transactionnelles et précédées d'une sauvegarde vérifiée ; les versions inconnues sont refusées.
+Les positions sont sur un plan de sol de 10 × 10 mètres. La portée d'un mètre est une règle logique arbitraire pour les tests, pas une mesure anatomique. Le serveur de rendu local n'agit pas sur le monde ; il n'y a pas encore d'agent externe ni de synchronisation vocale. Le schéma v3 distingue l'origine des données, la révision du monde et la confirmation du corps, et stocke séparément les exécutions asynchrones. Les migrations sont explicites, transactionnelles et précédées d'une sauvegarde vérifiée ; les versions inconnues sont refusées.
 
 Une activité échouée conserve son erreur et son curseur ; elle n'est pas relancée automatiquement. La replanification après changement du monde sera une responsabilité de l'adaptateur agent.
