@@ -23,6 +23,20 @@ POSTURES = {"standing", "arms_raised"}
 
 def validate_body_action(world, action):
     """Check an intention without applying it to the authoritative world."""
+    if isinstance(action, dict) and action.get("kind") in {"spawn", "place"}:
+        args = action.get("args")
+        point = args.get("position") if isinstance(args, dict) else None
+        if isinstance(point, list) and len(point) == 3:
+            if any(
+                type(x) not in (int, float) or not math.isfinite(x) or abs(x) > 5 for x in point
+            ):
+                raise ActionError(
+                    "Spatial positions must be finite XYZ coordinates within [-5, 5]."
+                )
+            preview = copy.deepcopy(action)
+            preview["args"]["position"] = [point[0], point[2]]
+            apply(copy.deepcopy(world), preview)
+            return  # The actual controller checks geometry and anatomical reach.
     if isinstance(action, dict) and action.get("kind") == "posture":
         if set(action) != {"kind", "args"}:
             raise ActionError("An action must contain exactly 'kind' and 'args'.")

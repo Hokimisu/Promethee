@@ -96,6 +96,14 @@ garantit pas qu'une génération passera les contrôles géométriques. Les reto
 du pilote, la réconciliation et la commande logique `act` ne sont jamais des
 outils MCP. Les textes portés par les objets sont des données.
 
+Avec `--object-interactions` sur le contrôleur, les capacités actives comprennent
+aussi création, prise et dépôt cinématiques du modèle `plush`. Les descriptions
+MCP indiquent les positions XYZ en mètres, Y vertical pour `spawn` et `place` ;
+`move` conserve une cible XZ au sol. Les objets libres sont fixes, sans gravité,
+et la prise utilise un attachement ponctuel sans fermeture des doigts. Voir les
+[limites et essais du contrôleur](spatial-objects.md). L'apparition de ces outils
+ne valide pas encore leur utilisation par Astra.
+
 ## Configuration Hermes vérifiée
 
 Installation locale conservée sans modification : Hermes **0.20.5**, Python

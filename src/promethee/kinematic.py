@@ -80,20 +80,31 @@ def posture_reached(pose, name):
 
 
 class KinematicController:
-    def __init__(self, service, worker, *, clock=time.monotonic, seed=0):
+    def __init__(self, service, worker, *, clock=time.monotonic, seed=0, object_interactions=False):
         world = service.runtime.require_session()
-        if world["objects"] or world["avatar"]["holding"] or world["avatar"]["seated_on"]:
+        if world["avatar"]["seated_on"] or (
+            not object_interactions and (world["objects"] or world["avatar"]["holding"])
+        ):
             raise ActionError("This controller has not qualified object interactions yet.")
+        if object_interactions and world["objects"]:
+            from promethee.object_actions import check_clearance
+
+            check_clearance(world)
         self.service, self.worker, self.clock = service, worker, clock
         self.world_id = world["world_id"]
         self.handle = service.acquire_controller(
-            source="kinematic", supported_actions=["move", "posture"]
+            source="kinematic",
+            supported_actions=["move", "posture"]
+            + (["spawn", "take", "place"] if object_interactions else []),
         )
         self.observation = {key: copy.deepcopy(world[key]) for key in ("avatar", "objects", "pose")}
         self.active = None
         self.sequence = 0
         self.job_id = None
         self.trajectory = None
+        self.object_frames = None
+        self.object_expected = None
+        self.skeleton = None
         self.frame = 0
         self.ready = False
         self.seed = seed
@@ -112,6 +123,13 @@ class KinematicController:
         self.observation["pose"] = copy.deepcopy(pose)
         root = pose["positions"][0]
         self.observation["avatar"]["position"] = [root[0], root[2]]
+        held = self.observation["avatar"]["holding"]
+        if held:
+            from promethee.spatial import follow_attachment
+
+            self.observation["objects"][held] = follow_attachment(
+                self.observation["objects"][held], pose
+            )
 
     def _feedback(self, status, error=None):
         self.sequence += 1
@@ -132,6 +150,8 @@ class KinematicController:
             self.active = None
             self.trajectory = None
             self.job_id = None
+            self.object_frames = None
+            self.object_expected = None
 
     def _submit_motion(self, target, text, frames):
         self.job_id = uuid4().hex
@@ -180,6 +200,19 @@ class KinematicController:
             poses = read_trajectory(
                 self.worker.output / expected_file, start_pose=self.pose, target=target
             )
+            if self.observation["objects"]:
+                from promethee.object_actions import check_clearance
+                from promethee.spatial import follow_attachment
+
+                for pose in poses:
+                    candidate = copy.deepcopy(self.observation)
+                    candidate["pose"] = pose
+                    held = candidate["avatar"]["holding"]
+                    if held:
+                        candidate["objects"][held] = follow_attachment(
+                            candidate["objects"][held], pose
+                        )
+                    check_clearance(candidate)
         except (ValueError, OSError, KeyError) as exc:
             if not self.active:
                 raise RuntimeError(f"Cannot initialize the body: {exc}") from exc
@@ -216,6 +249,7 @@ class KinematicController:
             if item["type"] == "crashed":
                 raise RuntimeError(item["error"])
             if item["type"] == "ready":
+                self.skeleton = item["skeleton"]
                 (self.worker.output / "conventions.json").write_text(
                     json.dumps(item["skeleton"]), encoding="utf-8"
                 )
@@ -237,8 +271,17 @@ class KinematicController:
         if self.worker.pending is not None and now - self.job_started > 60:
             raise TimeoutError("Motion generation exceeded 60 seconds.")
         if self.trajectory is not None:
+            if self.object_frames is not None and self.observation != self.object_expected:
+                self._feedback(
+                    "failed", "The object or body changed during its planned interaction."
+                )
+                return
             self.frame = min(int((now - self.play_started) * 20), len(self.trajectory) - 1)
-            self._observe_pose(self.trajectory[self.frame])
+            if self.object_frames is not None:
+                self.observation = copy.deepcopy(self.object_frames[self.frame])
+                self.object_expected = copy.deepcopy(self.observation)
+            else:
+                self._observe_pose(self.trajectory[self.frame])
             if self.frame == len(self.trajectory) - 1:
                 action = self.active["envelope"]["action"]
                 if action["kind"] == "posture" and not posture_reached(
@@ -258,6 +301,23 @@ class KinematicController:
                 self.sequence = 0
                 self._feedback("running")
                 action = self.active["envelope"]["action"]
+                if action["kind"] in {"spawn", "take", "place"}:
+                    from promethee.object_actions import prepare_object_action
+                    from promethee.world import validate_body_action
+
+                    try:
+                        validate_body_action(self.observation, action)
+                        frames = prepare_object_action(self.observation, self.skeleton, action)
+                    except (ValueError, KeyError) as exc:
+                        self._feedback("failed", str(exc))
+                        return
+                    self.object_frames = frames
+                    self.object_expected = copy.deepcopy(self.observation)
+                    self.trajectory = [frame["pose"] for frame in frames]
+                    self.frame = 0
+                    self.play_started = self.clock()
+                    self.message = "Interaction cinématique en cours."
+                    return
                 target = self.observation["avatar"]["position"]
                 text = POSTURE_TEXT.get(action["args"].get("name"))
                 if action["kind"] == "move":

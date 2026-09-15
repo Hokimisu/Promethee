@@ -2,9 +2,9 @@
 
 Le schéma 9 ajoute un champ optionnel `spatial` aux objets observés. Il permet
 de persister une pose et un attachement rigide à la main avec la pose du corps
-et les événements d'exécution, dans la même transaction. Le pilote ARDY actuel
-ne propose toujours pas de prise : ce contrat prépare son raccord et ne valide
-ni contact, ni collision, ni articulation des doigts.
+et les événements d'exécution, dans la même transaction. Le contrôleur propose
+maintenant un mode expérimental de création, prise et dépôt cinématiques avec
+`--object-interactions`. Il ne simule ni gravité ni articulation des doigts.
 
 ## Coordonnées et attachement
 
@@ -56,9 +56,56 @@ réponse ne peut pas remplacer la pose réconciliée. Les identifiants rejoués 
 redéclenchent pas le mouvement.
 
 Ces tests utilisent des poses artificielles pour isoler le contrat de stockage.
-Ils ne sont pas une qualification motrice. La [lecture VRM](avatar-rendering.md)
-affiche maintenant un premier doudou déjà attaché, avec adaptation du bras
-visible et refus des cibles hors de portée. Restent à raccorder au contrôleur :
-approche et contact, attachement au bon instant, collisions, dépôt et essais
-sur plusieurs positions et géométries. Le [ticket T08](implementation-plan.md)
-reste ouvert.
+Ils ne sont pas une qualification motrice. Le parcours du contrôleur et ses
+limites sont décrits ci-dessous. Le [ticket T08](implementation-plan.md) reste ouvert.
+
+## Actions cinématiques expérimentales
+
+Ajouter `--object-interactions` à la commande `promethee run` configurée pour
+ARDY. Les commandes apparaissent dans le dossier « Objets » du visualiseur Core
+et dans les capacités MCP du même contrôleur. Aucun objet n'est créé au démarrage.
+`spawn` et `place` prennent une position **XYZ en mètres, Y vertical** ; `move`
+conserve sa cible au sol XZ. Seul l'asset `plush` dispose d'une géométrie de prise.
+
+`take` évalue les deux bras, retient l'approche accessible la plus courte et
+prépare toute la trajectoire avant de la jouer. La main rejoint un point de la
+surface du bras du doudou en trois secondes ; l'attachement est établi à cet
+instant, puis l'objet est levé de six centimètres en 1,5 seconde. Le point de
+main est un proxy situé à 4,5 cm du poignet, pas un contact de peau validé.
+`place` conduit l'objet à sa cible en trois secondes et détache seulement à
+l'arrivée. Les objets libres restent fixes dans le monde, y compris en hauteur.
+
+La préparation refuse les intersections entre enveloppes d'objets, avec le sol,
+les limites de la pièce et des capsules du torse, de la tête, des jambes et des
+bras Core. Ces enveloppes conservatrices ne représentent ni les doigts ni la
+peau du VRM ; elles ne vérifient pas les limites articulaires ou les collisions
+du corps avec lui-même. Les trajectoires ARDY ultérieures vérifient aussi la
+distance aux objets avant lecture et transportent l'objet attaché avec la main.
+La marche avec un objet tenu n'est pas encore qualifiée.
+
+Une annulation avant contact laisse l'objet libre ; après contact, il reste
+tenu à la dernière pose observée. Une cible déplacée pendant l'approche fait
+échouer l'action sans écraser son nouvel état. La reprise conserve pose et
+attachement et ne rejoue pas l'action terminée.
+
+## Premier parcours sur une pose Core enregistrée
+
+Le script [qualify_object_controller.py](../experiments/motion/qualify_object_controller.py)
+exécute le vrai contrôleur et le service SQLite à partir d'une pose Core archivée,
+sans nouvelle génération ARDY ni appel au cerveau. Exemple reproductible avec
+les artefacts locaux disponibles :
+
+```sh
+python experiments/motion/qualify_object_controller.py --motion .local/arm-reach-qualification-02/reach-00.npz --skeleton .local/runtime-holdout-09/motions/conventions.json --output .local/object-controller-qualification-02
+```
+
+Le premier essai `object-controller-qualification-01` réussit création, prise,
+dépôt et dépôt après redémarrage ; il refuse une seconde prise mains occupées,
+une création dans le sol et une cible absente. Les deux annulations conservent
+l'état attendu avant/après contact. Le replay contient 280 poses, échantillonnées
+nominalement à 20 Hz en omettant les délais de préparation CPU. Dans le VRM pixiv,
+l'écart maximal entre la main droite adaptée et la main Core est de 0,000000033 m.
+Les pieds visibles restent environ 17 mm au-dessus du sol : cet essai ne valide
+pas l'appui. Les doigts restent ouverts. Il reste à qualifier plusieurs positions
+et géométries et à partager les contraintes de portée du VRM avec le contrôleur
+avant de déclarer T08 terminé.

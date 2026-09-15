@@ -12,11 +12,16 @@ primitives mesure 16,4 cm en X, 22,4 cm en Y et 10 cm en Z. L'origine est le
 repère local de l'objet, pas son point le plus bas. Le rendu utilise des sphères
 de rayon 0,5 mises à l'échelle aux dimensions complètes indiquées dans le fichier.
 
-Capacité vérifiée : affichage d'une pose rigide enregistrée, libre ou déjà
-attachée à une main. La présence du modèle ne rend pas `take` ou `place`
-disponibles dans le pilote ARDY. Aucune fermeture des doigts, prise physique,
-déformation du tissu ou collision n'est qualifiée. Le décalage d'attachement
-des essais est un paramètre de vérification, pas un point de prise validé.
+Le contrôleur expose création, prise et dépôt cinématiques lorsque l'option
+`--object-interactions` est activée. Les points de prise sont les extrémités
+externes des ellipsoïdes des bras, à `[±0.082, -0.015, 0]` dans le repère objet.
+La main rejoint ce point avec un proxy décalé de 4,5 cm du poignet ; le contrôleur
+mesure un résidu inférieur à 1 mm avant l'attachement et une levée de 6 cm.
+Les collisions utilisent l'enveloppe globale des ellipsoïdes face à d'autres
+objets et aux segments du corps. Ce contrôle conservateur exclut doigts et peau.
+Aucune fermeture des doigts, prise physique ou déformation du tissu n'est
+qualifiée. Les objets libres restent fixes, sans gravité. Voir le
+[parcours mesuré et ses limites](../spatial-objects.md).
 
 L'objet n'est pas créé au lancement d'une session. Son rôle dans les essais ne
 définit aucune préférence ou activité attendue de l'agent.

@@ -227,17 +227,18 @@ Ajouter à ce stade une commande cible `run` pour ouvrir explicitement une sessi
 
 ## T08 — Donner des usages vérifiables aux objets
 
-Préparation livrée : [portée géométrique du bras Core](arm-reaching.md), avec
-douze essais locaux et inspection VRM d'une cible haute. Ce calcul n'est pas
-une prise et n'est pas exposé au contrôleur. T08 reste ouvert.
+Première capacité expérimentale livrée : création, approche, attachement,
+levée et dépôt d'un doudou géométrique via `--object-interactions`. Le contrôleur
+utilise la [portée du bras Core](arm-reaching.md), vérifie les enveloppes de
+collision et persiste corps et objet dans la même transaction. Le
+[parcours réel depuis une pose Core archivée](spatial-objects.md) couvre aussi
+mains occupées, cible absente, annulations avant/après contact et redémarrage.
+La lecture VRM adapte la main visible ; les commandes directes sont disponibles
+dans le visualiseur Core. Aucun objet n'est créé automatiquement.
 
-Le [contrat d'observation des objets en 3D](spatial-objects.md) persiste aussi
-les attachements à la main et vérifie leur cohérence après interruption dans
-des tests CPU. Le contrôleur et le rendu d'interaction restent à raccorder.
-
-La [lecture VRM avec objets](avatar-rendering.md) affiche un doudou déjà attaché
-et adapte le bras visible à la main observée lorsque la cible est accessible.
-La prise et le dépôt dans une session restent à réaliser.
+T08 reste ouvert : doigts et peau ne sont pas modélisés, les contraintes de
+portée VRM restent propres au replay, et les essais sur plusieurs positions et
+géométries ne sont pas terminés. Une prise cinématique ne valide pas la physique.
 
 **À modifier :** catalogue, validation, contrôleur et rendu.
 **À créer :** tests des interactions et fiche de provenance pour chaque asset introduit.

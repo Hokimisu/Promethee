@@ -2,8 +2,9 @@
 
 Préparation de T08 : `arm_reach.reach_arm` produit une trajectoire du poignet
 à partir d'une pose observée et des longueurs du squelette Core. Cette fonction
-expérimentale n'est exposée ni comme action du corps ni comme outil Hermes.
-Elle ne déplace aucun objet et ne valide pas une prise.
+expérimentale reste interne. Le contrôleur l'utilise pour les
+[interactions cinématiques optionnelles](spatial-objects.md), avec leurs propres
+contrôles de géométrie. Elle ne valide pas à elle seule une prise.
 
 ## Calcul et limites
 
@@ -26,14 +27,18 @@ poignet ni qu'elle convient à un objet particulier.
 Les positions sont reconstruites depuis les rotations globales et les offsets
 de repos, selon la convention Core déjà qualifiée. La pose d'entrée doit être
 cohérente avec ce squelette à 1 mm près. Les noms et parents des articulations
-déterminent la chaîne ; les matrices restent des rotations propres.
+déterminent la chaîne ; les matrices restent des rotations propres. Les erreurs
+d'arrondi sont normalisées par SVD avant le calcul pour éviter une dérive de
+rotation au fil des prises répétées. Un changement supérieur à 0,00001 par
+coefficient est refusé ; la première pose restituée reste exactement l'entrée.
 
 Cette géométrie ne connaît ni limites articulaires anatomiques, ni collisions
 du bras avec le corps ou les objets, ni articulation des doigts. Un changement
 de plan de flexion près d'une singularité n'est pas qualifié. Le nombre de poses
 est configurable, mais aucun plafond de vitesse n'est garanti pour une durée
-arbitraire. Ce composant doit rester hors du contrôleur tant que ces contraintes
-et le choix de l'orientation de contact ne sont pas traités pour l'usage considéré.
+arbitraire. Son utilisation dans le contrôleur reste limitée au protocole
+expérimental du doudou : point de contact explicite et enveloppes de collision,
+sans validation anatomique complète.
 
 ## Essai local
 
@@ -90,6 +95,7 @@ de la pose source. Aucun de ces essais ne valide les contacts avec un objet.
 
 Les tests CPU couvrent conservation des segments et du reste du corps, rotation
 et translation du monde, cibles impossibles, pose incohérente et géométrie non
-finie. Les dépendances restent optionnelles. Le prochain raccord doit associer
-géométrie de l'objet, point de contact, orientation de main et attachement suivi
-par le contrôleur, avec interruptions et observations cohérentes.
+finie, ainsi que six approches successives sans dérive des rotations. Les
+dépendances restent optionnelles. Le raccord du contrôleur associe maintenant
+géométrie du doudou, point de contact, orientation de main et attachement suivi,
+avec interruptions et observations cohérentes ; sa qualification reste partielle.

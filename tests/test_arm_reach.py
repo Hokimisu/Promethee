@@ -212,3 +212,24 @@ def test_half_turn_interpolation_tolerates_float32_pose_roundoff():
     start = np.eye(3) * (1 + 1e-7)
     actual = interpolate_rotation(start, end, 1.0)
     np.testing.assert_allclose(actual, end, atol=1e-10)
+
+
+def test_repeated_reaching_does_not_accumulate_rotation_roundoff():
+    skeleton, pose = fixture()
+    pose["rotations"] = (np.array(pose["rotations"]) * (1 + 1e-7)).tolist()
+    original = copy.deepcopy(pose)
+    for i in range(6):
+        result = reach_arm(pose, skeleton, [-0.2, 1.3, 0.25] if i % 2 else [-0.25, 1.25, 0.2])
+        if i == 0:
+            np.testing.assert_allclose(result["global_rot_mats"][0], original["rotations"], atol=0)
+        matrices = result["global_rot_mats"][-1]
+        np.testing.assert_allclose(
+            matrices @ np.swapaxes(matrices, -1, -2),
+            np.repeat(np.eye(3)[None], 27, axis=0),
+            atol=1e-12,
+        )
+        pose = {
+            "skeleton": "cskel27",
+            "positions": result["posed_joints"][-1].tolist(),
+            "rotations": matrices.tolist(),
+        }

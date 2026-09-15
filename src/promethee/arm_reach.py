@@ -94,6 +94,13 @@ def reach_arm(pose, skeleton, target, *, side="right", frames=61, hand_rotation=
         raise ValueError("Expected 27 joint positions.")
     validate_pose(pose, points[0, [0, 2]].tolist())
     rotations = np.asarray(pose["rotations"], dtype=float)
+    original_rotations = rotations.copy()
+    u, _, vt = np.linalg.svd(rotations)
+    rotations = u @ vt
+    if np.max(np.abs(rotations - original_rotations)) > 1e-5:
+        raise ValueError(
+            "Pose rotation error exceeds numerical roundoff; cannot normalize it safely."
+        )
     if hand_rotation is not None:
         hand_rotation = np.asarray(hand_rotation, dtype=float)
         if (
@@ -123,7 +130,7 @@ def reach_arm(pose, skeleton, target, *, side="right", frames=61, hand_rotation=
     distance = np.linalg.norm(target - origin)
     if not abs(upper - lower) + 1e-6 < distance < limit - 1e-6:
         raise ValueError(f"Wrist target outside geometric arm reach ({limit:.6f} m maximum).")
-    positions, matrices = [points.copy()], [rotations.copy()]
+    positions, matrices = [points.copy()], [original_rotations]
     for index in range(1, frames):
         phase = index / (frames - 1)
         blend = phase * phase * (3 - 2 * phase)

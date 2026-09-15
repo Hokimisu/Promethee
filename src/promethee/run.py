@@ -31,7 +31,9 @@ def run_session(args):
         encoder_url=args.encoder_url,
     )
     try:
-        controller = KinematicController(service, worker, seed=args.seed)
+        controller = KinematicController(
+            service, worker, seed=args.seed, object_interactions=args.object_interactions
+        )
     except Exception:
         worker.close()
         raise
@@ -93,19 +95,53 @@ def run_session(args):
                 item = service.cancel(request[0])
                 result.content = f"{request[0]} : {item['status']} · arrêt demandé"
 
+        if args.object_interactions:
+            with server.gui.add_folder("Objets"):
+                name = server.gui.add_text("Nom de l’objet", initial_value="")
+                location = server.gui.add_vector3(
+                    "Position XYZ (m)",
+                    initial_value=(0, 1, 0.5),
+                    min=(-5, 0, -5),
+                    max=(5, 5, 5),
+                    step=0.05,
+                    hint="Y est la hauteur. Les objets libres restent fixes, sans gravité.",
+                )
+                create = server.gui.add_button("Créer un doudou")
+                take = server.gui.add_button("Prendre l’objet")
+                place = server.gui.add_button("Déposer l’objet tenu")
+
+            @create.on_click
+            def create_clicked(_):
+                submit(
+                    {
+                        "kind": "spawn",
+                        "args": {
+                            "object_id": name.value,
+                            "asset": "plush",
+                            "position": list(location.value),
+                        },
+                    }
+                )
+
+            @take.on_click
+            def take_clicked(_):
+                submit({"kind": "take", "args": {"object_id": name.value}})
+
+            @place.on_click
+            def place_clicked(_):
+                submit({"kind": "place", "args": {"position": list(location.value)}})
+
         body = None
+        object_nodes = {}
         edges = None
         next_status = 0.0
         while True:
             tick = time.monotonic()
             controller.tick()
-            if controller.pose is not None:
+            if controller.pose is not None and controller.skeleton is not None:
                 if edges is None:
-                    from promethee.rendering import load_skeleton
-
-                    skeleton = load_skeleton(worker.output / "conventions.json")
                     edges = np.stack(
-                        [np.asarray(skeleton["parents"])[1:], np.arange(1, 27)], axis=1
+                        [np.asarray(controller.skeleton["parents"])[1:], np.arange(1, 27)], axis=1
                     )
                 points = np.asarray(controller.pose["positions"])[edges]
                 if body is None:
@@ -114,6 +150,37 @@ def run_session(args):
                     )
                 else:
                     body.points = points
+            if args.object_interactions:
+                from viser.transforms import SO3
+
+                from promethee.object_models import OBJECT_MODELS, part_mesh
+
+                observed_objects = controller.observation["objects"]
+                for object_id in set(object_nodes) - set(observed_objects):
+                    parent, children = object_nodes.pop(object_id)
+                    for node in children:
+                        node.remove()
+                    parent.remove()
+                for object_id, obj in observed_objects.items():
+                    if object_id not in object_nodes:
+                        path = f"/objects/{object_id}"
+                        parent = server.scene.add_frame(path, show_axes=False)
+                        children = []
+                        for index, part in enumerate(OBJECT_MODELS[obj["asset"]]):
+                            vertices, faces = part_mesh(part)
+                            color = tuple(int(part["color"][i : i + 2], 16) for i in (1, 3, 5))
+                            children.append(
+                                server.scene.add_mesh_simple(
+                                    f"{path}/part-{index}",
+                                    vertices=vertices,
+                                    faces=faces,
+                                    color=color,
+                                )
+                            )
+                        object_nodes[object_id] = (parent, children)
+                    parent = object_nodes[object_id][0]
+                    parent.position = tuple(obj["spatial"]["position"])
+                    parent.wxyz = SO3.from_matrix(np.asarray(obj["spatial"]["rotation"])).wxyz
             if tick >= next_status:
                 status.content = controller.message
                 if request[0]:
@@ -136,6 +203,11 @@ def configure(parser):
     parser.add_argument("--encoder-url", default="http://127.0.0.1:9550")
     parser.add_argument("--port", type=int, default=2335)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument(
+        "--object-interactions",
+        action="store_true",
+        help="Enable experimental kinematic spatial spawn/take/place.",
+    )
 
 
 def main():

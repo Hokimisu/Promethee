@@ -17,3 +17,24 @@ OBJECT_MODELS = {
         {"center": [0, 0.057, 0.039], "size": [0.012, 0.009, 0.008], "color": "#302c29"},
     ],
 }
+
+
+def part_mesh(part):
+    """Triangulate the same ellipsoid for the live Core diagnostic viewer."""
+    import numpy as np
+
+    points = []
+    for ring in range(13):
+        phi = np.pi * ring / 12
+        for sector in range(21):
+            theta = 2 * np.pi * sector / 20
+            point = np.array(
+                [np.sin(phi) * np.cos(theta), np.cos(phi), np.sin(phi) * np.sin(theta)]
+            )
+            points.append(np.array(part["center"]) + point * np.array(part["size"]) / 2)
+    faces = []
+    for ring in range(12):
+        for sector in range(20):
+            a = ring * 21 + sector
+            faces.extend([[a, a + 1, a + 21], [a + 1, a + 22, a + 21]])
+    return np.asarray(points, dtype=np.float32), np.asarray(faces, dtype=np.uint32)

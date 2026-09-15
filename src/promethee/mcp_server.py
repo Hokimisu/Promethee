@@ -28,9 +28,17 @@ class WorldTools:
         for action in actions:
             if action["kind"] == "posture":
                 action["names"] = sorted(POSTURES)
+            if action["kind"] in {"spawn", "place"}:
+                action["position_format"] = "Spatial controller: [x, y, z] metres, Y up."
+            if action["kind"] == "spawn":
+                from promethee.object_models import OBJECT_MODELS
+
+                action["spatial_models"] = sorted(OBJECT_MODELS)
         return {
             "actions": actions,
-            "coordinates": "Floor plane [x, y] in metres; each coordinate is in [-5, 5].",
+            "coordinates": (
+                "Move: floor plane [x, z]. Spatial spawn/place: [x, y, z], Y up. Metres in [-5, 5]."
+            ),
             "execution": "Asynchronous; availability does not guarantee a successful motion.",
         }
 
