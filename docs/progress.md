@@ -11,7 +11,7 @@ Ce registre distingue le code livré des intégrations réellement vérifiées. 
 | T04 | Implémenté et vérifié sur CPU | Suivi séparé, observation atomique, révision, `busy`, doublons et provenance du pilote ; contrôleur factice explicite |
 | T05 | Implémenté et vérifié sur CPU | Annulation, bail exclusif, réconciliation et coupures réelles de processus ; 60 tests passent, lint, format et construction réussis |
 | T06 | Implémenté et vérifié avec le vrai squelette | Viser en lecture seule, deux dispositions, mise à jour d'un objet, lecture/scrutation d'un NPZ ARDY, contrôle d'échelle et de rotation ; 69 tests CPU passent. [Guide de rendu](rendering.md) |
-| T07 | En cours | Raccord ARDY/runtime et pilotage manuel réels ; [mesures et limites](motion-validation.md), contacts et postures restant à qualifier |
+| T07 | En cours | Pilotage ARDY, postures, arrêt et reprise réels ; [mesures et limites](motion-validation.md), déplacements encore trop souvent refusés ; 96 tests CPU |
 | T08–T13 | À réaliser | Aucune intégration réelle revendiquée |
 
 Les journaux de test et données locales restent dans `.local/` et ne sont pas publiés.

@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import math
 import shutil
 from pathlib import Path
 
@@ -12,6 +13,7 @@ from ardy.model.load_model import load_model, load_text_encoder
 from ardy.motion_rep.tools import compute_heading_angle, length_to_mask
 from ardy.postprocess import post_process_motion
 from ardy.tools import seed_everything
+from ardy.viz.core_skin import CoreSkin
 from qualify import arrays, sync_time
 
 
@@ -23,6 +25,7 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--checkpoint-root", required=True)
     parser.add_argument("--seed", type=int, required=True)
+    parser.add_argument("--end-posture", choices=["standing", "arms_raised"])
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=False)
     shutil.copyfile(__file__, args.output / "trial-source.py")
@@ -48,6 +51,40 @@ def main():
             ).unsqueeze(0),
         ),
     ]
+    if args.end_posture:
+        local_rotations = model.skeleton.global_rots_to_local_rots(rotations.clone())
+        angle = float(heading[0])
+        c, s = math.cos(angle), math.sin(angle)
+        yaw_rotation = torch.tensor([[c, 0, s], [0, 1, 0], [-s, 0, c]], device="cuda")
+        direction = 1 if args.end_posture == "arms_raised" else -1
+        for name, sign in (("RightArm", -1), ("LeftArm", 1)):
+            angle = direction * sign * math.pi / 2
+            c, s = math.cos(angle), math.sin(angle)
+            arm_rotation = yaw_rotation @ torch.tensor(
+                [[c, -s, 0], [s, c, 0], [0, 0, 1]], device="cuda"
+            )
+            index = model.skeleton.bone_index[name]
+            parent = int(model.skeleton.joint_parents[index])
+            local_rotations[0, index] = rotations[0, parent].T @ arm_rotation
+        for name in ("RightForeArm", "LeftForeArm", "RightHand", "LeftHand"):
+            local_rotations[0, model.skeleton.bone_index[name]] = torch.eye(3, device="cuda")
+        target = np.asarray(args.target) - offset[[0, 2]]
+        goal_rotations, goal_points, _ = model.skeleton.fk(
+            local_rotations,
+            torch.tensor(
+                [[target[0], initial[0, 1], target[1]]], device="cuda", dtype=torch.float32
+            ),
+        )
+        mesh = CoreSkin(model.skeleton).skin(goal_rotations, goal_points, rot_is_global=True)
+        goal_points[:, :, 1] -= mesh[..., 1].min()
+        constraints.append(
+            FullBodyConstraintSet(model.skeleton, torch.tensor([119]), goal_points, goal_rotations)
+        )
+        np.savez(
+            args.output / "goal.npz",
+            posed_joints=goal_points.cpu().numpy(),
+            global_rot_mats=goal_rotations.cpu().numpy(),
+        )
     lengths = torch.tensor([120], device="cuda")
     observed, mask = model.motion_rep.create_conditions_from_constraints_batched(
         constraints, lengths, to_normalize=True, device="cuda"
@@ -79,7 +116,12 @@ def main():
         )
     )
     processed = arrays(output)
-    measures = {"seed": args.seed, "prompt": args.prompt, "generation_with_text_seconds": elapsed}
+    measures = {
+        "seed": args.seed,
+        "prompt": args.prompt,
+        "end_posture": args.end_posture,
+        "generation_with_text_seconds": elapsed,
+    }
     for name, values in (("raw", raw), ("processed", processed)):
         for field in ("root_positions", "posed_joints"):
             values[field] += offset

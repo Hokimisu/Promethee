@@ -25,12 +25,15 @@ def read_trajectory(path, *, start_pose, target):
     with np.load(path, allow_pickle=False) as data:
         positions = data["posed_joints"].copy()
         rotations = data["global_rot_mats"].copy()
+        contacts = data["foot_contacts"].copy()
         fps = float(data["fps"])
     if (
         positions.ndim != 3
         or positions.shape[1:] != (27, 3)
         or not 40 <= len(positions) <= 320
         or rotations.shape != (len(positions), 27, 3, 3)
+        or contacts.shape != (len(positions), 4)
+        or not np.isfinite(contacts).all()
         or fps != 20
     ):
         raise ValueError("Invalid trajectory dimensions or cadence.")
@@ -57,6 +60,14 @@ def read_trajectory(path, *, start_pose, target):
         raise ValueError("Generated motion misses the target by more than 5 cm.")
     if np.linalg.norm(np.diff(positions[:, 0], axis=0), axis=-1).max() > 0.12:
         raise ValueError("Generated root contains a discontinuity.")
+    if np.linalg.norm(np.diff(positions, axis=0), axis=-1).max() > 0.3:
+        raise ValueError("Generated joints contain an excessive frame step.")
+    feet = positions[:, [25, 26, 21, 22]][..., [0, 2]]
+    speed = np.linalg.norm(np.diff(feet, axis=0), axis=-1) * fps
+    contact_pairs = (contacts[:-1] > 0.5) & (contacts[1:] > 0.5)
+    sliding = speed[contact_pairs]
+    if len(sliding) and (sliding.max() > 0.2 or np.quantile(sliding, 0.95) > 0.05):
+        raise ValueError("Predicted contact feet slide beyond the calibrated limits.")
     return poses
 
 
@@ -113,9 +124,11 @@ class KinematicController:
         ):
             raise RuntimeError("Controller feedback lost ownership or its execution.")
         if status != "running":
-            self.message = f"{self.active['request_id']} : {status}" + (
-                f" · {error}" if error else ""
-            )
+            self.message = {
+                "completed": "Mouvement terminé.",
+                "cancelled": "Mouvement arrêté.",
+                "failed": "Mouvement non réalisé.",
+            }[status]
             self.active = None
             self.trajectory = None
             self.job_id = None
@@ -129,6 +142,9 @@ class KinematicController:
             "seed": self.seed,
             "frames": frames,
             "start_pose": self.pose,
+            "posture": (
+                self.active["envelope"]["action"]["args"].get("name") if self.active else None
+            ),
         }
         with (self.worker.output / f"{self.job_id}-request.json").open(
             "x", encoding="utf-8"
@@ -181,7 +197,7 @@ class KinematicController:
             self.trajectory = poses
             self.frame = 0
             self.play_started = self.clock()
-            self.message = f"{self.active['request_id']} : mouvement en cours."
+            self.message = "Mouvement en cours."
 
     def tick(self):
         now = self.clock()
@@ -253,7 +269,7 @@ class KinematicController:
                         "Movement above 2 metres is not qualified; choose a closer target.",
                     )
                 else:
-                    self.message = f"{self.active['request_id']} : génération du mouvement."
+                    self.message = "Préparation du mouvement."
                     self._submit_motion(target, text, 120)
 
     def close(self):

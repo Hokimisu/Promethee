@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "frozen_before_holdout": true,
+  "calibration": ["motion-transition-03", "posture-constraint-calibration-02", "ground-calibration-01"],
+  "source": "kinematic Core with explicit mesh-floor projection",
+  "target_error_max_m": 0.05,
+  "initial_joint_error_max_m": 0.02,
+  "root_frame_step_max_m": 0.12,
+  "joint_frame_step_max_m": 0.3,
+  "floor_lift_max_m": 0.05,
+  "floor_lift_frame_step_max_m": 0.015,
+  "contact_foot_speed_max_m_s": 0.2,
+  "contact_foot_speed_p95_max_m_s": 0.05,
+  "mesh_floor_penetration_max_m": 0.001,
+  "posture_wrist_above_head_min_m": 0.15,
+  "notes": "These are geometric acceptance bounds, not physical balance or subjective naturalness certification. Foot contacts are model predictions. Qualification prompts and worlds are excluded from agent context."
+}

@@ -21,14 +21,18 @@ def serve(args, send):
     from ardy.constraints import FullBodyConstraintSet, Root2DConstraintSet
     from ardy.model.load_model import load_model, load_text_encoder
     from ardy.motion_rep.tools import compute_heading_angle, length_to_mask
-    from ardy.postprocess import post_process_motion
+    from ardy.skeleton.definitions import CoreSkeleton27
     from ardy.tools import seed_everything
+    from ardy.viz.core_skin import CoreSkin
+    from ardy_geometry import continue_from_pose, ground_motion, posture_goal
 
     args.output.mkdir(parents=True, exist_ok=True)
     model = load_model(
         "core", device="cuda", text_encoder=False, checkpoints_dir=args.checkpoint_root
     )
     model.text_encoder = load_text_encoder(mode="api", url=args.encoder_url, device="cuda")
+    cpu_skin = CoreSkin(CoreSkeleton27())
+    goal_skin = CoreSkin(model.skeleton)
     send(
         {
             "type": "ready",
@@ -55,7 +59,7 @@ def serve(args, send):
         if not isinstance(job_id, str) or not re.fullmatch(r"[a-f0-9]{32}", job_id):
             raise ValueError("Invalid worker job ID.")
         try:
-            if set(job) != {"job_id", "target", "text", "seed", "frames", "start_pose"}:
+            if set(job) != {"job_id", "target", "text", "seed", "frames", "start_pose", "posture"}:
                 raise ValueError("Invalid worker request fields.")
             frames, seed, text = job["frames"], job["seed"], job["text"]
             if type(frames) is not int or not 40 <= frames <= 320 or frames % 4:
@@ -93,6 +97,21 @@ def serve(args, send):
                         torch.tensor(rotations, device="cuda").unsqueeze(0),
                     )
                 )
+                if job["posture"] is not None:
+                    goal_points, goal_rotations = posture_goal(
+                        model.skeleton,
+                        goal_skin,
+                        torch.tensor(rotations, device="cuda").unsqueeze(0),
+                        local,
+                        float(heading[0]),
+                        (target - offset[[0, 2]]).tolist(),
+                        job["posture"],
+                    )
+                    constraints.append(
+                        FullBodyConstraintSet(
+                            model.skeleton, torch.tensor([frames - 1]), goal_points, goal_rotations
+                        )
+                    )
             else:
                 offset = np.asarray([target[0], 0, target[1]], dtype=np.float32)
                 heading = torch.zeros(1, device="cuda")
@@ -128,37 +147,32 @@ def serve(args, send):
                     progress_bar=lambda values: values,
                 )
                 output = model.motion_rep.inverse(motion, is_normalized=True)
-                raw = {key: value.detach().cpu().numpy() for key, value in output.items()}
-                output.update(
-                    post_process_motion(
-                        output["local_rot_mats"],
-                        output["root_positions"],
-                        output["foot_contacts"],
-                        model.skeleton,
-                        constraint_lst=constraints,
-                    )
-                )
-            processed = {key: value.detach().cpu().numpy() for key, value in output.items()}
+                raw = {key: value[0].detach().cpu().numpy() for key, value in output.items()}
+            for field in ("root_positions", "posed_joints"):
+                raw[field] += offset
+            processed = {key: value.copy() for key, value in raw.items()}
             for label, values in (("raw", raw), ("processed", processed)):
-                for field in ("root_positions", "posed_joints"):
-                    values[field] += offset
                 if not all(np.isfinite(value).all() for value in values.values()):
                     raise ValueError("Non-finite generated motion.")
+                if label == "processed":
+                    continue_from_pose(values, job["start_pose"], cpu_skin.skeleton)
+                    grounding = ground_motion(values, cpu_skin)
                 with (args.output / f"{job_id}-{label}.npz").open("xb") as stream:
                     np.savez(
                         stream,
-                        **{key: value[0] for key, value in values.items()},
+                        **values,
                         fps=np.asarray(20),
                         text=np.asarray(text),
                         seed=np.asarray(seed),
                     )
-            joints = processed["posed_joints"][0]
+            joints = processed["posed_joints"]
             send(
                 {
                     "type": "generated",
                     "job_id": job_id,
                     "file": f"{job_id}-processed.npz",
                     "elapsed_seconds": time.perf_counter() - started,
+                    "grounding": grounding,
                     "max_start_error_m": (
                         float(np.linalg.norm(joints[0] - initial, axis=-1).max())
                         if initial is not None
