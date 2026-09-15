@@ -18,6 +18,7 @@ agent = [
     "PyYAML==6.0.3",
 ]
 memory = ["PyYAML==6.0.3"]
+voice = ["openai==2.24.0", "sounddevice==0.5.3"]
 avatar = ["numpy==2.4.6"]
 
 [project.scripts]

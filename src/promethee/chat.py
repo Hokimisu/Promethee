@@ -227,7 +227,8 @@ def configure(parser):
     parser.add_argument("--vault", type=Path, help="Optional sourced interactive memory vault.")
 
 
-def run_chat(args):
+@contextlib.contextmanager
+def open_text_host(args):
     if not os.environ.get("PROMETHEE_OPENAI_API_KEY"):
         raise ValueError("Configure PROMETHEE_OPENAI_API_KEY locally before starting the chat.")
     if not args.hermes_python.is_file() or not args.hermes_root.is_dir():
@@ -259,15 +260,6 @@ def run_chat(args):
             request,
         )
 
-    incoming = queue.Queue(maxsize=16)
-
-    def read_input():
-        while True:
-            line = sys.stdin.readline(16002)
-            incoming.put(line)
-            if not line:
-                return
-
     with exclusive_host(data_dir):
         host = TextHost(
             store,
@@ -277,6 +269,23 @@ def run_chat(args):
             api_mode=args.api_mode,
             timeout=args.timeout,
         )
+        try:
+            yield host
+        finally:
+            host.close()
+
+
+def run_chat(args):
+    incoming = queue.Queue(maxsize=16)
+
+    def read_input():
+        while True:
+            line = sys.stdin.readline(16002)
+            incoming.put(line)
+            if not line:
+                return
+
+    with open_text_host(args) as host:
         threading.Thread(target=read_input, daemon=True).start()
         print(
             "Texte : un message par ligne. /cancel coupe la réponse ; /quit ferme le chat.",

@@ -55,6 +55,10 @@ def main():
     from promethee.chat import configure as configure_chat
 
     configure_chat(chat)
+    voice = commands.add_parser("voice", help="Push-to-talk diagnostic through the same Hermes.")
+    from promethee.voice import configure as configure_voice
+
+    configure_voice(voice)
     submit = commands.add_parser("submit", help="Submit an asynchronous body action.")
     submit.add_argument("--request-id", required=True)
     submit.add_argument("--expected-revision", type=int, required=True)
@@ -91,6 +95,14 @@ def main():
                     memory.export_pending()
                     result = {"exported": True}
             print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 0
+        if args.command == "voice":
+            from promethee.voice import run_voice
+
+            try:
+                run_voice(args)
+            except KeyboardInterrupt:
+                pass
             return 0
         if args.command == "chat":
             from promethee.chat import run_chat

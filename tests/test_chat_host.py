@@ -224,7 +224,8 @@ def test_fresh_profile_is_bound_to_turn_and_has_no_implicit_tools(tmp_path):
         prepare_profile(profile, tmp_path, "turn-fixture")
 
 
-def test_cli_without_credentials_does_not_create_a_world(tmp_path):
+@pytest.mark.parametrize("command", ["chat", "voice"])
+def test_cli_without_credentials_does_not_create_a_world(tmp_path, command):
     environment = dict(os.environ)
     environment.pop("PROMETHEE_OPENAI_API_KEY", None)
     target = tmp_path / "absent-session"
@@ -235,7 +236,7 @@ def test_cli_without_credentials_does_not_create_a_world(tmp_path):
             "promethee.cli",
             "--data-dir",
             str(target),
-            "chat",
+            command,
             "--hermes-python",
             sys.executable,
             "--hermes-root",
@@ -244,7 +245,12 @@ def test_cli_without_credentials_does_not_create_a_world(tmp_path):
             "diagnostic",
             "--api-mode",
             "chat_completions",
-        ],
+        ]
+        + (
+            ["--transcription-model", "fixture", "--speech-model", "fixture", "--voice", "fixture"]
+            if command == "voice"
+            else []
+        ),
         env=environment,
         capture_output=True,
         text=True,

@@ -44,7 +44,12 @@ manuelles. Les notes restent des données historiques : le monde courant fait
 autorité et une recherche ne reprend aucune activité. Les jeux de qualification
 et les anciennes sessions non classées sont exclus. Voir le [contrat mémoire](memory.md).
 
-La piste principale est GPT-Live avec délégation vers un adaptateur Hermes/Astra. Elle conserve un agent persistant tout en permettant la conversation vocale. Une chaîne transcription → agent → synthèse reste une option de diagnostic si nécessaire. Les capacités et l'accès effectif aux modèles doivent être vérifiés avant l'intégration payante.
+La piste principale reste GPT-Live avec délégation vers Hermes/Astra. `voice.py`
+fournit désormais une chaîne de diagnostic transcription → même hôte Hermes →
+synthèse, avec micro à la demande et génération invalidée lors d'une correction.
+Les clients audio sont vérifiés contre un fournisseur local simulé ; accès,
+périphériques réels et interruption automatique restent à qualifier. Voir les
+[commandes et limites](voice.md).
 
 Les événements d'interruption doivent parvenir à la conversation et au corps. Si l'avatar est assis, interrompre une réponse vocale ne doit pas le téléporter debout. L'annulation d'une action physique doit aboutir à une posture valide, puis être attestée par le contrôleur.
 

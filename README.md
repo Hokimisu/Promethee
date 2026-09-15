@@ -55,6 +55,7 @@ Cette commande réalise une transition instantanée, sans activité préécrite 
 | Mémoire Markdown lisible dans Obsidian | Sources, recherche, corrections et éditions manuelles ; raccord Hermes vérifié avec fournisseur de test |
 | Contrôles automatiques et tests de comportement | Fournis |
 | Pont d'outils Hermes | Hôte texte, historique persistant et MCP vérifiés ; accès Astra et voix à raccorder |
+| Voix de diagnostic | Chaîne transcription/Hermes/synthèse testée avec fournisseurs simulés ; microphone et voix réels non qualifiés |
 | ARDY Core et rendu Viser | Pilotage cinématique manuel ; qualification des déplacements incomplète |
 | Apparence anime en VRM | Lecture animée ARDY et textures vérifiées ; appuis et pilotage direct à raccorder |
 | Initiative autonome et services externes | Jalons ultérieurs |
@@ -107,6 +108,7 @@ docs/            Vision, architecture, contrats et jalons
 - [Plan d'implémentation pour le développeur](docs/implementation-plan.md)
 - [Avancement vérifié des tickets](docs/progress.md)
 - [Pont Hermes et accès au modèle](docs/hermes-setup.md)
+- [Voix de diagnostic et interruptions](docs/voice.md)
 - [Provenance de l'avatar VRM](docs/assets/pixiv-vrm-sample.md)
 - [Lecture animée de l'avatar](docs/avatar-rendering.md)
 - [Contribuer](CONTRIBUTING.md)

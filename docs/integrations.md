@@ -8,7 +8,7 @@ qui a réellement été essayé localement.
 |---|---|---|
 | Raisonnement | Astra, mode d'API explicite dans l'hôte | Accès OpenAI configuré : HTTP 401 ; aucune inférence Astra validée |
 | Agent persistant | Hermes Agent 0.20.5, réutilisé en amont | Hôte texte, historique et outils vérifiés avec fournisseur local de test ; [qualification](hermes-setup.md) |
-| Voix | GPT-Live avec délégation vers l'agent | Non connecté |
+| Voix | GPT-Live reste la cible ; chaîne transcription/Hermes/synthèse pour le diagnostic | [Chaîne et interruptions](voice.md) vérifiées avec fournisseurs simulés ; pas d'accès audio réel qualifié |
 | Mouvement | ARDY préentraîné, piloté par texte et contraintes | Génération et pilote cinématique réels ; déplacements encore peu fiables, [mesures](motion-validation.md) |
 | Contrôle physique éventuel | GPC / ProtoMotions ou contrôleur adapté | À évaluer après le premier essai |
 | Rendu | Viser pour le monde ; Three.js/VRM pour l'apparence | [Monde et squelette](rendering.md), [avatar animé en lecture seule](avatar-rendering.md) ; interactions corporelles non livrées |
@@ -24,8 +24,9 @@ Astra supporte les entrées texte/image et les sorties texte ; sa fiche ne décl
 Ne pas déduire l'accès API de la présence du modèle dans ChatGPT ou Codex. La
 commande `chat` utilise désormais `PROMETHEE_OPENAI_API_KEY`, un modèle et un mode
 d'API explicites ; elle ne choisit aucun fournisseur de secours. Le compte n'a
-pas encore permis de qualifier cette intégration réelle. GPT-Live et la chaîne
-transcription → Hermes → synthèse restent à raccorder et à mesurer.
+pas encore permis de qualifier cette intégration réelle. GPT-Live reste à
+raccorder ; la chaîne transcription → Hermes → synthèse dispose d'un diagnostic
+exécutable, encore sans mesures de fournisseur ou de périphérique réels.
 
 ## Hermes
 

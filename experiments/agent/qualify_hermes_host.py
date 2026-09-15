@@ -25,6 +25,9 @@ parser.add_argument("--hermes-root", type=Path, required=True)
 parser.add_argument(
     "--memory", action="store_true", help="Exercise the four sourced memory tools too."
 )
+parser.add_argument(
+    "--voice", action="store_true", help="Exercise chained audio with synthetic PCM, no devices."
+)
 args = parser.parse_args()
 output = args.output.resolve()
 output.mkdir(exist_ok=False)
@@ -39,6 +42,8 @@ for name in (
     "memory.py",
     "mcp_server.py",
     "migrations.py",
+    "voice.py",
+    "voice_worker.py",
 ):
     shutil.copyfile(root / "src/promethee" / name, output / name)
 (output / "purpose.json").write_text(
@@ -58,7 +63,24 @@ class Provider(BaseHTTPRequestHandler):
         pass
 
     def do_POST(self):
-        request = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        raw = self.rfile.read(int(self.headers["Content-Length"]))
+        if args.voice and self.path in {"/v1/audio/transcriptions", "/v1/audio/speech"}:
+            if self.path.endswith("transcriptions"):
+                assert b"RIFF" in raw and b"recording.wav" in raw
+                body, content_type = b'{"text":"Read the world"}', "application/json"
+            else:
+                request = json.loads(raw)
+                assert request["input"] == "Diagnostic host: world read."
+                assert request["response_format"] == "pcm"
+                body, content_type = b"\x01\x00" * 2400, "application/octet-stream"
+            calls.append({"audio": self.path, "at": time.monotonic()})
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        request = json.loads(raw)
         if "messages" not in request:
             self.send_error(404)
             return
@@ -223,6 +245,58 @@ try:
             assert result["status"] == "completed", result
             results.append({"case": "read", "elapsed": time.monotonic() - started, **result})
             print(json.dumps(results[-1]), flush=True)
+            if args.voice:
+                from promethee.voice import VoiceHost
+
+                class SyntheticDevice:
+                    active, error = False, None
+
+                    def listen(self):
+                        self.active = True
+
+                    def stop(self):
+                        self.active = False
+
+                    def finish_recording(self):
+                        self.stop()
+                        return b"\x01\x00" * 2400
+
+                    def play(self, pcm):
+                        assert pcm == b"\x01\x00" * 2400
+                        self.active = True
+
+                voice_host = VoiceHost(
+                    host,
+                    lambda request: WorkerProcess(
+                        [sys.executable, "-m", "promethee.voice_worker"], request
+                    ),
+                    SyntheticDevice(),
+                    transcription_model="diagnostic-fixture",
+                    speech_model="diagnostic-fixture",
+                    voice="fixture",
+                    base_url=base_url,
+                )
+                try:
+                    voice_host.listen()
+                    voice_host.finish_listening()
+                    stages = []
+                    while voice_host.state != "speaking":
+                        result = wait_for(voice_host.poll)
+                        stages.append(result)
+                        assert result["status"] != "failed", result
+                    interrupted = voice_host.interrupt()
+                    results.append(
+                        {
+                            "case": "chained-voice-synthetic-device",
+                            "stages": stages,
+                            "interruption": interrupted,
+                            "provider_cost": 0,
+                            "actual_microphone_or_speakers": False,
+                        }
+                    )
+                    print(json.dumps(results[-1]), flush=True)
+                finally:
+                    voice_host.interrupt()
             if args.memory:
                 host.start("Remember qualification")
                 result = wait_for(host.poll)

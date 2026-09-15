@@ -197,8 +197,9 @@ réponse, sans réémettre une action. Les résultats échoués sont exclus du c
 
 L'hôte `chat.py` gère le lancement, l'échéance, l'arrêt du processus et la diffusion
 sérialisée des réponses textuelles. Le worker seul ne crée pas de monde, n'ouvre
-pas de tour et ne décide pas qu'une action corporelle a réussi. La voix n'est pas
-raccordée à cette interface.
+pas de tour et ne décide pas qu'une action corporelle a réussi. Le [diagnostic
+vocal](voice.md) réutilise ce même hôte ; modèles audio et périphériques réels
+restent à qualifier.
 
 Le script [qualify_hermes_loop.py](../experiments/agent/qualify_hermes_loop.py)
 utilise le vrai Hermes et le vrai transport MCP, avec un fournisseur déterministe
