@@ -7,6 +7,8 @@ The browser independently checks its rest geometry and scale against the profile
 import json
 from importlib.resources import files
 
+from promethee.avatar_rotation import normalized_core_rotation
+
 PIXIV_SHA256 = "12c2b97e95e700783a6a550dc0eee2d7880aeedccef9ae67bc4c5a2f0f2631a2"
 
 
@@ -50,11 +52,7 @@ class PixivArmReach:
         names = skeleton["joint_names"]
         position = np.asarray(pose["positions"][0], dtype=float).copy()
         position[1] += root_y_offset
-        rotations = np.asarray(pose["rotations"], dtype=float)
-        # Match the renderer's normalization within floating-point roundoff.
-        # The 10 micrometre reach margin exceeds these sub-micrometre differences.
-        u, _, vt = np.linalg.svd(rotations)
-        rotations = u @ vt
+        rotations = [normalized_core_rotation(rows) for rows in pose["rotations"]]
         for parent, child in zip(chain[:-1], chain[1:], strict=True):
             offset = (
                 np.array(bones[child]["rest_position"]) - bones[parent]["rest_position"]

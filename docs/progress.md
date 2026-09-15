@@ -25,7 +25,9 @@ Les [poses d'apparence préparées](avatar-foot-contact.md#poses-préparées-ava
 peuvent être exportées et rejouées sans recalculer l'adaptation. Sur 519 images
 de calibration, les appuis et la cible de main sont conservés après passage
 par JSON ; le déplacement dépassant 5 cm reste refusé sans export. Ce chemin
-reste hors session, en attente de validation et de persistance côté contrôleur.
+reste hors session. Le [chargeur Python](avatar-foot-contact.md#vérification-python-des-poses-préparées)
+vérifie désormais leur provenance, les rotations non adaptées et les cibles de
+main. Le raccord asynchrone et la persistance côté contrôleur restent à faire.
 
 La [comparaison des réglages ARDY](motion-sampling.md) sur quatre requêtes
 archivées n'a pas identifié d'amélioration générale. Le checkpoint est limité

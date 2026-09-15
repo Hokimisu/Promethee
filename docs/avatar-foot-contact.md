@@ -174,6 +174,43 @@ Les sources, entrées, rapports et poses sont conservés dans
 Les tests utilisent aussi une hiérarchie tournée, translatée et mise à
 l'échelle : la pose ne dépend pas de l'état précédent et les longueurs restent
 inchangées. Les huit tests web passent. Cette préparation reste hors session :
-la validation de l'archive par le contrôleur, son lancement asynchrone et la
-persistance de la pose d'apparence avec la pose Core restent à raccorder avant
+le lancement asynchrone et la persistance de la pose d'apparence avec la pose
+Core restent à raccorder avant
 d'activer l'adaptation dans le rendu en direct.
+
+## Vérification Python des poses préparées
+
+`prepared_avatar.load_prepared_poses(path, motion_bytes)` vérifie l'archive
+contre les octets exacts du document envoyé à la préparation. Il refuse un
+autre asset, une autre échelle, un mauvais nombre de poses, des rotations
+invalides et des décalages de bassin hors limites. La liste des mains alignées
+doit correspondre aux attachements du document. L'ancrage exige les indicateurs
+de contact archivés ; une translation seule ne peut modifier les jambes.
+
+Le contrôle compare les rotations non adaptées à Core, puis reconstruit les
+mains sur les longueurs VRM du profil. Chaque main alignée doit rester à moins
+de 10 µm de sa cible Core, avec une portée encore valide après déplacement du
+bassin. Le chargement ne modifie aucun monde. Les contacts du maillage restent
+mesurés par le producteur Three.js ; ce contrôle Python ne les recalcule pas.
+
+Le premier essai a révélé une différence entre l'orthogonalisation SVD utilisée
+en Python et la conversion matrice/quaternion du rendu. Pour une matrice Core
+légèrement imparfaite, ces deux conversions diffèrent : jusqu'à 5,04 × 10⁻⁵
+sur un coefficient de rotation de la séquence retour 16. Python utilise
+désormais la même conversion que Three.js 0.186.0, y compris dans le contrôle
+de portée existant. Le seuil de comparaison reste inchangé.
+
+Les 519 poses passent alors la vérification, avec un écart maximal de
+2,11 × 10⁻¹⁵ sur les rotations non adaptées. Les sept parcours objets
+antérieurs repassent aussi le contrôle de portée sur 1 955 poses. Un export
+supplémentaire de 278 poses du parcours objets 02 passe le chargeur avec la
+main gauche alignée ; son erreur visible maximale reste de 3,64 × 10⁻⁸ m.
+Les rapports
+sont conservés dans `.local/prepared-validator-qualification-02` et
+`.local/avatar-offset-reach-qualification-02`. Ces données restent des
+calibrations, exclues de la mémoire personnelle. Le contrôleur en direct
+n'appelle pas encore ce chargeur ; le raccord asynchrone et la persistance
+restent nécessaires.
+
+Vérifications du changement : 302 tests Python réussis, deux tests optionnels
+ignorés, lint, formatage et construction du paquet réussis.

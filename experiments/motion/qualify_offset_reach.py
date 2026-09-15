@@ -22,6 +22,7 @@ def main():
     for source in (
         Path(__file__),
         root / "src/promethee/avatar_reach.py",
+        root / "src/promethee/avatar_rotation.py",
         root / "src/promethee/pixiv_arm_profile.json",
         root / "web/avatar/measure-feet.mjs",
         root / "web/avatar/retarget.js",
