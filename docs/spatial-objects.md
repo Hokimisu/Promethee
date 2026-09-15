@@ -106,6 +106,31 @@ l'état attendu avant/après contact. Le replay contient 280 poses, échantillon
 nominalement à 20 Hz en omettant les délais de préparation CPU. Dans le VRM pixiv,
 l'écart maximal entre la main droite adaptée et la main Core est de 0,000000033 m.
 Les pieds visibles restent environ 17 mm au-dessus du sol : cet essai ne valide
-pas l'appui. Les doigts restent ouverts. Il reste à qualifier plusieurs positions
-et géométries et à partager les contraintes de portée du VRM avec le contrôleur
+pas l'appui. Les doigts restent ouverts. Il reste à qualifier plusieurs
+géométries et à partager les contraintes de portée du VRM avec le contrôleur
 avant de déclarer T08 terminé.
+
+Trois essais supplémentaires utilisent le même code moteur, sans retoucher les
+seuils après le premier parcours :
+
+| Dossier local | Position initiale avant transformation | Rotation du corps | Décalage XZ | Main utilisée | Parcours |
+| --- | --- | --- | --- | --- | --- |
+| `object-controller-qualification-02` | `[-0.15, 1.18, 0.27]` | 0° | `[0, 0]` | gauche | 9 résultats attendus |
+| `object-controller-qualification-03` | `[0.15, 1.18, 0.27]` | 0° | `[0, 0]` | gauche | 9 résultats attendus |
+| `object-controller-qualification-04` | `[0, 1.15, 0.25]` | 90° | `[1, -1]` | droite | 9 résultats attendus |
+
+Les options `--object-position X Y Z`, `--heading-degrees` et `--offset-xz X Z`
+reproduisent ces variations. La rotation et la translation s'appliquent au corps
+et aux positions cibles ; le doudou apparaît avec une orientation mondiale
+identité, donc son orientation relative au corps varie dans le dernier cas.
+Les empreintes des sources et de la pose sont conservées dans chaque rapport.
+Les essais 03 et suivants sauvegardent aussi la configuration avant exécution,
+pour pouvoir reproduire un échec.
+
+Les prises complètes durent 4,71 à 4,85 secondes, préparation CPU comprise ; les
+dépôts 3,15 à 3,21 secondes. Les trois séquences passent la vérification de portée
+du visualiseur VRM sur toutes leurs poses. Leur inspection à la pose 80 montre
+le doudou levé auprès de la main ; les doigts ouverts et l'absence de simulation
+physique restent inchangés. Ces variantes ne couvrent pas toute la pièce ni
+toutes les postures et ne transforment pas une capacité expérimentale en prise
+physique générale.

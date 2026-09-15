@@ -237,8 +237,10 @@ La lecture VRM adapte la main visible ; les commandes directes sont disponibles
 dans le visualiseur Core. Aucun objet n'est créé automatiquement.
 
 T08 reste ouvert : doigts et peau ne sont pas modélisés, les contraintes de
-portée VRM restent propres au replay, et les essais sur plusieurs positions et
-géométries ne sont pas terminés. Une prise cinématique ne valide pas la physique.
+portée VRM restent propres au replay, et les essais sur plusieurs géométries ne
+sont pas terminés. Quatre parcours couvrent maintenant des positions latérales,
+une rotation de 90° et une translation dans la pièce. Une prise cinématique ne
+valide pas la physique.
 
 **À modifier :** catalogue, validation, contrôleur et rendu.
 **À créer :** tests des interactions et fiche de provenance pour chaque asset introduit.

@@ -41,7 +41,12 @@ def main():
     parser.add_argument("--motion", type=Path, required=True)
     parser.add_argument("--skeleton", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--heading-degrees", type=float, default=0)
+    parser.add_argument("--offset-xz", type=float, nargs=2, default=[0, 0])
+    parser.add_argument("--object-position", type=float, nargs=3, default=[0, 1.15, 0.25])
     args = parser.parse_args()
+    if not np.isfinite([args.heading_degrees, *args.offset_xz, *args.object_position]).all():
+        parser.error("Trial coordinates must be finite.")
     args.output.mkdir(parents=True, exist_ok=False)
     source_root = Path(__file__).resolve().parents[2]
     sources = [Path(__file__)] + [
@@ -52,8 +57,29 @@ def main():
     for source in sources:
         shutil.copy2(source, args.output / source.name)
         source_hashes[source.name] = hashlib.sha256(source.read_bytes()).hexdigest()
+    (args.output / "config.json").write_text(
+        json.dumps(
+            {
+                key: str(value) if isinstance(value, Path) else value
+                for key, value in vars(args).items()
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
     motion = motion_document(args.motion, args.skeleton)
     pose = motion["frames"][0]
+    angle = np.deg2rad(args.heading_degrees)
+    rotation = np.array(
+        [[np.cos(angle), 0, np.sin(angle)], [0, 1, 0], [-np.sin(angle), 0, np.cos(angle)]]
+    )
+    offset = np.array([args.offset_xz[0], 0, args.offset_xz[1]])
+
+    def point(value):
+        return (rotation @ value + offset).tolist()
+
+    pose["positions"] = [point(value) for value in pose["positions"]]
+    pose["rotations"] = (rotation @ np.asarray(pose["rotations"])).tolist()
     path = args.output / "world.sqlite3"
     service = ExecutionService(Runtime(path, data_origin="session", session_kind="qualification"))
     handle = service.acquire_controller(source="kinematic", supported_actions=["move"])
@@ -105,12 +131,13 @@ def main():
         perform(
             "spawn",
             "spawn",
-            {"object_id": "sample", "asset": "plush", "position": [0, 1.15, 0.25]},
+            {"object_id": "sample", "asset": "plush", "position": point(args.object_position)},
             "completed",
         )
         perform("take", "take", {"object_id": "sample"}, "completed")
         perform("occupied", "take", {"object_id": "sample"}, "rejected")
-        perform("place", "place", {"position": [0, 1.13, 0.27]}, "completed")
+        placement = np.asarray(args.object_position) + [0, -0.02, 0.02]
+        perform("place", "place", {"position": point(placement)}, "completed")
         perform("cancel-before-contact", "take", {"object_id": "sample"}, "cancelled", 1.0)
         assert controller.observation["avatar"]["holding"] is None
         perform("cancel-after-contact", "take", {"object_id": "sample"}, "cancelled", 3.5)
@@ -123,7 +150,8 @@ def main():
         )
         controller.tick()
         assert controller.observation == before
-        perform("place-after-restart", "place", {"position": [0, 1.15, 0.26]}, "completed")
+        replacement = np.asarray(args.object_position) + [0, 0, 0.01]
+        perform("place-after-restart", "place", {"position": point(replacement)}, "completed")
         perform(
             "floor-intersection",
             "spawn",
@@ -146,6 +174,10 @@ def main():
         "source_motion_sha256": hashlib.sha256(args.motion.read_bytes()).hexdigest(),
         "source_skeleton_sha256": hashlib.sha256(args.skeleton.read_bytes()).hexdigest(),
         "source_code_sha256": source_hashes,
+        "heading_degrees": args.heading_degrees,
+        "offset_xz": args.offset_xz,
+        "object_position_before_world_transform": args.object_position,
+        "object_spawn_orientation": "world identity, not rotated with the trial",
         "samples": len(observations),
         "sample_period_seconds": 0.05,
         "preparation_delays_omitted_from_replay": True,
