@@ -8,6 +8,8 @@ Utiliser ARDY Core, checkpoint `ARDY-Core-RP-20FPS-Horizon40`, et le visualiseur
 
 L'adaptateur Promethee est `src/promethee/viewer.py`, lancé avec `uv run --extra viewer promethee-view --database <base.sqlite3> --skeleton <conventions.json>`, éventuellement `--motion <poses.npz>`. La [procédure de rendu](../rendering.md) décrit son installation, ses repères et son fonctionnement en lecture seule.
 
+L'apparence VRM demandée ensuite utilise une [vue Three.js dédiée](../avatar-rendering.md) : Viser ne permet pas d'animer les os du GLB importé en conservant ses textures. Cet essai reste en lecture seule ; il ne remplace pas le pilote Core qualifié ici.
+
 Conserver deux environnements Python 3.11 : ARDY et l'encodeur LLM2Vec. Les versions compatibles de Transformers diffèrent. L'API Gradio locale déjà prévue par ARDY assure leur liaison ; le socle Python 3.12+ garde ses dépendances indépendantes. Le moteur devra recevoir des contraintes et retourner les poses observées, sans écrire un succès à partir du seul texte.
 
 ## Conventions relevées

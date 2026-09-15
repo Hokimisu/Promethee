@@ -56,7 +56,7 @@ Cette commande réalise une transition instantanée, sans activité préécrite 
 | Contrôles automatiques et tests de comportement | Fournis |
 | Pont d'outils Hermes | MCP stdio vérifié ; conversation Astra et voix à raccorder |
 | ARDY Core et rendu Viser | Pilotage cinématique manuel ; qualification des déplacements incomplète |
-| Apparence anime en VRM | Asset pixiv importé et licence vérifiée ; animation à raccorder |
+| Apparence anime en VRM | Lecture animée ARDY et textures vérifiées ; appuis et pilotage direct à raccorder |
 | Initiative autonome et services externes | Jalons ultérieurs |
 
 ## Architecture cible
@@ -108,6 +108,7 @@ docs/            Vision, architecture, contrats et jalons
 - [Avancement vérifié des tickets](docs/progress.md)
 - [Pont Hermes et accès au modèle](docs/hermes-setup.md)
 - [Provenance de l'avatar VRM](docs/assets/pixiv-vrm-sample.md)
+- [Lecture animée de l'avatar](docs/avatar-rendering.md)
 - [Contribuer](CONTRIBUTING.md)
 - [Instructions pour les agents de développement](AGENTS.md)
 

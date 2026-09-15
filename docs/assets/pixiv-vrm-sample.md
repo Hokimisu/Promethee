@@ -2,8 +2,8 @@
 
 Première apparence retenue à la demande de l'utilisateur, le 15 septembre 2026.
 Le personnage reste remplaçable ; il ne définit ni identité, ni personnalité,
-ni comportement attendu. Le téléchargement ne valide pas encore son animation
-par le squelette Core d'ARDY.
+ni comportement attendu. La [lecture animée de poses Core](../avatar-rendering.md)
+est désormais vérifiée ; le raccord au pilotage direct reste à réaliser.
 
 | Champ | Valeur vérifiée dans le fichier |
 |---|---|
@@ -36,6 +36,7 @@ permissions relues. Le binaire et sa provenance complète restent locaux.
 La vignette embarquée et l'import statique dans Viser ont été inspectés :
 personnage féminin anime aux cheveux bruns longs, tee-shirt blanc, short noir
 et chaussures noires. Le GLB conserve ses textures dans cet aperçu local.
-Viser n'expose pas les articulations d'un GLB importé via son `GlbHandle` :
-le retargeting et le pilotage de ce maillage restent à effectuer. Ne pas annoncer
-cet avatar comme un corps déjà pilotable.
+Viser n'expose pas les articulations d'un GLB importé via son `GlbHandle`.
+La vue Three.js conserve les textures et anime ce modèle à partir des rotations
+Core enregistrées. Les mesures montrent encore des chaussures au-dessus du sol :
+ne pas annoncer cet avatar comme un corps dont les appuis sont validés.

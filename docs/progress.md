@@ -18,6 +18,11 @@ Ce registre distingue le code livré des intégrations réellement vérifiées. 
 
 Les journaux de test et données locales restent dans `.local/` et ne sont pas publiés.
 
+L'[apparence VRM](avatar-rendering.md) dispose d'une lecture animée en textures,
+vérifiée sur un déplacement et une posture ARDY. Les hanches sont conservées,
+mais les chaussures flottent de 1 à 4 cm sur ces essais ; les appuis ne sont
+pas validés. Cette vue reste en lecture seule, sans nouveau comportement d'agent.
+
 T06 est livré sur la branche [codex/world-viewer](https://github.com/Hokimisu/Promethee/tree/codex/world-viewer). Le rendu optionnel a été lancé sous Windows 11/Python 3.13.12 et inspecté dans le navigateur intégré : lecture et pause d'une séquence de 120 poses, déplacement d'objet visible à la révision 6, seconde disposition avec pose neutre tournée de 90°, puis réouverture. Les contrôles sur Core confirment 27 articulations, échelle de 1,684 m, conservation exacte des positions NPZ et absence d'écriture SQLite. Les objets restent des repères explicitement sans asset ; aucune assise, prise ou collision n'est revendiquée.
 
 T02 est livré sur la branche [codex/motion-qualification](https://github.com/Hokimisu/Promethee/tree/codex/motion-qualification). Les scripts reproduisent les environnements séparés, les poids épinglés, le service d'encodage et les mesures brutes/post-traitées. Les erreurs de coordonnées initiales restent conservées et sont rejetées par le vérificateur ; les trois cas réservés passent. L'installation neuve génère également trois séquences de 40 poses. Le rendu officiel a été inspecté, mais l'analyse détaillée des contacts, l'annulation et le raccord au monde restent dans T06–T08.

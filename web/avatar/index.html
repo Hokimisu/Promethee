@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="fr">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
+        <title>Promethee · Avatar</title>
+        <link rel="stylesheet" href="/style.css" />
+    </head>
+    <body>
+        <main id="scene" aria-label="Avatar 3D"></main>
+        <header>
+            <h1>Promethee</h1>
+            <p id="status" role="status">Chargement de l’avatar…</p>
+        </header>
+        <section id="playback" aria-label="Lecture du mouvement">
+            <button id="play" disabled>Lire</button>
+            <input
+                id="frame"
+                aria-label="Position dans le mouvement"
+                type="range"
+                min="0"
+                max="1"
+                value="0"
+                disabled
+            />
+            <output id="time">0,0 s</output>
+            <label
+                ><input id="skeleton" type="checkbox" />Squelette source</label
+            >
+        </section>
+        <details id="diagnostics">
+            <summary>Mesures du rendu</summary>
+            <p>
+                L’apparence a ses propres proportions. Les contacts du corps
+                source ne la valident pas.
+            </p>
+            <button id="measure" disabled>Mesurer la séquence</button>
+            <pre id="metrics"></pre>
+        </details>
+        <script type="module" src="/app.js"></script>
+    </body>
+</html>
