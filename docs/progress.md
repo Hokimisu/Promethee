@@ -21,6 +21,12 @@ Ce registre distingue le code livré des intégrations réellement vérifiées. 
 
 Les journaux de test et données locales restent dans `.local/` et ne sont pas publiés.
 
+La [comparaison des réglages ARDY](motion-sampling.md) sur quatre requêtes
+archivées n'a pas identifié d'amélioration générale. Le checkpoint est limité
+à dix étapes de génération ; changer le guidage peut réduire un saut de bras
+mais aggraver l'inclinaison ou faire échouer un déplacement auparavant accepté.
+Le pilote conserve son réglage, sans nouvelle tentative cachée.
+
 L'[apparence VRM](avatar-rendering.md) dispose d'une lecture animée en textures,
 vérifiée sur un déplacement et une posture ARDY. Les hanches sont conservées,
 mais les chaussures flottent de 1 à 4 cm sur ces essais ; les appuis ne sont
