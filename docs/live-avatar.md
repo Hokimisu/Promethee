@@ -81,6 +81,9 @@ du mélange des mains. Ils ne remplacent pas l'inspection du maillage réel.
 ## Apparence préparée (expérimental)
 
 Ajouter `--prepare-avatar` pour calculer les poses VRM avant leur lecture.
+Le préparateur gère désormais les [appuis séparés du talon et de la pointe](avatar-foot-roll.md)
+pour permettre au pied de pivoter pendant le pas. La fiabilité globale de la
+marche reste ouverte ; le guide conserve aussi les essais refusés.
 Node.js et les dépendances de `web/avatar` doivent rester installés : construire
 le seul fichier du navigateur ne suffit pas. Une base existante doit être au
 schéma 10, avec sauvegarde vérifiée lors de sa migration.

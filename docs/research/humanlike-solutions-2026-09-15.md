@@ -13,6 +13,12 @@ donne pas encore une marche convaincante. Cela confirme la faisabilité de
 l'historique et la nécessité de travailler les appuis et l'adaptation au VRM.
 Le contrôleur de production reste inchangé.
 
+Une étape ultérieure a identifié puis corrigé un [ancrage excessif du pied](../avatar-foot-roll.md)
+lorsque seule la pointe devait rester au sol. Le cas 02 passe désormais la
+préparation VRM, avec les mêmes poses. Les nouvelles séries confirment toutefois
+que d'autres déplacements restent refusés. Les mesures ci-dessus décrivent
+l'état initial de la recherche ; le guide lié présente ce correctif et ses limites.
+
 ## Décisions proposées
 
 | Blocage | Solution à essayer en premier | Alternative si elle échoue | Nature du travail |

@@ -14,7 +14,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from ardy.constraints import Root2DConstraintSet
+from ardy.constraints import FullBodyConstraintSet, Root2DConstraintSet
 from ardy.model.load_model import load_model, load_text_encoder
 from ardy.skeleton.definitions import CoreSkeleton27
 from ardy.tools import seed_everything
@@ -73,6 +73,11 @@ def main():
     parser.add_argument("--chunks", type=int, default=3)
     parser.add_argument("--history-frames", type=int, default=40)
     parser.add_argument("--source-end", type=int, help="Exclusive end of the archived history.")
+    parser.add_argument(
+        "--arrival-pose",
+        action="store_true",
+        help="Constrain arrival to the translated source pose; requires a suitable source stance.",
+    )
     args = parser.parse_args()
     if not 1 <= args.chunks <= 8 or not 4 <= args.history_frames <= 160:
         parser.error("Use 1-8 chunks and 4-160 history frames.")
@@ -112,6 +117,9 @@ def main():
         raise ValueError("Expected one root position per frame.")
     if any(not np.isfinite(value).all() for value in history.values()):
         raise ValueError("History must contain finite values.")
+    arrival = pose(history)
+    arrival_points = np.asarray(arrival["positions"], dtype=np.float32)
+    arrival_points[:, [0, 2]] += np.asarray(args.target) - arrival_points[0, [0, 2]]
     report = {
         "status": "running",
         "chunks": [],
@@ -149,6 +157,15 @@ def main():
                         torch.tensor([args.target], device="cuda"),
                     )
                 ]
+                if args.arrival_pose:
+                    constraints.append(
+                        FullBodyConstraintSet(
+                            model.skeleton,
+                            torch.tensor([window - 1]),
+                            torch.tensor(arrival_points, device="cuda").unsqueeze(0),
+                            torch.tensor(arrival["rotations"], device="cuda").unsqueeze(0),
+                        )
+                    )
                 observed, mask = model.motion_rep.create_conditions_from_constraints_batched(
                     constraints,
                     torch.tensor([window], device="cuda"),
