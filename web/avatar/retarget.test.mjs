@@ -11,6 +11,101 @@ import {
 import { ObjectVisuals } from "./objects.js";
 import { alignHand } from "./align-hand.js";
 import { footSurfaceSummary } from "./foot-geometry.js";
+import { capturePreparedPose, applyPreparedPose } from "./prepared-pose.js";
+
+test("prepared poses replay independently of previous state without changing lengths", () => {
+    const scene = new Object3D();
+    scene.position.set(2, 0.3, -1);
+    scene.rotation.y = 0.7;
+    const hips = new Object3D(),
+        child = new Object3D();
+    scene.add(hips);
+    hips.add(child);
+    child.position.set(0.2, 0.4, 0.1);
+    const vrm = { scene, update() {} };
+    const retarget = {
+        vrm,
+        hips,
+        bones: [
+            { name: "hips", node: hips },
+            { name: "child", node: child },
+        ],
+    };
+    scene.scale.setScalar(1.3);
+    hips.rotation.set(0.1, 0.2, 0.3);
+    child.rotation.set(-0.4, 0.5, -0.2);
+    scene.updateMatrixWorld(true);
+    const record = JSON.parse(
+        JSON.stringify(capturePreparedPose(retarget, -0.02)),
+    );
+    const length = child.position.length() * 1.3;
+    const source = { positions: [[0.8, 1.2, -0.3]] };
+    for (const angle of [1.5, -0.3, 0.8]) {
+        hips.position.set(5, -2, 4);
+        hips.rotation.set(angle, angle, angle);
+        child.rotation.set(-angle, 0, angle);
+        applyPreparedPose(retarget, source, record);
+        assert.ok(
+            hips
+                .getWorldPosition(new Vector3())
+                .distanceTo(new Vector3(0.8, 1.18, -0.3)) < 1e-12,
+        );
+        assert.ok(
+            Math.abs(
+                hips
+                    .getWorldPosition(new Vector3())
+                    .distanceTo(child.getWorldPosition(new Vector3())) - length,
+            ) < 1e-12,
+        );
+        for (const { name, node } of retarget.bones)
+            assert.ok(
+                node
+                    .getWorldQuaternion(new Quaternion())
+                    .angleTo(new Quaternion(...record.rotations[name])) < 1e-7,
+            );
+    }
+    const original = JSON.stringify(capturePreparedPose(retarget, -0.02));
+    for (const corrupt of [
+        (r) => {
+            r.root_y_offset = 0.0501;
+        },
+        (r) => {
+            r.root_y_offset = NaN;
+        },
+        (r) => {
+            r.rotations.child = [0, 0, 0, 2];
+        },
+        (r) => {
+            r.rotations.child = [0, 0, 0, true];
+        },
+        (r) => {
+            delete r.rotations.child;
+            r.rotations.unknown = [0, 0, 0, 1];
+        },
+        (r) => {
+            r.positions = [[1, 2, 3]];
+        },
+    ]) {
+        const invalid = structuredClone(record);
+        corrupt(invalid);
+        assert.throws(
+            () => applyPreparedPose(retarget, source, invalid),
+            /invalide/,
+        );
+        assert.equal(
+            JSON.stringify(capturePreparedPose(retarget, -0.02)),
+            original,
+        );
+    }
+    assert.throws(
+        () => applyPreparedPose(retarget, { positions: [[NaN, 1, 2]] }, record),
+        /invalide/,
+    );
+    assert.equal(
+        JSON.stringify(capturePreparedPose(retarget, -0.02)),
+        original,
+    );
+});
 
 test("VRM foot surface measurements distinguish floating feet from contact", () => {
     const summary = footSurfaceSummary([

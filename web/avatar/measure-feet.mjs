@@ -7,8 +7,12 @@ import { VRMLoaderPlugin } from "@pixiv/three-vrm";
 import { CoreRetarget, validateArmProfile } from "./retarget.js";
 import { FootGeometry, footSurfaceSummary } from "./foot-geometry.js";
 import { FootPlantingTrial } from "./foot-planting-trial.js";
+import { capturePreparedPose, applyPreparedPose } from "./prepared-pose.js";
 
-const [avatarPath, motionPath, outputPath, mode] = process.argv.slice(2);
+const [avatarPath, motionPath, outputPath, mode, exportOption, preparedPath] =
+    process.argv.slice(2);
+if (exportOption && (exportOption !== "--poses" || !preparedPath))
+    throw new Error("Use --poses FILE to export qualified appearance poses.");
 if (mode && !["--settle", "--plant"].includes(mode))
     throw new Error("Unknown measurement option.");
 if (!avatarPath || !motionPath || !outputPath)
@@ -25,11 +29,14 @@ if (
 const motionBytes = readFileSync(motionPath);
 const data = JSON.parse(motionBytes);
 if (
+    data.fps !== 20 ||
     !Array.isArray(data.frames) ||
     data.frames.length < 1 ||
     data.frames.length > 1200
 )
-    throw new Error("Expected 1 to 1200 frames exported by the avatar viewer.");
+    throw new Error(
+        "Expected 1 to 1200 frames at 20 fps exported by the avatar viewer.",
+    );
 const loader = new GLTFLoader();
 loader.register((parser) => {
     parser.loadTexture = async () => new Texture();
@@ -61,6 +68,7 @@ const hands = [
     ),
 ];
 const samples = [];
+const preparedFrames = [];
 const offsets = [];
 let maximumHandError = 0;
 let maximumHipError = 0;
@@ -113,6 +121,13 @@ try {
             throw new Error(
                 "Combined VRM root correction exceeds 15 mm/frame.",
             );
+        const prepared = JSON.parse(
+            JSON.stringify(capturePreparedPose(retarget, offset)),
+        );
+        // Discard the solver state, then measure only the serialized replay.
+        retarget.apply(frame);
+        applyPreparedPose(retarget, frame, prepared);
+        preparedFrames.push(prepared);
         for (const hand of hands) {
             const bone = hand === "RightHand" ? "rightHand" : "leftHand";
             maximumHandError = Math.max(
@@ -177,6 +192,9 @@ const report = {
     planting_source_sha256: sha256(
         readFileSync(new URL("./foot-planting-trial.js", import.meta.url)),
     ),
+    prepared_pose_source_sha256: sha256(
+        readFileSync(new URL("./prepared-pose.js", import.meta.url)),
+    ),
     uniform_scale: scale,
     maximum_joint_step_m: samples.length > 1 ? maximumJointStep : null,
     maximum_hip_error_m: samples.length ? maximumHipError : null,
@@ -205,4 +223,36 @@ const report = {
     physical_support_validated: false,
 };
 writeFileSync(outputPath, JSON.stringify(report, null, 2), { flag: "wx" });
+if (preparedPath) {
+    if (
+        failure ||
+        samples.length !== data.frames.length ||
+        report.frames_with_any_surface_contact !== data.frames.length ||
+        (samples.length > 1 &&
+            (!speeds.length ||
+                report.surface_speed_max_m_s > 0.2 ||
+                report.surface_speed_p95_m_s > 0.05)) ||
+        Object.values(report.foot_surface).some(
+            (foot) => foot.lowest_vertex_y_m < -0.001,
+        ) ||
+        maximumJointStep > 0.3 ||
+        maximumHandError > 1e-5
+    )
+        throw new Error(
+            "Appearance geometry did not pass preparation gates; no poses exported.",
+        );
+    writeFileSync(
+        preparedPath,
+        JSON.stringify({
+            version: 1,
+            avatar_sha256: sha256(bytes),
+            motion_sha256: sha256(motionBytes),
+            scale,
+            mode: mode ?? "none",
+            aligned_hands: hands,
+            frames: preparedFrames,
+        }),
+        { flag: "wx" },
+    );
+}
 console.log(JSON.stringify(report, null, 2));

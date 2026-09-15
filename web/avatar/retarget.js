@@ -87,6 +87,7 @@ export class CoreRetarget {
             if (!node || index < 0)
                 throw new Error(`Articulation manquante : ${name} / ${source}`);
             return {
+                name,
                 node,
                 index,
                 restWorld: node.getWorldQuaternion(new Quaternion()),

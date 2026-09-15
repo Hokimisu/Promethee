@@ -136,3 +136,44 @@ et conserver ces contraintes pendant les annulations et reprises. L'actuel
 profil de bras suppose les hanches à leur position Core : activer cette
 correction uniquement dans le navigateur contournerait sa vérification.
 Le rendu livré reste inchangé et T07 reste ouvert.
+
+## Poses préparées avant lecture
+
+L'outil de mesure peut exporter les rotations mondiales des 22 os normalisés
+et le décalage vertical du bassin. Il ne transmet aucune longueur de membre
+ni position locale permettant d'étirer le squelette. L'archive identifie
+l'asset, le document Core exact par SHA-256, l'échelle, le mode de correction
+et les mains alignées.
+
+```sh
+node web/avatar/measure-feet.mjs avatar.vrm mouvement.json nouveau-rapport.json --plant --poses nouvelles-poses.json
+```
+
+Chaque pose est sérialisée en JSON, puis le squelette est remis dans sa pose
+Core sans adaptation des mains. Le rejeu applique les rotations enregistrées
+et la position corrigée du bassin, sans relancer la résolution des membres.
+Les contacts et les erreurs des mains sont mesurés sur ce résultat rejoué.
+Une pose mal formée est refusée avant toute modification du squelette.
+
+L'export exige la totalité des images à 20 Hz, un contact géométrique à chaque
+image, un glissement maximal/P95 inférieur ou égal à 0,20/0,05 m/s, aucune
+pénétration de chaussure au-delà de 1 mm, un déplacement articulaire maximal
+de 0,30 m par image et une erreur des mains alignées au plus égale à 10 µm.
+Les limites de correction verticale restent 5 cm et 15 mm par image. Un refus
+ne produit pas de fichier de poses ; son rapport de mesure reste consultable.
+Ces seuils ne qualifient ni équilibre physique ni naturel du mouvement.
+
+Sur les mêmes données de calibration, les 279 images objets 07, les 120 images
+du retour 16 et les 120 images bras levés 13 passent ce chemin. Les vitesses
+de semelle retrouvent les mesures du tableau précédent ; la main droite du
+parcours objets reste à moins de 3,3 × 10⁻⁸ m de sa cible après rejeu. Le
+premier trajet 15 reste refusé avant export pour dépassement de 5 cm.
+Les sources, entrées, rapports et poses sont conservés dans
+`.local/prepared-poses-qualification-02`.
+
+Les tests utilisent aussi une hiérarchie tournée, translatée et mise à
+l'échelle : la pose ne dépend pas de l'état précédent et les longueurs restent
+inchangées. Les huit tests web passent. Cette préparation reste hors session :
+la validation de l'archive par le contrôleur, son lancement asynchrone et la
+persistance de la pose d'apparence avec la pose Core restent à raccorder avant
+d'activer l'adaptation dans le rendu en direct.
