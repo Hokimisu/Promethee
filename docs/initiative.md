@@ -97,5 +97,6 @@ valide ni Astra ni une capacité à former des intentions cohérentes.
 T12 reste à qualifier avec le vrai modèle dans plusieurs sessions sollicitées et
 non sollicitées, historiques et capacités. Les répétitions doivent être examinées
 dans leur contexte ; inactivité et nouveauté ne sont pas des scores de réussite.
-L'accès Astra répond encore HTTP 401. Aucune initiative n'a été activée dans
+L'accès Astra est désormais vérifié avec l'authentification ChatGPT native de
+Hermes, selon le [guide d'intégration](hermes-setup.md). Aucune initiative n'a été activée dans
 une session personnelle pendant ces essais.

@@ -6,12 +6,12 @@ qui a réellement été essayé localement.
 
 | Composant | Choix de départ | Statut dans Promethee |
 |---|---|---|
-| Raisonnement | Astra, mode d'API explicite dans l'hôte | Accès OpenAI configuré : HTTP 401 ; aucune inférence Astra validée |
-| Agent persistant | Hermes Agent 0.20.5, réutilisé en amont | Hôte texte, historique et outils vérifiés avec fournisseur local de test ; [qualification](hermes-setup.md) |
+| Raisonnement | Astra, authentification ChatGPT native de Hermes | Conversation, lecture du monde, mouvement ARDY et annulation vérifiés avec `gpt-6-astra` ; [essais réels](hermes-setup.md) |
+| Agent persistant | Hermes Agent 0.20.5, réutilisé en amont | Hôte texte, historique après redémarrage et outils vérifiés avec Astra ; [qualification](hermes-setup.md) |
 | Voix | GPT-Live reste la cible ; chaîne transcription/Hermes/synthèse pour le diagnostic | [Chaîne et interruptions](voice.md) vérifiées avec fournisseurs simulés ; pas d'accès audio réel qualifié |
 | Mouvement | ARDY préentraîné, piloté par texte et contraintes | Génération et pilote cinématique réels ; déplacements encore peu fiables, [mesures](motion-validation.md) |
 | Contrôle physique éventuel | GPC / ProtoMotions ou contrôleur adapté | À évaluer après le premier essai |
-| Rendu | Viser pour le monde ; Three.js/VRM pour l'apparence | [Monde et squelette](rendering.md), [avatar animé en lecture seule](avatar-rendering.md) ; interactions corporelles non livrées |
+| Rendu | Viser pour le monde ; Three.js/VRM pour l'apparence | [Monde et squelette](rendering.md), [session VRM interactive](live-avatar.md), prise et dépôt cinématiques ; qualification des mouvements encore ouverte |
 | Notes | Markdown consultable dans Obsidian | Sources, recherche et corrections raccordées à Hermes ; [contrat et tests](memory.md) |
 
 ## Astra et voix
@@ -22,10 +22,12 @@ Astra supporte les entrées texte/image et les sorties texte ; sa fiche ne décl
 - [Architectures vocales](https://developers.openai.com/api/docs/guides/voice-agents)
 
 Ne pas déduire l'accès API de la présence du modèle dans ChatGPT ou Codex. La
-commande `chat` utilise désormais `PROMETHEE_OPENAI_API_KEY`, un modèle et un mode
-d'API explicites ; elle ne choisit aucun fournisseur de secours. Le compte n'a
-pas encore permis de qualifier cette intégration réelle. GPT-Live reste à
-raccorder ; la chaîne transcription → Hermes → synthèse dispose d'un diagnostic
+commande `chat` utilise soit `PROMETHEE_OPENAI_API_KEY`, soit l'authentification
+ChatGPT existante de Hermes avec `--auth hermes-codex`. Le modèle et le mode
+d'API restent explicites, sans fournisseur de secours. Le second chemin est
+vérifié avec Astra ; la clé API essayée séparément répond HTTP 401 et l'accès
+ChatGPT ne constitue pas un accès aux API audio. GPT-Live reste à raccorder ;
+la chaîne transcription → Hermes → synthèse dispose d'un diagnostic
 exécutable, encore sans mesures de fournisseur ou de périphérique réels.
 
 ## Hermes
@@ -57,7 +59,8 @@ interchangeables librement entre simulateurs ; lire leur fiche de modèle.
 
 ## Assets et redistribution
 
-Le catalogue d'objets reste logique. L'avatar VRM pixiv est téléchargé localement
+Le catalogue logique est distinct des capacités corporelles : balle et doudou
+géométriques disposent d'interactions cinématiques qualifiées. L'avatar VRM pixiv est téléchargé localement
 à une révision et une empreinte vérifiées ; sa [fiche de provenance](assets/pixiv-vrm-sample.md)
 précise sa licence. Les poids moteurs et les assets ne sont pas redistribués
 dans Git. Pour tout ajout, enregistrer source, licence, version et conventions

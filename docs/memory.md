@@ -35,8 +35,9 @@ de note ou d'objet n'est exécuté comme du code.
 Ajouter `--vault .local/mon-coffre` à la commande `chat` du [guide Hermes](hermes-setup.md).
 Le profil expose alors neuf outils : les cinq opérations du monde et les quatre
 opérations mémoire suivantes. Sans ce paramètre, il conserve les cinq outils
-du monde. L'accès réel à Astra reste à configurer ; les essais utilisent le vrai
-Hermes avec un fournisseur de test explicite.
+du monde. L'authentification ChatGPT native de Hermes permet maintenant les
+essais avec Astra réel ; les qualifications antérieures avec fournisseur local
+restent identifiées séparément ci-dessous.
 
 | Outil | Usage |
 |---|---|
@@ -156,3 +157,52 @@ essai, son monde a été classé `qualification` et le refus d'accès à son cof
 a été vérifié. Ses textes restent des données de développement, pas une mémoire
 personnelle. La syntaxe Obsidian est vérifiée par lecture YAML et liens ; aucune
 revue visuelle dans l'application Obsidian n'est revendiquée.
+
+## Essai avec Astra réel
+
+Le script suivant utilise six appels réels à un modèle explicitement choisi,
+dans deux mondes neufs. Il ne charge aucun coffre personnel, contrôleur corporel
+ou périphérique audio. Ses messages fictifs sont des entrées de qualification,
+pas des consignes initiales pour une session personnelle.
+
+```sh
+python experiments/agent/qualify_astra_memory.py --output .local/essai-memoire-astra-neuf --hermes-python CHEMIN_PYTHON_HERMES --hermes-root CHEMIN_HERMES --hermes-auth-root RACINE_AUTH_HERMES --model gpt-6-astra
+```
+
+Chaque message est traité après réouverture de l'hôte. Le script conserve les
+réponses, appels d'outils natifs, notes, profils sans identifiants secrets et
+sources du code dans le dossier de sortie. Les mondes exercent temporairement
+le contrat interactif dans cet environnement isolé, puis sont classés
+`qualification` dans un bloc de nettoyage, même si un appel échoue. Le refus
+d'accès ultérieur à leur mémoire est vérifié. Ne pas réutiliser ces coffres
+comme souvenirs personnels.
+
+Un tour marqué `completed` prouve seulement la fin de l'appel. Il faut relire
+les réponses et leurs sources avant de conclure sur la récupération, la
+correction et l'absence d'action.
+
+Le 15 septembre 2026, `.local/astra-memory-qualification-02` a terminé ses
+six appels avec `gpt-6-astra`, Hermes 0.20.5 et le profil à neuf outils.
+Les réponses et appels natifs relus montrent :
+
+- une recherche vide reconnue sans souvenir inventé ;
+- une proposition fictive suspendue enregistrée avec sa source utilisateur ;
+- une correction liée, retrouvée en recherchant l'ancien terme, puis la source
+  de cette correction relue par l'outil ;
+- la distinction entre cette proposition historique et le monde actuellement
+  vide, dont le corps non confirmé n'est pas présenté comme une observation physique ;
+- une recherche vide dans le second monde, sans accès aux notes du premier.
+
+Les latences de bout en bout sont respectivement 25,06 s, 36,54 s, 38,52 s,
+30,18 s, 26,60 s et 40,75 s, chaque appel comprenant un démarrage de l'hôte.
+Le premier coffre contient exactement deux notes — proposition et correction —,
+le second zéro. Aucune exécution corporelle n'est enregistrée dans les deux
+mondes ; leur exclusion ultérieure de la mémoire est vérifiée. Le premier
+essai `01` s'est arrêté sur une erreur de préparation avant tout appel et ne
+constitue pas une mesure du modèle.
+
+Cette série vérifie un raisonnement réel sur les notes et un objet évoqué mais
+absent. Le retrait d'un objet auparavant présent et les contenus malveillants
+restent couverts ici par les tests déterministes, pas par cette série Astra.
+Elle ne valide pas la qualité d'une mémoire sur une longue durée ni le rendu
+visuel des notes dans Obsidian.
