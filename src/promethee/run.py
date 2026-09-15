@@ -45,6 +45,11 @@ def run_session(args):
         raise
     server = None
     try:
+        if args.avatar is not None:
+            from promethee.avatar_live import run_live_session
+
+            run_live_session(service, controller, args)
+            return
         server = viser.ViserServer(host="127.0.0.1", port=args.port, label="Promethee")
         server.scene.set_up_direction("+y")
         server.scene.add_grid(
@@ -210,6 +215,10 @@ def configure(parser):
     parser.add_argument("--encoder-url", default="http://127.0.0.1:9550")
     parser.add_argument("--port", type=int, default=2335)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument(
+        "--avatar", type=Path, help="Use the pinned pixiv VRM for the live session."
+    )
+    parser.add_argument("--web-root", type=Path, default=Path("web/avatar/dist"))
     parser.add_argument(
         "--object-interactions",
         action="store_true",

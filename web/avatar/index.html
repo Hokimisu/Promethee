@@ -37,6 +37,105 @@
             <button id="measure" disabled>Mesurer la séquence</button>
             <pre id="metrics"></pre>
         </details>
+        <section id="live" aria-label="Commandes de la session" hidden>
+            <button id="live-stop" disabled>Arrêter le mouvement</button>
+            <p id="live-result" role="status"></p>
+            <details open>
+                <summary>Objets</summary>
+                <label
+                    >Nom du nouvel objet<input
+                        id="object-name"
+                        maxlength="64"
+                        autocomplete="off"
+                /></label>
+                <label
+                    >Modèle<select id="object-model">
+                        <option value="plush">Doudou</option>
+                        <option value="ball">Balle</option>
+                    </select></label
+                >
+                <div class="coordinates">
+                    <label
+                        >X (m)<input
+                            id="object-x"
+                            type="number"
+                            value="0"
+                            min="-5"
+                            max="5"
+                            step="0.01"
+                            required
+                    /></label>
+                    <label
+                        >Hauteur (m)<input
+                            id="object-y"
+                            type="number"
+                            value="1.15"
+                            min="0"
+                            max="5"
+                            step="0.01"
+                            required
+                    /></label>
+                    <label
+                        >Z (m)<input
+                            id="object-z"
+                            type="number"
+                            value="0.25"
+                            min="-5"
+                            max="5"
+                            step="0.01"
+                            required
+                    /></label>
+                </div>
+                <p>Les objets libres restent fixes, sans gravité.</p>
+                <button data-kind="spawn" disabled>Créer l’objet</button>
+                <label
+                    >Objet à prendre<select id="object-target">
+                        <option value="">Choisir un objet</option>
+                    </select></label
+                >
+                <button data-kind="take" disabled>Prendre</button>
+                <button data-kind="place" disabled>
+                    Déposer aux coordonnées
+                </button>
+            </details>
+            <details>
+                <summary>Corps</summary>
+                <div class="coordinates">
+                    <label
+                        >Cible X (m)<input
+                            id="move-x"
+                            type="number"
+                            value="0"
+                            min="-5"
+                            max="5"
+                            step="0.1"
+                            required
+                    /></label>
+                    <label
+                        >Cible Z (m)<input
+                            id="move-z"
+                            type="number"
+                            value="0"
+                            min="-5"
+                            max="5"
+                            step="0.1"
+                            required
+                    /></label>
+                </div>
+                <button data-kind="move" disabled>Se déplacer</button>
+                <label
+                    >Posture<select id="live-posture">
+                        <option value="standing">Debout</option>
+                        <option value="arms_raised">Bras levés</option>
+                    </select></label
+                >
+                <button data-kind="posture" disabled>Changer de posture</button>
+                <label
+                    ><input id="live-skeleton" type="checkbox" />Squelette
+                    source</label
+                >
+            </details>
+        </section>
         <script type="module" src="/app.js"></script>
     </body>
 </html>

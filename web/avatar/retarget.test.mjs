@@ -94,6 +94,61 @@ test("hand alignment reaches a world target without stretching the arm", () => {
     );
 });
 
+test("live hand blend preserves its endpoints and does not accumulate", () => {
+    const scene = new Object3D(),
+        bones = {};
+    for (const name of Object.keys(BONE_MAP)) bones[name] = new Object3D();
+    scene.add(bones.hips);
+    for (const [name, node] of Object.entries(bones)) {
+        if (name === "hips") continue;
+        const parent =
+            {
+                rightUpperArm: "rightShoulder",
+                rightLowerArm: "rightUpperArm",
+                rightHand: "rightLowerArm",
+            }[name] ?? "hips";
+        bones[parent].add(node);
+    }
+    bones.rightUpperArm.position.set(0.15, 0.2, 0);
+    bones.rightLowerArm.position.set(0.25, 0, 0);
+    bones.rightHand.position.set(0.16, 0.05, 0);
+    const skeleton = { joint_names: Object.values(BONE_MAP) };
+    const vrm = {
+        scene,
+        humanoid: { getNormalizedBoneNode: (name) => bones[name] },
+        update() {},
+    };
+    const retarget = new CoreRetarget(vrm, skeleton, 1);
+    const frame = {
+        positions: skeleton.joint_names.map(() => [0, 1, 0]),
+        rotations: skeleton.joint_names.map(() => [
+            [1, 0, 0],
+            [0, 1, 0],
+            [0, 0, 1],
+        ]),
+    };
+    frame.positions[skeleton.joint_names.indexOf("RightForeArm")] = [
+        0.4, 1.2, 0,
+    ];
+    const target = new Vector3(0.45, 1.25, 0.1);
+    frame.positions[skeleton.joint_names.indexOf("RightHand")] =
+        target.toArray();
+    retarget.apply(frame);
+    const baseline = bones.rightHand.getWorldPosition(new Vector3());
+    for (const weight of [0, 0.1, 0.5, 1, 0.5, 0]) {
+        retarget.apply(frame, ["RightHand"], { RightHand: weight });
+        assert.ok(
+            bones.rightHand
+                .getWorldPosition(new Vector3())
+                .distanceTo(baseline.clone().lerp(target, weight)) < 1e-9,
+        );
+    }
+    assert.throws(
+        () => retarget.apply(frame, ["RightHand"], { RightHand: NaN }),
+        /invalide/,
+    );
+});
+
 test("object render follows the recorded world pose and removes absent objects", () => {
     const scene = new Object3D();
     const visual = new ObjectVisuals(scene, {

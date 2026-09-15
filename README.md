@@ -57,13 +57,13 @@ Cette commande réalise une transition instantanée, sans activité préécrite 
 | Pont d'outils Hermes | Hôte texte, historique persistant et MCP vérifiés ; accès Astra et voix à raccorder |
 | Voix de diagnostic | Chaîne transcription/Hermes/synthèse testée avec fournisseurs simulés ; microphone et voix réels non qualifiés |
 | ARDY Core et rendu Viser | Pilotage cinématique manuel ; qualification des déplacements incomplète |
-| Apparence anime en VRM | Lecture animée ARDY et textures vérifiées ; appuis et pilotage direct à raccorder |
+| Apparence anime en VRM | Lecture et [session en direct](docs/live-avatar.md) ; prise/dépôt cinématiques, arrêt et restauration vérifiés ; appuis non validés |
 | Initiative à budget explicite | Pause persistante et réveils regroupés ; essais avec fournisseur simulé, comportements Astra non qualifiés |
 | Services externes | Extensions ultérieures selon besoin observé |
 
 ## Architecture cible
 
-Le [guide de rendu](docs/rendering.md) donne l'installation optionnelle et les commandes pour consulter un monde existant ou lire un enregistrement moteur. Les repères d'objets ne représentent pas encore des géométries utilisables.
+Le [guide de rendu](docs/rendering.md) donne l'installation optionnelle et les commandes pour consulter un monde existant ou lire un enregistrement moteur. La [session VRM](docs/live-avatar.md) permet aussi de manipuler un doudou ou une balle géométrique avec le contrôleur cinématique.
 
 ```mermaid
 flowchart LR

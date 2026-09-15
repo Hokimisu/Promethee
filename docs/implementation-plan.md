@@ -234,9 +234,10 @@ collision et persiste corps et objet dans la même transaction. Le
 [parcours réel depuis une pose Core archivée](spatial-objects.md) couvre aussi
 mains occupées, cible absente, annulations avant/après contact et redémarrage.
 La lecture VRM adapte la main visible ; les commandes directes sont disponibles
-dans le visualiseur Core. Aucun objet n'est créé automatiquement.
+dans le visualiseur Core et la [session VRM](live-avatar.md). Aucun objet n'est créé automatiquement.
 
-T08 reste ouvert : le raccord du VRM à une session interactive reste à livrer.
+Le raccord VRM interactif est livré : prise, dépôt, arrêt et reprise de l'objet
+tenu ont été vérifiés dans le navigateur. La qualification des appuis T07 reste ouverte.
 Le [profil de portée pixiv](avatar-arm-reach.md) est maintenant vérifié avant
 exécution et comparé au vrai modèle dans le visualiseur. Six parcours couvrent
 les deux géométries, des positions latérales, des rotations de ±90° et des

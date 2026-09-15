@@ -105,7 +105,7 @@ export class CoreRetarget {
         this.hips = vrm.humanoid.getNormalizedBoneNode("hips");
     }
 
-    apply(frame, attachedHands = []) {
+    apply(frame, attachedHands = [], handWeights = {}) {
         for (const { node, index, restWorld } of this.bones) {
             node.parent.updateWorldMatrix(true, false);
             const desired = rotationQuaternion(frame.rotations[index]).multiply(
@@ -124,6 +124,10 @@ export class CoreRetarget {
         this.hips.position.copy(this.hips.parent.worldToLocal(position));
         this.hips.updateMatrixWorld(true);
         for (const name of new Set(attachedHands)) {
+            const weight = handWeights[name] ?? 1;
+            if (!Number.isFinite(weight) || weight < 0 || weight > 1)
+                throw new Error("Adaptation de main invalide.");
+            if (weight === 0) continue;
             const side =
                 name === "RightHand"
                     ? "right"
@@ -135,11 +139,15 @@ export class CoreRetarget {
             const elbow = this.skeleton.joint_names.indexOf(
                 name === "RightHand" ? "RightForeArm" : "LeftForeArm",
             );
+            const hand = this.vrm.humanoid.getNormalizedBoneNode(`${side}Hand`);
+            const target = hand
+                .getWorldPosition(new Vector3())
+                .lerp(new Vector3(...frame.positions[index]), weight);
             alignHand(
                 this.vrm.humanoid.getNormalizedBoneNode(`${side}UpperArm`),
                 this.vrm.humanoid.getNormalizedBoneNode(`${side}LowerArm`),
-                this.vrm.humanoid.getNormalizedBoneNode(`${side}Hand`),
-                new Vector3(...frame.positions[index]),
+                hand,
+                target,
                 new Vector3(...frame.positions[elbow]),
             );
         }

@@ -7,6 +7,64 @@
 * {
     box-sizing: border-box;
 }
+[hidden] {
+    display: none !important;
+}
+#live {
+    position: fixed;
+    right: 24px;
+    top: 110px;
+    width: 300px;
+    max-height: calc(100vh - 140px);
+    overflow: auto;
+    padding: 16px;
+    background: #263031ed;
+    border: 1px solid #465353;
+    border-radius: 12px;
+}
+#live details {
+    border-top: 1px solid #465353;
+    padding-top: 12px;
+    margin-top: 14px;
+}
+#live label {
+    display: block;
+    margin-top: 10px;
+    white-space: normal;
+}
+#live input:not([type="checkbox"]),
+#live select {
+    display: block;
+    width: 100%;
+    margin-top: 5px;
+    background: #20272a;
+    color: #e8ecea;
+    border: 1px solid #667876;
+    border-radius: 5px;
+    padding: 7px;
+    min-width: 0;
+}
+#live button {
+    margin-top: 10px;
+}
+#live-stop {
+    width: 100%;
+}
+#live-result {
+    margin-top: 10px;
+    overflow-wrap: anywhere;
+}
+.coordinates {
+    display: flex;
+    gap: 8px;
+}
+.coordinates label {
+    flex: 1;
+    min-width: 0;
+}
+#live p {
+    margin-top: 10px;
+}
 body {
     margin: 0;
 }

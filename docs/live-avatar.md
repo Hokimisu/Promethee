@@ -1,0 +1,79 @@
+# Session VRM en direct
+
+Le personnage [pixiv](assets/pixiv-vrm-sample.md) peut maintenant afficher une
+session corporelle active et lui soumettre des commandes. Le même contrôleur
+cinématique et le même registre d'exécution servent la page et les outils MCP.
+Aucun objet ni comportement n'est lancé à l'ouverture de la page.
+
+## Lancer
+
+Installer le [pilote ARDY](motion-validation.md) et télécharger l'avatar selon sa
+fiche de provenance. Construire le rendu :
+
+```sh
+npm --prefix web/avatar ci --ignore-scripts
+npm --prefix web/avatar run build
+```
+
+Ajouter `--avatar` et `--web-root` à la commande du pilote. Exemple avec
+l'environnement ARDY installé sous WSL ; adapter les chemins locaux :
+
+```sh
+uv run --extra avatar promethee --data-dir .local/live-avatar run --ardy-python /root/.local/share/promethee/ardy-env/bin/python --checkpoint-root /root/.local/share/promethee/checkpoints --wsl Ubuntu-22.04 --object-interactions --avatar .local/assets/pixiv-vrm/VRM1_Constraint_Twist_Sample.vrm --web-root web/avatar/dist --port 2365
+```
+
+Ouvrir `http://127.0.0.1:2365/`. Ne pas ouvrir un second contrôleur sur le même
+dossier. Une session neuve doit recevoir sa première pose par le pilote ;
+le chargement reste affiché jusqu'à ce qu'un état articulé soit disponible.
+Les commandes de corps conservent les prérequis et refus du pilote ARDY.
+
+Le panneau propose création de doudou ou balle, prise, dépôt aux coordonnées,
+déplacement et posture. Les capacités absentes du contrôleur sont désactivées.
+Y est la hauteur ; les objets libres gardent leur transformation, sans gravité.
+L'arrêt reste une demande jusqu'à la confirmation du contrôleur.
+
+## Cohérence de la vue
+
+Le contrôleur publie un instantané corps/objets après chaque pas, à 20 Hz.
+La page consulte le dernier instantané, sans inventer de poses corporelles
+intermédiaires. Un flux vieux de plus d'une seconde est refusé ; la page
+signale la perte et désactive les nouvelles actions. Un changement de session
+exige de recharger la page. Une erreur de rendu reste visible jusqu'au
+rechargement ; recevoir de nouveaux états ne la masque pas.
+
+La [portée du personnage](avatar-arm-reach.md) est vérifiée par le contrôleur.
+Pendant une interaction, la main visible est adaptée au poignet Core. Le poids
+de cette adaptation varie sur 0,25 s à l'approche et après libération pour
+éviter une commutation brutale entre les deux morphologies. Dès qu'un objet
+est tenu, le poids vaut un : son attachement reste celui de l'observation.
+Cette transition est une correction d'apparence, pas une trajectoire physique.
+Les doigts, la peau et les appuis ne sont pas validés par ce calcul.
+
+Le transport HTTP n'écoute que sur `127.0.0.1`. Les mutations exigent le Host
+et l'Origin de la session ainsi qu'un JSON borné. Les routes statiques sont
+énumérées et ne donnent aucun accès aux dossiers. Chaque action reçoit un ID
+et la révision courante ; la page ne retransmet pas automatiquement une
+mutation dont la réponse manque. Recharger consulte l'état sans rejouer l'action.
+
+## Vérification locale
+
+Le 15 septembre 2026, une session réelle du contrôleur, initialisée depuis une
+pose Core archivée, a été pilotée dans le navigateur avec le vrai maillage
+pixiv. La balle `sample` a été prise, conservée lors du rechargement, déposée,
+puis reprise. Une dépose interrompue par le bouton d'arrêt a fini `cancelled`
+avec la balle encore tenue. Le redémarrage du serveur a restauré cet état.
+La création de `peluche-ui` en `[0.3, 1.1, 0.4]` a ensuite ajouté sa géométrie
+au même monde sans modifier l'attachement de la balle.
+Les exécutions et observations sont conservées localement dans
+`.local/object-controller-qualification-07/live-browser.json`.
+
+Ces commandes sont manuelles et restent des données de qualification exclues
+de la mémoire personnelle. Elles ne valident ni Astra ni une nouvelle
+génération ARDY. Les [essais sur plusieurs positions et géométries](spatial-objects.md)
+qualifient séparément le contrôleur d'objets.
+
+Les tests HTTP utilisent des poses analytiques : publication immuable,
+réémission idempotente, arrêt avant départ et pendant l'approche ou après
+contact, refus des requêtes étrangères, flux périmé et chemins inconnus.
+Les tests JavaScript vérifient aussi les extrémités et l'absence d'accumulation
+du mélange des mains. Ils ne remplacent pas l'inspection du maillage réel.

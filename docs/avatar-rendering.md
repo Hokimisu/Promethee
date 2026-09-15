@@ -3,7 +3,8 @@
 Une vue Three.js affiche l'[avatar anime pixiv](assets/pixiv-vrm-sample.md) avec
 ses textures et les rotations d'un enregistrement ARDY Core. Lecture, pause,
 choix d'une pose et superposition du squelette source sont disponibles.
-Cette vue ne modifie pas le monde et ne pilote pas encore une session en direct.
+Ce lecteur reste sans écriture. Le même rendu peut maintenant piloter une
+[session en direct](live-avatar.md) avec le contrôleur existant.
 
 ## Choix du rendu
 
@@ -132,8 +133,8 @@ mise à jour des os et des contraintes. Les deux séquences de 120 poses donnent
 
 **Les chaussures flottent encore.** L'absence de pénétration n'est pas une
 preuve de contact. La vue n'annonce aucun appui validé et ne corrige pas
-silencieusement la hauteur. Le raccord en direct et l'adaptation des appuis à
-cette morphologie restent à réaliser avant d'utiliser l'apparence pour valider
+silencieusement la hauteur. L'adaptation des appuis à
+cette morphologie reste à réaliser avant d'utiliser l'apparence pour valider
 T07–T08. Les doigts restent dans leur pose propre au modèle ; aucune prise
 physique n'est revendiquée.
 
