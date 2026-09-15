@@ -295,3 +295,41 @@ Restent nécessaires : accès effectif à Astra et conversations variées avec c
 modèle pour vérifier ses décisions et la restitution des résultats corporels.
 Le fournisseur de test ne prouve aucune qualité de raisonnement. T07 conserve
 également ses limites de déplacement ; la conversation vocale reste dans T11.
+
+## Piste Codex vérifiée, raccord non activé
+
+Le 15 septembre 2026, le CLI Codex **0.153.1** indique une connexion ChatGPT
+existante. Une connexion stdio au serveur officiel, limitée à `initialize`,
+`initialized` et `model/list`, renvoie **`gpt-6-astra`** dans son catalogue.
+Le rapport local `.local/codex-model-access.json` conserve les identifiants de
+modèles et précise qu'aucun tour d'inférence n'a été lancé. Aucun jeton n'a été
+lu ou copié par le diagnostic. Ce résultat établit la présence d'Astra dans le
+catalogue de ce runtime ; il ne valide ni une réponse du modèle, ni l'accès API
+précédemment refusé, ni le pilotage du monde.
+
+Hermes installé à la révision `cd297653fa4fac85f45f7d3ad8e361db0f14e9be`
+possède un mode optionnel `codex_app_server`. Il délègue la boucle d'outils à
+Codex. Sa documentation locale décrit une migration des plugins et des MCP
+personnels ainsi qu'un accès aux outils de développement. L'activer tel quel
+ne satisfait donc pas le profil limité à Promethee de T09.
+
+Deux détails du code installé empêchent aussi de traiter ce mode comme un
+simple changement de fournisseur : `CodexAppServerSession.ensure_started()`
+ne transmet que `cwd` à `thread/start`, et `run_turn()` transmet uniquement le
+message courant à `turn/start`. Ces requêtes ne sélectionnent pas explicitement
+le modèle et ne transportent pas l'historique fourni à l'hôte Promethee. Or cet
+hôte recrée actuellement son processus Hermes à chaque tour. Les vérifier est
+nécessaire avant de réutiliser ce mode pour une conversation persistante.
+
+Le [protocole officiel App Server](https://learn.chatgpt.com/docs/app-server)
+et les schémas générés par le CLI installé offrent des paramètres de modèle,
+de configuration et de session éphémère. La
+[configuration officielle](https://learn.chatgpt.com/docs/config-file/config-reference)
+permet notamment de désactiver le terminal et la lecture des instructions de
+projet. Ces possibilités restent à qualifier ensemble : absence d'outils et
+de contexte personnels hérités, modèle demandé réellement utilisé, continuité
+des échanges, outils monde/mémoire liés au tour courant, interruption et
+fermeture de tous les processus. La découverte du catalogue ne suffit pas à
+cocher ces critères. Le chemin `chat` publié conserve ses deux modes API
+qualifiés avec doublon ; aucune migration de configuration personnelle n'est
+effectuée automatiquement.
