@@ -148,7 +148,7 @@ def test_v2_upgrade_preserves_origin_revision_and_adds_execution_storage(tmp_pat
             conn.execute(f"DROP TABLE {table}")
     before = contents(path)
     backup = tmp_path / "before-v3.sqlite3"
-    assert migrate(path, backup)["schema_version"] == 4
+    assert migrate(path, backup)["schema_version"] == 5
     assert contents(backup) == before
     world = Runtime(path).require_session()
     assert world["revision"] == 7

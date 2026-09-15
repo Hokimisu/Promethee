@@ -13,7 +13,7 @@ Ce registre distingue le code livré des intégrations réellement vérifiées. 
 | T06 | Implémenté et vérifié avec le vrai squelette | Viser en lecture seule, deux dispositions, mise à jour d'un objet, lecture/scrutation d'un NPZ ARDY, contrôle d'échelle et de rotation ; 69 tests CPU passent. [Guide de rendu](rendering.md) |
 | T07 | En cours | Pilotage ARDY, postures, arrêt et reprise réels ; correction des jambes et rejet des semelles glissantes. La série 07 termine deux postures et refuse deux déplacements avant lecture. [Mesures et limites](motion-validation.md) |
 | T08 | À réaliser | Interactions corporelles avec les objets non livrées |
-| T09 | Pont MCP vérifié, conversation à réaliser | Cinq outils reconnus par Hermes ; commande réelle ARDY et retransmission vérifiées. Accès OpenAI essayé : HTTP 401. [Configuration et limites](hermes-setup.md) |
+| T09 | Pont MCP vérifié, conversation à réaliser | Cinq outils reconnus par Hermes ; commande réelle ARDY et retransmission vérifiées. Tours persistés en v5, mutations tardives refusées dans le transport MCP testé. Accès OpenAI essayé : HTTP 401. [Configuration et limites](hermes-setup.md) |
 | T10–T13 | À réaliser | Aucune intégration réelle revendiquée |
 
 Les journaux de test et données locales restent dans `.local/` et ne sont pas publiés.

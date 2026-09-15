@@ -127,13 +127,13 @@ class ExecutionService:
     @contextmanager
     def _transaction(self):
         with self.runtime.connection() as conn:
-            now = self.clock()
             conn.execute("BEGIN IMMEDIATE")
+            now = self.clock()
             self._expire(conn, now)
             # Expiry remains durable even if the following request is malformed or stale.
             conn.commit()
             conn.execute("BEGIN IMMEDIATE")
-            yield conn, now
+            yield conn, self.clock()
 
     def get_world(self):
         """Read the latest persisted observation after expiring a missing controller."""
@@ -162,7 +162,38 @@ class ExecutionService:
             control = self._control(conn)
             return control.get("supported_actions", []) if control["session_id"] else []
 
-    def submit(self, request_id, expected_revision, action):
+    def begin_turn(self, *, timeout=60):
+        """Trusted conversation host only; never expose this as a model tool.
+
+        A correction or host restart opens a new turn. It invalidates previous
+        proposals without cancelling an already accepted body action.
+        """
+        self.runtime.require_session()
+        timeout = positive_seconds(timeout)
+        turn_id = "turn-" + uuid4().hex
+        with self._transaction() as (conn, now):
+            world = read_world(conn)
+            world["conversation"] = {"turn_id": turn_id, "expires_at": now + timeout}
+            world["revision"] += 1
+            conn.execute("UPDATE world SET data=? WHERE id=1", (encode(world),))
+        return turn_id
+
+    @staticmethod
+    def _check_turn(conn, turn_id, now):
+        current = read_world(conn)["conversation"]
+        if current is None or current["turn_id"] != turn_id or now >= current["expires_at"]:
+            raise ActionError("Conversation turn is obsolete or expired.")
+
+    def end_turn(self, turn_id):
+        """Atomically claim a current reply for delivery, or invalidate a failed call."""
+        with self._transaction() as (conn, now):
+            self._check_turn(conn, turn_id, now)
+            world = read_world(conn)
+            world["conversation"] = None
+            world["revision"] += 1
+            conn.execute("UPDATE world SET data=? WHERE id=1", (encode(world),))
+
+    def submit(self, request_id, expected_revision, action, *, turn_id=None):
         identifier(request_id)
         if request_id.startswith("activity-"):
             raise ActionError("The activity- request namespace is reserved.")
@@ -173,6 +204,9 @@ class ExecutionService:
             "expected_revision": expected_revision,
             "action": action,
         }
+        if turn_id is not None:
+            identifier(turn_id)
+            envelope["turn_id"] = turn_id
         payload = encode(envelope)
         with self._transaction() as (conn, now):
             row = conn.execute(
@@ -183,6 +217,8 @@ class ExecutionService:
                 if encode(previous["envelope"]) != payload:
                     raise ActionError("Request ID reused with a different envelope.")
                 return {**previous, "replayed": True}
+            if turn_id is not None:
+                self._check_turn(conn, turn_id, now)
             if conn.execute("SELECT 1 FROM commands WHERE request_id=?", (request_id,)).fetchone():
                 raise ActionError("Request ID already belongs to a logical command.")
             world, control = read_world(conn), self._control(conn)
@@ -222,12 +258,14 @@ class ExecutionService:
             self._record(conn, item, item["status"], now)
             return {**item, "replayed": False}
 
-    def cancel(self, request_id):
+    def cancel(self, request_id, *, turn_id=None):
         identifier(request_id)
         with self._transaction() as (conn, now):
             item = self._get(conn, request_id)
             if item["status"] in TERMINAL or item["cancel_requested"]:
                 return item
+            if turn_id is not None:
+                self._check_turn(conn, turn_id, now)
             item["cancel_requested"] = True
             if not item["dispatched"]:
                 item["status"] = "cancelled"

@@ -1,4 +1,4 @@
-# Contrats exécutables — monde version 4
+# Contrats exécutables — monde version 5
 
 Ces exemples décrivent l'API Python locale. Le rendu utilise HTTP/WebSocket sur l'interface de boucle locale. `run` propose des boutons de pilotage qui passent par le service d'exécution. Le [pont MCP stdio](hermes-setup.md) expose cinq opérations de ce même service ; aucune API REST d'action n'est livrée.
 
@@ -130,6 +130,28 @@ L'observation comprend `avatar` et `objects`, avec les champs du monde logique, 
 Le champ `body` du monde contient `status` (`confirmed` ou `unconfirmed`), `observed_at` et `source`. `ExecutionService.get_world()` et la CLI `world` appliquent les expirations avant lecture. `Runtime.snapshot()` fournit seulement le dernier état persisté. Une lecture qui constate la perte du pilote peut donc modifier le statut et la révision, sans inventer une nouvelle pose.
 
 ## Arrêt et récupération
+
+Le schéma v5 ajoute `conversation`, initialement `null`. L'hôte conversationnel
+de confiance ouvre un tour avec `ExecutionService.begin_turn(timeout=60)` ; le
+monde conserve son identifiant et son échéance. Une correction ouvre un nouveau
+tour. Le changement augmente la révision, sans annuler l'action du corps déjà
+acceptée. `end_turn(turn_id)` ferme un tour encore valide ; une réponse expirée
+ou issue d'un ancien tour est refusée. L'hôte doit ouvrir un nouveau tour à son
+redémarrage et encore contrôler la fraîcheur au moment de diffuser de l'audio.
+
+Le pont MCP peut être lié à cet identifiant par `--turn-id`. Cet argument vient
+de l'hôte et ne figure pas parmi les arguments d'outils que le modèle choisit.
+Une nouvelle soumission et une nouvelle annulation vérifient le tour dans la
+même transaction que leur mutation : une lecture récente du monde ne permet
+pas à un ancien pont de récupérer le droit d'agir. La retransmission exacte
+d'une soumission existante reste une lecture idempotente de son résultat ;
+elle n'est jamais réémise. Une annulation déjà demandée reste idempotente.
+Les opérations manuelles et le pont de diagnostic sans tour restent disponibles.
+La boucle Hermes qui crée et termine réellement ces tours reste à raccorder.
+
+La migration v4 → v5 ajoute uniquement `conversation: null` et conserve poses,
+requêtes et observations ; sauvegarde et rollback restent obligatoires. Fermer
+les anciens processus avant de migrer, puis les relancer avec le même code.
 
 `cancel` termine immédiatement une demande non envoyée. Après envoi, il pose `cancel_requested` et une échéance (deux secondes par défaut, configurable à la création du service). Répéter l'appel ne repousse pas cette échéance. La dernière pose confirmée est conservée pendant l'attente. Une fin et une annulation concurrentes produisent un seul résultat terminal selon l'ordre enregistré.
 

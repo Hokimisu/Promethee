@@ -17,10 +17,10 @@ from promethee.runtime import Runtime  # noqa: E402
 
 
 @asynccontextmanager
-async def connect(directory):
+async def connect(directory, turn_id):
     params = StdioServerParameters(
         command=sys.executable,
-        args=["-m", "promethee.mcp_server", "--data-dir", str(directory)],
+        args=["-m", "promethee.mcp_server", "--data-dir", str(directory), "--turn-id", turn_id],
     )
     async with stdio_client(params) as streams, ClientSession(*streams) as client:
         await client.initialize()
@@ -39,7 +39,8 @@ def test_stdio_tools_idempotence_validation_and_restart(tmp_path, articulated_po
     handle.reconcile(observation, stopped=True)
 
     async def run():
-        async with connect(tmp_path) as client:
+        turn = service.begin_turn()
+        async with connect(tmp_path, turn) as client:
             tools = await client.list_tools()
             assert {tool.name for tool in tools.tools} == {
                 "read_world",
@@ -66,9 +67,23 @@ def test_stdio_tools_idempotence_validation_and_restart(tmp_path, articulated_po
             assert replayed.structured_content["replayed"]
             forbidden = await client.call_tool("feedback", {"status": "completed"})
             assert forbidden.is_error
+            next_turn = service.begin_turn()
+            fresh = await client.call_tool("read_world")
+            late = await client.call_tool(
+                "submit_action",
+                {
+                    **args,
+                    "request_id": "late-proposal",
+                    "expected_revision": fresh.structured_content["revision"],
+                },
+            )
+            assert late.is_error
+            late_cancel = await client.call_tool("cancel_action", {"request_id": "transport-one"})
+            assert late_cancel.is_error
+            assert service.get("transport-one")["status"] == "accepted"
         # A transport disconnect neither releases the body nor re-emits its request.
         assert handle.heartbeat()
-        async with connect(tmp_path) as client:
+        async with connect(tmp_path, next_turn) as client:
             result = await client.call_tool("read_execution", {"request_id": "transport-one"})
             assert result.structured_content["status"] == "accepted"
             stopped = await client.call_tool("cancel_action", {"request_id": "transport-one"})

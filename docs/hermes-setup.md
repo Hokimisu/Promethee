@@ -2,8 +2,9 @@
 
 Le pont local expose cinq outils et utilise le même runtime que le contrôleur
 cinématique. Il ne lance aucun modèle de raisonnement. T09 reste ouvert : la
-conversation réelle avec Astra et l'invalidation des décisions d'un ancien tour
-ne sont pas encore raccordées. Ne pas activer une session autonome avec ce seul pont.
+conversation réelle avec Astra n'est pas encore raccordée. Le runtime sait
+désormais invalider les propositions d'un ancien tour ; la future boucle Hermes
+doit encore ouvrir et fermer ces tours. Ne pas activer une session autonome avec ce seul pont.
 
 ## Installation et lancement
 
@@ -106,7 +107,22 @@ Le 15 septembre 2026, sous Windows 11 :
   lors de la liste des modèles. Aucun appel d'inférence, aucun remplacement
   d'Astra et aucune copie de jeton Codex n'ont été effectués.
 
+L'hôte peut ouvrir un tour avec `ExecutionService.begin_turn(timeout=60)`, puis
+lancer ce même serveur avec `--turn-id IDENTIFIANT_RETOURNE`. Le serveur est lié
+à ce tour pour sa durée de vie ; le modèle ne peut pas choisir un autre tour
+dans les arguments MCP. Un nouveau message utilisateur ouvre un nouveau tour,
+qui invalide les mutations de l'ancien serveur. Fermer un tour via `end_turn`
+invalide aussi toute nouvelle proposition tardive. Ces opérations sont réservées
+à l'hôte, absentes des outils MCP. Le lancement sans `--turn-id` ci-dessus reste
+un diagnostic manuel, sans cette protection conversationnelle.
+
+Les tests du vrai transport stdio ouvrent deux processus successifs et vérifient
+qu'un ancien serveur ne peut plus soumettre ni arrêter une action après correction,
+même après relecture du monde. Les tests CPU couvrent également échéance, fin du
+tour, remplacement de l'hôte et migration v4 → v5. Aucun de ces tests n'est une
+conversation avec Astra ni une validation de diffusion vocale.
+
 Restent nécessaires : accès effectif à Astra, profil conversationnel limité,
-association des propositions à un tour et rejet des réponses devenues obsolètes,
-essais de correction utilisateur et de délai fournisseur. Le pont seul ne
+raccord des tours à la boucle Hermes et essais réels de correction utilisateur
+et de délai fournisseur. Le pont seul ne
 satisfait pas ces critères. T07 conserve également ses limites de déplacement.

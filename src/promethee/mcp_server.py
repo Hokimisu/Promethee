@@ -10,8 +10,9 @@ from promethee.world import BODY_ACTION_FIELDS, POSTURES
 
 
 class WorldTools:
-    def __init__(self, service):
+    def __init__(self, service, *, turn_id=None):
         self.service = service
+        self.turn_id = turn_id
         service.runtime.require_session()
 
     def world(self):
@@ -35,7 +36,7 @@ class WorldTools:
 
     def submit(self, request_id, expected_revision, action):
         self.service.runtime.require_session()
-        return self.service.submit(request_id, expected_revision, action)
+        return self.service.submit(request_id, expected_revision, action, turn_id=self.turn_id)
 
     def execution(self, request_id):
         self.service.runtime.require_session()
@@ -43,16 +44,16 @@ class WorldTools:
 
     def cancel(self, request_id):
         self.service.runtime.require_session()
-        return self.service.cancel(request_id)
+        return self.service.cancel(request_id, turn_id=self.turn_id)
 
 
-def create_server(service):
+def create_server(service, *, turn_id=None):
     # The CPU runtime remains usable without installing the optional MCP SDK.
     from mcp.server import MCPServer
     from mcp_types import ToolAnnotations
     from pydantic import StrictInt, StrictStr
 
-    tools = WorldTools(service)
+    tools = WorldTools(service, turn_id=turn_id)
     server = MCPServer(
         "Promethee",
         instructions=(
@@ -108,9 +109,10 @@ def create_server(service):
 def main():
     parser = argparse.ArgumentParser(description="Promethee local MCP tools (stdio).")
     parser.add_argument("--data-dir", type=Path, required=True)
+    parser.add_argument("--turn-id", help="Bind mutations to a turn opened by the trusted host.")
     args = parser.parse_args()
     runtime = Runtime(args.data_dir / "world.sqlite3", create=False)
-    create_server(ExecutionService(runtime)).run(transport="stdio")
+    create_server(ExecutionService(runtime), turn_id=args.turn_id).run(transport="stdio")
 
 
 if __name__ == "__main__":

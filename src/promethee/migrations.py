@@ -5,7 +5,7 @@ import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 def create_execution_tables(conn):
@@ -58,6 +58,8 @@ def _upgrade(conn, world):
         conn.execute("UPDATE controller SET data=? WHERE id=1", (json.dumps({"session_id": None}),))
         world.update(schema_version=4, pose=None)
         world["body"]["status"] = "unconfirmed"
+    if world["schema_version"] == 4:
+        world.update(schema_version=5, conversation=None)
 
 
 def read_world(conn):
@@ -87,7 +89,7 @@ def migrate(path, backup):
             version = world.get("schema_version")
             if version == SCHEMA_VERSION:
                 return {"schema_version": version, "migrated": False, "backup": None}
-            if type(version) is not int or version not in (1, 2, 3):
+            if type(version) is not int or version not in (1, 2, 3, 4):
                 raise ValueError(f"No migration available from schema {version!r}.")
             if path == backup:
                 raise ValueError("Backup must be a different, new file.")

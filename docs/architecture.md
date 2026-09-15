@@ -46,6 +46,6 @@ Les événements d'interruption doivent parvenir à la conversation et au corps.
 
 ## Limites du socle
 
-Les positions sont sur un plan de sol de 10 × 10 mètres. La portée d'un mètre est une règle logique arbitraire pour les tests, pas une mesure anatomique. `viewer.py` reste en lecture seule ; `run.py` ajoute des boutons passant par le service d'exécution et son unique pilote. Il n'y a pas encore d'agent externe ni de synchronisation vocale. Le schéma v4 conserve aussi la pose articulée observée. Les migrations sont explicites, transactionnelles et précédées d'une sauvegarde vérifiée ; les versions inconnues sont refusées.
+Les positions sont sur un plan de sol de 10 × 10 mètres. La portée d'un mètre est une règle logique arbitraire pour les tests, pas une mesure anatomique. `viewer.py` reste en lecture seule ; `run.py` ajoute des boutons passant par le service d'exécution et son unique pilote. Il n'y a pas encore de conversation avec un agent externe ni de synchronisation vocale. Le schéma v5 conserve la pose articulée observée et le tour conversationnel courant. Les migrations sont explicites, transactionnelles et précédées d'une sauvegarde vérifiée ; les versions inconnues sont refusées.
 
 Une activité échouée conserve son erreur et son curseur ; elle n'est pas relancée automatiquement. La replanification après changement du monde sera une responsabilité de l'adaptateur agent.
