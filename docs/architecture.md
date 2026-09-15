@@ -63,6 +63,11 @@ Les événements d'interruption doivent parvenir à la conversation et au corps.
 
 ## Limites du socle
 
-Les positions sont sur un plan de sol de 10 × 10 mètres. La portée d'un mètre est une règle logique arbitraire pour les tests, pas une mesure anatomique. `viewer.py` reste en lecture seule ; `run.py` ajoute des boutons passant par le service d'exécution et son unique pilote. La conversation Astra et la synchronisation vocale restent à qualifier. Le schéma v7 conserve la pose articulée observée, les tours conversationnels et le registre de mémoire. Les migrations sont explicites, transactionnelles et précédées d'une sauvegarde vérifiée ; les versions inconnues sont refusées.
+Les positions sont sur un plan de sol de 10 × 10 mètres. La portée d'un mètre est une règle logique arbitraire pour les tests, pas une mesure anatomique. `viewer.py` reste en lecture seule ; `run.py` ajoute des boutons passant par le service d'exécution et son unique pilote. La conversation Astra et la synchronisation vocale restent à qualifier. Le schéma v8 conserve la pose articulée observée, les tours conversationnels, le registre de mémoire et la configuration d'initiative. Les migrations sont explicites, transactionnelles et précédées d'une sauvegarde vérifiée ; les versions inconnues sont refusées.
+
+`initiative.py` réserve un budget dans la même transaction que l'ouverture d'un
+tour du même Hermes. Les changements sont regroupés pendant une décision ;
+la pause survit au redémarrage. Aucun réveil n'est actif sans configuration
+explicite. Voir le [contrat et la qualification](initiative.md).
 
 Une activité échouée conserve son erreur et son curseur ; elle n'est pas relancée automatiquement. La replanification après changement du monde sera une responsabilité de l'adaptateur agent.

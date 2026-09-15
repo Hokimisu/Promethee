@@ -69,31 +69,34 @@ class ConversationStore:
         return bounded_history(history)
 
     def begin(self, message, *, timeout=60):
+        with self.service._transaction() as (conn, now):
+            return self._begin(conn, now, message, timeout=timeout)
+
+    def _begin(self, conn, now, message, *, timeout=60, trigger="user"):
+        """Open within a trusted host transaction, including any initiative reservation."""
         if not isinstance(message, str) or not message.strip() or len(message) > 16000:
             raise ValueError("Expected a nonempty message of at most 16000 characters.")
         timeout = positive_seconds(timeout)
         turn_id = "turn-" + uuid4().hex
-        with self.service._transaction() as (conn, now):
-            world = read_world(conn)
-            history = self._history(conn)
-            bounded_history([*history, {"role": "user", "content": message}])
-            record = {
-                "world_id": world["world_id"],
-                "data_origin": world["data_origin"],
-                "turn_id": turn_id,
-                "message": message,
-                "created_at": timestamp(now),
-            }
-            conn.execute(
-                "UPDATE conversation_turns SET status='interrupted' WHERE status='running'"
-            )
-            conn.execute(
-                "INSERT INTO conversation_turns(turn_id,status,data) VALUES (?,?,?)",
-                (turn_id, "running", encode(record)),
-            )
-            world["conversation"] = {"turn_id": turn_id, "expires_at": now + timeout}
-            world["revision"] += 1
-            conn.execute("UPDATE world SET data=? WHERE id=1", (encode(world),))
+        world = read_world(conn)
+        history = self._history(conn)
+        bounded_history([*history, {"role": "user", "content": message}])
+        record = {
+            "world_id": world["world_id"],
+            "data_origin": world["data_origin"],
+            "turn_id": turn_id,
+            "message": message,
+            "created_at": timestamp(now),
+            "trigger": trigger,
+        }
+        conn.execute("UPDATE conversation_turns SET status='interrupted' WHERE status='running'")
+        conn.execute(
+            "INSERT INTO conversation_turns(turn_id,status,data) VALUES (?,?,?)",
+            (turn_id, "running", encode(record)),
+        )
+        world["conversation"] = {"turn_id": turn_id, "expires_at": now + timeout}
+        world["revision"] += 1
+        conn.execute("UPDATE world SET data=? WHERE id=1", (encode(world),))
         return {"turn_id": turn_id, "session_id": world["world_id"], "history": history}
 
     def finish(self, turn_id, result):

@@ -16,7 +16,8 @@ Ce registre distingue le code livré des intégrations réellement vérifiées. 
 | T09 | Hôte texte implémenté ; Astra à raccorder | Cinq outils du monde, quatre outils mémoire optionnels ; historique natif persistant, correction et délai maximal gérés avec fermeture des processus. Commande réelle ARDY et retransmission vérifiées séparément. Qualification du vrai Hermes avec fournisseur de test local. Accès OpenAI essayé : HTTP 401. [Configuration et limites](hermes-setup.md) |
 | T10 | Mémoire sourcée implémentée et vérifiée | Recherche dans les notes Markdown, sources consultables, corrections liées, distinction du monde actuel, exclusion des qualifications et préservation des éditions. Tests CPU, vrai transport MCP et vrai Hermes avec fournisseur local ; aucune qualité de raisonnement Astra ni revue visuelle Obsidian revendiquée. [Contrat et qualification](memory.md) |
 | T11 | Diagnostic vocal implémenté ; qualification réelle à faire | Micro à la demande → même Hermes → synthèse. Interruptions testées ; vrai Hermes et SDK audio avec fournisseurs/périphérique simulés. Aucun microphone ni fournisseur réel validé ; GPT-Live reste à raccorder. [Mode et limites](voice.md) |
-| T12–T13 | À réaliser | Aucune intégration réelle revendiquée |
+| T12 | Initiative bornée implémentée ; observations Astra à faire | Budget et pause persistants, regroupement d'événements, réservation atomique et tours obsolètes testés. Un réveil dans le vrai Hermes avec fournisseur local ; aucune initiative personnelle activée. [Contrat et limites](initiative.md) |
+| T13 | À réaliser selon limite mesurée | Aucun entraînement ni connecteur supplémentaire revendiqué |
 
 Les journaux de test et données locales restent dans `.local/` et ne sont pas publiés.
 

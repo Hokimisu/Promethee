@@ -102,7 +102,7 @@ class MemoryStore:
 
     def _source(self, conn, source_id):
         if not isinstance(source_id, str) or source_id.count(":") != 1:
-            raise ActionError("Use execution:REQUEST_ID, user:TURN_ID or assistant:TURN_ID.")
+            raise ActionError("Use execution:REQUEST_ID or user:/assistant:/runtime:TURN_ID.")
         kind, item_id = source_id.split(":")
         identifier(item_id)
         if kind == "execution":
@@ -114,19 +114,23 @@ class MemoryStore:
                 for key in ("request_id", "status", "source", "envelope", "error", "observation")
             }
             content, date = encode(value), item["updated_at"]
-        elif kind in {"user", "assistant"}:
+        elif kind in {"user", "assistant", "runtime"}:
             row = conn.execute(
                 "SELECT status,data FROM conversation_turns WHERE turn_id=?", (item_id,)
             ).fetchone()
             if row is None:
                 raise ActionError("Unknown source message in this world.")
             status, item = row[0], json.loads(row[1])
+            if kind == "user" and item.get("trigger", "user") != "user":
+                raise ActionError("A runtime initiative event is not a user message.")
+            if kind == "runtime" and item.get("trigger") != "initiative":
+                raise ActionError("This message is not a runtime initiative event.")
             if item["world_id"] != self.world_id or item["data_origin"] != "session":
                 raise ActionError("Source message provenance does not match this world.")
             if kind == "assistant" and status != "completed":
                 raise ActionError("An unfinished or failed assistant response is not a source.")
-            content = item["message"] if kind == "user" else item["text"]
-            date = item["created_at"] if kind == "user" else item["finished_at"]
+            content = item["text"] if kind == "assistant" else item["message"]
+            date = item["finished_at"] if kind == "assistant" else item["created_at"]
         else:
             raise ActionError("Unsupported memory source kind.")
         return {
@@ -228,9 +232,11 @@ class MemoryStore:
                 for source in sources:
                     self._source(conn, source)
                 if kind == "observation" and any(
-                    source.startswith("assistant:") for source in sources
+                    source.startswith(("assistant:", "runtime:")) for source in sources
                 ):
-                    raise ActionError("Assistant statements cannot attest an observation.")
+                    raise ActionError(
+                        "Assistant statements and runtime wakes cannot attest an observation."
+                    )
                 if corrects:
                     if corrects not in records or any(
                         r["corrects"] == corrects for r in records.values()

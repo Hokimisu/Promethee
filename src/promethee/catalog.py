@@ -9,7 +9,8 @@ CATALOG = {
 }
 
 INITIAL_WORLD = {
-    "schema_version": 7,
+    "schema_version": 8,
+    "initiative": None,
     "session_kind": None,
     "conversation": None,
     "data_origin": "fixture",

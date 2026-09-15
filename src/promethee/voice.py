@@ -214,12 +214,20 @@ class VoiceHost:
             result.update(
                 world_id=self.world_id,
                 turn_id=self.text_host.turn_id,
-                generation=generation,
+                generation=self.generation if self.generation is not None else generation,
                 source="chained-voice-diagnostic",
             )
         return result
 
     def _poll(self):
+        initiative = self.text_host.initiative_tick(allow_start=self.state == "idle")
+        if initiative and initiative.get("paused"):
+            self.interrupt()
+            return {"status": "interrupted", "code": "initiative_paused"}
+        if initiative and initiative.get("started"):
+            self.generation = uuid4().hex
+            self.started = self.clock()
+            self.state = "thinking"
         if self.state == "listening" and not self.device.active:
             self.finish_listening()
         if self.worker:
@@ -330,6 +338,13 @@ def run_voice(args):
                             raise ValueError("Input line exceeds 16000 characters.")
                         if line.strip() == "/cancel":
                             print(json.dumps(host.interrupt()), flush=True)
+                        elif line.strip() in {"/pause", "/resume"}:
+                            from promethee.initiative import Initiative
+
+                            state = Initiative(text_host.store.service).update(
+                                paused=line.strip() == "/pause"
+                            )
+                            print(json.dumps({"initiative": state}), flush=True)
                         elif line.strip():
                             host.text(line.rstrip("\r\n"))
                         elif host.state == "listening":

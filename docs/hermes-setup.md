@@ -5,7 +5,8 @@ Le pont local expose cinq outils du monde, plus quatre outils de mémoire lorsqu
 cinématique. La commande `chat` lance désormais la boucle native Hermes dans
 son environnement séparé, avec historique persistant et interruption des appels.
 T09 reste ouvert : ce raccord est vérifié avec un fournisseur de test local,
-pas avec Astra. Il ne lance aucune initiative autonome.
+pas avec Astra. L'[initiative](initiative.md) reste désactivée sans configuration
+explicite de son budget dans la session.
 
 ## Conversation textuelle
 
@@ -14,7 +15,7 @@ ou créer un monde vide sans corps avec `promethee --data-dir CHEMIN_SESSION ini
 Pour ajouter la mémoire, initialiser un coffre neuf selon le [guide mémoire](memory.md),
 puis ajouter `--vault CHEMIN_COFFRE` à `chat`. Les anciennes sessions non classées
 peuvent converser mais ne sont pas admissibles à cette mémoire.
-Une base existante doit être au schéma 7 ; arrêter ses processus avant d'appliquer
+Une base existante doit être au schéma 8 ; arrêter ses processus avant d'appliquer
 la [migration explicite](contracts.md). Installer l'extra `agent` dans le Python
 de Promethee et utiliser l'installation Hermes 0.20.5 qualifiée ci-dessous.
 Configurer `PROMETHEE_OPENAI_API_KEY` localement, sans la mettre dans Git ni dans
@@ -36,8 +37,8 @@ la réponse en cours ; `/quit` ferme le chat. Ces opérations n'annulent pas une
 action corporelle déjà acceptée. Un arrêt du corps passe par son outil d'annulation.
 Les sorties indiquent `completed`, `failed` ou `interrupted` pour **la réponse**,
 sans les confondre avec les états d'exécution du corps. Le délai maximal vaut
-60 secondes par défaut (`--timeout`). Aucun appel au modèle n'est fait pendant
-l'attente d'un message.
+60 secondes par défaut (`--timeout`). Sans initiative configurée, aucun appel
+au modèle n'est fait pendant l'attente d'un message.
 
 Un verrou détenu par le système autorise un seul hôte de conversation par monde.
 Le redémarrage ferme les anciens tours, conserve les messages restés sans réponse

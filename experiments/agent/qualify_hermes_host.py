@@ -28,6 +28,7 @@ parser.add_argument(
 parser.add_argument(
     "--voice", action="store_true", help="Exercise chained audio with synthetic PCM, no devices."
 )
+parser.add_argument("--initiative", action="store_true", help="Exercise a single budgeted wake.")
 args = parser.parse_args()
 output = args.output.resolve()
 output.mkdir(exist_ok=False)
@@ -44,6 +45,7 @@ for name in (
     "migrations.py",
     "voice.py",
     "voice_worker.py",
+    "initiative.py",
 ):
     shutil.copyfile(root / "src/promethee" / name, output / name)
 (output / "purpose.json").write_text(
@@ -304,6 +306,24 @@ try:
                 notes = MemoryStore(service, vault).search("qualification")["notes"]
                 assert [note["note_id"] for note in notes] == ["qualification-note"]
                 results.append({"case": "sourced-memory", **result})
+                print(json.dumps(results[-1]), flush=True)
+
+            if args.initiative:
+                from promethee.initiative import Initiative
+
+                initiative = Initiative(service)
+                initiative.configure(budget=1, interval=1)
+                wait_for(host.initiative_tick)
+                result = wait_for(host.poll)
+                assert result["status"] == "completed", result
+                assert initiative.observe()["remaining"] == 0
+                assert host.initiative_tick() is None
+                with service.runtime.connection() as conn:
+                    row = conn.execute(
+                        "SELECT data FROM conversation_turns WHERE turn_id=?", (host.turn_id,)
+                    ).fetchone()
+                assert json.loads(row[0])["trigger"] == "initiative"
+                results.append({"case": "budgeted-initiative", "used": 1, **result})
                 print(json.dumps(results[-1]), flush=True)
 
             host.start("Wait for correction")

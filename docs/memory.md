@@ -56,6 +56,7 @@ Chaque note requiert une à huit sources existantes dans le monde associé :
 
 - `user:TURN_ID` : message utilisateur conservé, même après une interruption ;
 - `assistant:TURN_ID` : réponse native terminée, sans erreur ;
+- `runtime:TURN_ID` : réveil d'initiative enregistré, distinct d'une parole humaine ;
 - `execution:REQUEST_ID` : résultat terminal, avec statut et provenance du
   contrôleur. Un rejet reste un rejet, pas une action accomplie.
 
@@ -69,6 +70,10 @@ et `correction`. Une parole de l'assistant peut fonder une proposition ou un
 résumé, mais ne peut pas attester une observation. La présence de sources ne
 prouve pas à elle seule que l'interprétation rédigée est juste : catégorie,
 sources et incertitude restent visibles. Aucun résumé sans source n'est créé.
+
+Un réveil d'initiative peut sourcer une proposition, mais pas une observation.
+Le même tour ne peut pas être relu comme source `user:`. Les anciens messages
+sans champ `trigger` conservent leur origine utilisateur initiale.
 
 ## Fichiers, éditions et corrections
 

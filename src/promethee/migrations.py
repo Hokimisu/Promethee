@@ -5,7 +5,7 @@ import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 
 def create_memory_tables(conn):
@@ -80,6 +80,8 @@ def _upgrade(conn, world):
         create_memory_tables(conn)
         # Never promote old qualification or unclassified session data into memory.
         world.update(schema_version=7, session_kind=None)
+    if world["schema_version"] == 7:
+        world.update(schema_version=8, initiative=None)
 
 
 def read_world(conn):
@@ -109,7 +111,7 @@ def migrate(path, backup):
             version = world.get("schema_version")
             if version == SCHEMA_VERSION:
                 return {"schema_version": version, "migrated": False, "backup": None}
-            if type(version) is not int or version not in (1, 2, 3, 4, 5, 6):
+            if type(version) is not int or version not in (1, 2, 3, 4, 5, 6, 7):
                 raise ValueError(f"No migration available from schema {version!r}.")
             if path == backup:
                 raise ValueError("Backup must be a different, new file.")

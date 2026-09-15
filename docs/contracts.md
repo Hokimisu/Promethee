@@ -1,4 +1,4 @@
-# Contrats exécutables — monde version 7
+# Contrats exécutables — monde version 8
 
 Ces exemples décrivent l'API Python locale. Le rendu utilise HTTP/WebSocket sur l'interface de boucle locale. `run` propose des boutons de pilotage qui passent par le service d'exécution. Le [pont MCP stdio](hermes-setup.md) expose cinq opérations de ce même service et, avec un coffre configuré, quatre outils de mémoire ; aucune API REST d'action n'est livrée.
 
@@ -80,11 +80,11 @@ serveur MCP utilise cette option et exige ensuite `require_session()`.
 
 ## Migration explicite
 
-Ouvrir une ancienne base v1 à v6 ne la modifie pas. Pour la migrer, arrêter tous
+Ouvrir une ancienne base v1 à v7 ne la modifie pas. Pour la migrer, arrêter tous
 les processus qui utilisent la base et choisir une sauvegarde qui n'existe pas :
 
 ```sh
-uv run promethee --data-dir .local/ancien-monde migrate --backup .local/sauvegardes/avant-v7.sqlite3
+uv run promethee --data-dir .local/ancien-monde migrate --backup .local/sauvegardes/avant-v8.sqlite3
 ```
 
 La sauvegarde SQLite est copiée et vérifiée pendant que les écritures sont exclues, avant la migration transactionnelle. Les données sans origine deviennent `legacy`, leur révision commence à zéro ; leur ID de monde, historique et plans sont préservés. Une nouvelle migration d'une base déjà à jour ne fait rien. Une sauvegarde existante n'est jamais écrasée et une version inconnue reste refusée.
@@ -169,6 +169,11 @@ et les historiques en sont exclus. Rouvrir une base ne permet pas de changer
 sa classification. La migration ne transforme donc aucun essai en souvenir.
 Le [contrat mémoire](memory.md) décrit les sources, corrections, limites et la
 reprise d'un export interrompu après son enregistrement SQLite.
+
+La version 8 ajoute `initiative: null` sans activer d'appel. Une configuration
+explicite conserve budget, pause et événements regroupés dans le monde. Réservation
+et ouverture d'un tour autonome partagent une transaction ; une correction ou une
+pause invalide ses outils. Voir le [contrat d'initiative](initiative.md).
 
 `ConversationStore(service)` est réservé à l'hôte et exige une base `session`.
 `begin(message, timeout=60)` conserve le message, marque les appels précédents

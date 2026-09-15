@@ -35,6 +35,15 @@ def main():
         "memory-export", help="Complete pending registered note exports."
     )
     memory_export.add_argument("--vault", type=Path, required=True)
+    initiative = commands.add_parser("initiative", help="Explicit session initiative controls.")
+    controls = initiative.add_subparsers(dest="initiative_command", required=True)
+    enable = controls.add_parser("configure")
+    enable.add_argument("--budget", type=int, required=True)
+    enable.add_argument("--interval", type=float)
+    for control in ("pause", "resume", "status"):
+        controls.add_parser(control)
+    replenish = controls.add_parser("add-budget")
+    replenish.add_argument("--calls", type=int, required=True)
     commands.add_parser(
         "catalog", help="List logical assets and capabilities without changing data."
     )
@@ -69,6 +78,21 @@ def main():
     args = parser.parse_args()
     exit_code = 0
     try:
+        if args.command == "initiative":
+            from promethee.initiative import Initiative
+
+            runtime = Runtime(args.data_dir / "world.sqlite3", create=False)
+            manager = Initiative(ExecutionService(runtime))
+            if args.initiative_command == "configure":
+                result = manager.configure(budget=args.budget, interval=args.interval)
+            elif args.initiative_command in {"pause", "resume"}:
+                result = manager.update(paused=args.initiative_command == "pause")
+            elif args.initiative_command == "add-budget":
+                result = manager.update(add_budget=args.calls)
+            else:
+                result = manager.observe()
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 0
         if args.command == "init-session":
             if (args.data_dir / "world.sqlite3").exists():
                 raise ValueError("Choose a new session directory; existing data is never promoted.")

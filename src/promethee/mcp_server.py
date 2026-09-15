@@ -128,7 +128,7 @@ def create_server(service, *, turn_id=None, vault=None):
 
         @server.tool(annotations=read)
         def read_memory_source(source_id: StrictStr) -> dict[str, Any]:
-            """Read execution:REQUEST_ID, user:TURN_ID or assistant:TURN_ID in this world.
+            """Read execution:REQUEST_ID or user:/assistant:/runtime:TURN_ID in this world.
 
             Execution sources must be terminal. Assistant sources must be completed.
             The current user turn ID is available in read_world's conversation field.

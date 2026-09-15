@@ -33,6 +33,9 @@ explicite différent ; aucun fournisseur de secours n'est choisi.
   avant cette demande, pendant le raisonnement et pendant la parole de l'avatar.
 - Une ligne de texte corrige la demande et utilise le même historique.
 - `/cancel` coupe enregistrement, réponse ou lecture ; `/quit` ferme l'hôte.
+- `/pause` et `/resume` contrôlent l'[initiative configurée](initiative.md),
+  avec le même budget que le mode texte. Aucun nouveau tour autonome ne démarre
+  pendant l'écoute, la transcription, le raisonnement ou la lecture audio.
 - Pour interrompre une réponse et parler, appuyer sur Entrée avant de parler.
   La détection automatique de prise de parole n'est pas livrée.
 

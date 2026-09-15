@@ -58,7 +58,8 @@ Cette commande réalise une transition instantanée, sans activité préécrite 
 | Voix de diagnostic | Chaîne transcription/Hermes/synthèse testée avec fournisseurs simulés ; microphone et voix réels non qualifiés |
 | ARDY Core et rendu Viser | Pilotage cinématique manuel ; qualification des déplacements incomplète |
 | Apparence anime en VRM | Lecture animée ARDY et textures vérifiées ; appuis et pilotage direct à raccorder |
-| Initiative autonome et services externes | Jalons ultérieurs |
+| Initiative à budget explicite | Pause persistante et réveils regroupés ; essais avec fournisseur simulé, comportements Astra non qualifiés |
+| Services externes | Extensions ultérieures selon besoin observé |
 
 ## Architecture cible
 
@@ -109,6 +110,7 @@ docs/            Vision, architecture, contrats et jalons
 - [Avancement vérifié des tickets](docs/progress.md)
 - [Pont Hermes et accès au modèle](docs/hermes-setup.md)
 - [Voix de diagnostic et interruptions](docs/voice.md)
+- [Initiative, budget et pause](docs/initiative.md)
 - [Provenance de l'avatar VRM](docs/assets/pixiv-vrm-sample.md)
 - [Lecture animée de l'avatar](docs/avatar-rendering.md)
 - [Contribuer](CONTRIBUTING.md)

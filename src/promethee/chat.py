@@ -1,4 +1,4 @@
-"""Exclusive text host for the native Hermes worker. No autonomous polling of a model."""
+"""Exclusive native Hermes host; initiative requires an explicitly configured budget."""
 
 import contextlib
 import json
@@ -167,11 +167,16 @@ class TextHost:
         self.settings = {"model": model, "base_url": base_url, "api_mode": api_mode}
         self.timeout = positive_seconds(timeout)
         self.worker, self.turn_id = None, None
+        self.initiative_turn = None
         store.recover()
 
     def start(self, message):
         started = time.monotonic()
         opened = self.store.begin(message, timeout=self.timeout)
+        self.initiative_turn = None
+        return self._launch(opened, message, started)
+
+    def _launch(self, opened, message, started):
         # Fence the old tools BEFORE stopping their process or starting a new one.
         self.turn_id = opened["turn_id"]
         self.deadline = started + self.timeout
@@ -185,6 +190,28 @@ class TextHost:
             self.store.abort(self.turn_id)
             raise
         return self.turn_id
+
+    def initiative_tick(self, *, allow_start=True):
+        from promethee.initiative import Initiative
+
+        initiative = Initiative(self.store.service)
+        state = initiative.observe()
+        if state is None:
+            return None
+        if state["paused"] and self.initiative_turn:
+            self.close()
+            self.initiative_turn = None
+            return {"paused": True}
+        if not allow_start or self.worker is not None:
+            return None
+        started = time.monotonic()
+        opened = initiative.open_turn(self.store, timeout=self.timeout)
+        if opened is None:
+            return None
+        message = opened.pop("message")
+        self.initiative_turn = opened["turn_id"]
+        self._launch(opened, message, started)
+        return {"started": self.turn_id}
 
     def poll(self):
         if self.worker is None:
@@ -288,7 +315,8 @@ def run_chat(args):
     with open_text_host(args) as host:
         threading.Thread(target=read_input, daemon=True).start()
         print(
-            "Texte : un message par ligne. /cancel coupe la réponse ; /quit ferme le chat.",
+            "Texte : un message par ligne. /cancel coupe la réponse ; /quit ferme le chat. "
+            "/pause et /resume contrôlent l'initiative configurée.",
             flush=True,
         )
         try:
@@ -302,12 +330,20 @@ def run_chat(args):
                         break
                     if line.strip() == "/cancel":
                         host.close()
+                    elif line.strip() in {"/pause", "/resume"}:
+                        from promethee.initiative import Initiative
+
+                        state = Initiative(host.store.service).update(
+                            paused=line.strip() == "/pause"
+                        )
+                        print(json.dumps({"initiative": state}), flush=True)
                     elif line.strip():
                         if not line.endswith("\n") or len(line.rstrip("\r\n")) > 16000:
                             raise ValueError("Input line exceeds 16000 characters.")
                         host.start(line.rstrip("\r\n"))
                     # Process another queued correction before emitting a result.
                     continue
+                host.initiative_tick()
                 result = host.poll()
                 if result:
                     print(json.dumps(result, ensure_ascii=False), flush=True)
