@@ -65,11 +65,13 @@ Ajouter `--object-interactions` à la commande `promethee run` configurée pour
 ARDY. Les commandes apparaissent dans le dossier « Objets » du visualiseur Core
 et dans les capacités MCP du même contrôleur. Aucun objet n'est créé au démarrage.
 `spawn` et `place` prennent une position **XYZ en mètres, Y vertical** ; `move`
-conserve sa cible au sol XZ. Seul l'asset `plush` dispose d'une géométrie de prise.
+conserve sa cible au sol XZ. Les assets `plush` et `ball` disposent chacun de
+points de contact définis sur leur propre géométrie. Le choix « Modèle » du
+visualiseur permet de créer un doudou ou une balle.
 
 `take` évalue les deux bras, retient l'approche accessible la plus courte et
 prépare toute la trajectoire avant de la jouer. La main rejoint un point de la
-surface du bras du doudou en trois secondes ; l'attachement est établi à cet
+surface de l'objet en trois secondes ; l'attachement est établi à cet
 instant, puis l'objet est levé de six centimètres en 1,5 seconde. Le point de
 main est un proxy situé à 4,5 cm du poignet, pas un contact de peau validé.
 `place` conduit l'objet à sa cible en trois secondes et détache seulement à
@@ -106,8 +108,8 @@ l'état attendu avant/après contact. Le replay contient 280 poses, échantillon
 nominalement à 20 Hz en omettant les délais de préparation CPU. Dans le VRM pixiv,
 l'écart maximal entre la main droite adaptée et la main Core est de 0,000000033 m.
 Les pieds visibles restent environ 17 mm au-dessus du sol : cet essai ne valide
-pas l'appui. Les doigts restent ouverts. Il reste à qualifier plusieurs
-géométries et à partager les contraintes de portée du VRM avec le contrôleur
+pas l'appui. Les doigts restent ouverts. Il reste à partager les contraintes
+de portée du VRM avec le contrôleur
 avant de déclarer T08 terminé.
 
 Trois essais supplémentaires utilisent le même code moteur, sans retoucher les
@@ -134,3 +136,22 @@ le doudou levé auprès de la main ; les doigts ouverts et l'absence de simulati
 physique restent inchangés. Ces variantes ne couvrent pas toute la pièce ni
 toutes les postures et ne transforment pas une capacité expérimentale en prise
 physique générale.
+
+La [balle géométrique](assets/geometric-ball.md) ajoute une seconde surface de
+prise, distincte des onze ellipsoïdes du doudou. Les essais suivants utilisent
+`--asset ball`, sans changer les seuils de contact ou de collision :
+
+| Dossier local | Position avant transformation | Rotation du corps | Décalage XZ | Parcours |
+| --- | --- | --- | --- | --- |
+| `object-controller-qualification-05` | `[0, 1.15, 0.25]` | 0° | `[0, 0]` | 9 résultats attendus |
+| `object-controller-qualification-06` | `[0.15, 1.2, 0.28]` | −90° | `[-1, 1]` | 9 résultats attendus |
+
+Les prises durent 4,70 et 4,84 secondes, préparation comprise ; les dépôts
+3,15 à 3,19 secondes. Les tests CPU vérifient que tous les points de contact
+déclarés sont sur une surface visible, que les deux géométries conservent leur
+attachement après annulation et reprise, et qu'une balle ne peut pas être créée
+dans l'enveloppe d'un doudou existant. Ni rebond ni lancer ne sont implémentés.
+Les deux replays de balle passent le contrôle de portée VRM sur leurs 279 poses ;
+la pose 80 a été inspectée visuellement dans chaque cas. Le choix « Balle » puis
+« Créer l'objet » a aussi produit une sphère dans la session Core restaurée,
+avec un résultat `completed` et un deuxième objet conservé dans le monde.

@@ -4,6 +4,7 @@ CATALOG = {
     "chair": {"movable": True, "sit": True},
     "sign": {"movable": True, "write": True},
     "plush": {"movable": True},
+    "ball": {"movable": True},
     "bed": {"movable": False},
     "tv": {"movable": False},
 }

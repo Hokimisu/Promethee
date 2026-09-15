@@ -98,6 +98,7 @@ def run_session(args):
         if args.object_interactions:
             with server.gui.add_folder("Objets"):
                 name = server.gui.add_text("Nom de l’objet", initial_value="")
+                model = server.gui.add_dropdown("Modèle", options=("Doudou", "Balle"))
                 location = server.gui.add_vector3(
                     "Position XYZ (m)",
                     initial_value=(0, 1, 0.5),
@@ -106,7 +107,7 @@ def run_session(args):
                     step=0.05,
                     hint="Y est la hauteur. Les objets libres restent fixes, sans gravité.",
                 )
-                create = server.gui.add_button("Créer un doudou")
+                create = server.gui.add_button("Créer l’objet")
                 take = server.gui.add_button("Prendre l’objet")
                 place = server.gui.add_button("Déposer l’objet tenu")
 
@@ -117,7 +118,7 @@ def run_session(args):
                         "kind": "spawn",
                         "args": {
                             "object_id": name.value,
-                            "asset": "plush",
+                            "asset": "plush" if model.value == "Doudou" else "ball",
                             "position": list(location.value),
                         },
                     }

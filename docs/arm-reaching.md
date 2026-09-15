@@ -37,7 +37,7 @@ du bras avec le corps ou les objets, ni articulation des doigts. Un changement
 de plan de flexion près d'une singularité n'est pas qualifié. Le nombre de poses
 est configurable, mais aucun plafond de vitesse n'est garanti pour une durée
 arbitraire. Son utilisation dans le contrôleur reste limitée au protocole
-expérimental du doudou : point de contact explicite et enveloppes de collision,
+expérimental des objets géométriques : point de contact explicite et enveloppes de collision,
 sans validation anatomique complète.
 
 ## Essai local
@@ -97,5 +97,5 @@ Les tests CPU couvrent conservation des segments et du reste du corps, rotation
 et translation du monde, cibles impossibles, pose incohérente et géométrie non
 finie, ainsi que six approches successives sans dérive des rotations. Les
 dépendances restent optionnelles. Le raccord du contrôleur associe maintenant
-géométrie du doudou, point de contact, orientation de main et attachement suivi,
+géométrie de l'objet, point de contact, orientation de main et attachement suivi,
 avec interruptions et observations cohérentes ; sa qualification reste partielle.

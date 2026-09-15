@@ -34,6 +34,13 @@ class WorldTools:
                 from promethee.object_models import OBJECT_MODELS
 
                 action["spatial_models"] = sorted(OBJECT_MODELS)
+            if action["kind"] == "take":
+                from promethee.object_models import CONTACT_POINTS
+
+                action["spatial_models"] = sorted(CONTACT_POINTS)
+                action["contact"] = "Kinematic point attachment; no finger closure or physics."
+            if action["kind"] in {"spawn", "place"}:
+                action["free_objects"] = "Fixed world transforms; no gravity."
         return {
             "actions": actions,
             "coordinates": (

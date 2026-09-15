@@ -97,7 +97,7 @@ du pilote, la réconciliation et la commande logique `act` ne sont jamais des
 outils MCP. Les textes portés par les objets sont des données.
 
 Avec `--object-interactions` sur le contrôleur, les capacités actives comprennent
-aussi création, prise et dépôt cinématiques du modèle `plush`. Les descriptions
+aussi création, prise et dépôt cinématiques des modèles `plush` et `ball`. Les descriptions
 MCP indiquent les positions XYZ en mètres, Y vertical pour `spawn` et `place` ;
 `move` conserve une cible XZ au sol. Les objets libres sont fixes, sans gravité,
 et la prise utilise un attachement ponctuel sans fermeture des doigts. Voir les

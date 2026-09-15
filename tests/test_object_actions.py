@@ -56,20 +56,21 @@ def advance(state, seconds):
         controller.tick()
 
 
-def spawn(state, rid="spawn", point=None):
+def spawn(state, rid="spawn", point=None, asset="plush"):
     command(
         state,
         rid,
         "spawn",
-        {"object_id": "item", "asset": "plush", "position": point or [0, 1.3, 0.25]},
+        {"object_id": "item", "asset": asset, "position": point or [0, 1.3, 0.25]},
     )
     advance(state, 0.1)
     assert state[1].get(rid)["status"] == "completed"
 
 
-def test_take_attaches_only_at_contact_and_place_releases_only_at_arrival(objects):
+@pytest.mark.parametrize("asset", ["plush", "ball"])
+def test_take_attaches_only_at_contact_and_place_releases_only_at_arrival(objects, asset):
     controller, service, worker, _, _ = objects
-    spawn(objects)
+    spawn(objects, asset=asset)
     original = copy.deepcopy(service.get_world()["objects"]["item"])
     assert command(objects, "take", "take", {"object_id": "item"})["status"] == "accepted"
     assert service.get("take")["status"] == "running"
@@ -97,9 +98,10 @@ def test_take_attaches_only_at_contact_and_place_releases_only_at_arrival(object
 
 
 @pytest.mark.parametrize("when,holding", [(1.0, None), (3.5, "item")])
-def test_cancel_and_restart_keep_the_actual_attachment_state(objects, when, holding):
+@pytest.mark.parametrize("asset", ["plush", "ball"])
+def test_cancel_and_restart_keep_the_actual_attachment_state(objects, when, holding, asset):
     controller, service, worker, now, skeleton = objects
-    spawn(objects)
+    spawn(objects, asset=asset)
     command(objects, "take", "take", {"object_id": "item"})
     advance(objects, when)
     expected = copy.deepcopy(controller.observation)
@@ -161,10 +163,11 @@ def test_ellipsoid_bounds_rotate_with_object():
     np.testing.assert_allclose(high - low, [0.1, 0.224, 0.164], atol=1e-10)
 
 
-def test_live_mesh_has_outward_faces_and_matching_dimensions():
+@pytest.mark.parametrize("asset", ["plush", "ball"])
+def test_live_mesh_has_outward_faces_and_matching_dimensions(asset):
     from promethee.object_models import OBJECT_MODELS, part_mesh
 
-    for part in OBJECT_MODELS["plush"]:
+    for part in OBJECT_MODELS[asset]:
         vertices, faces = part_mesh(part)
         triangles = vertices[faces]
         normals = np.cross(triangles[:, 1] - triangles[:, 0], triangles[:, 2] - triangles[:, 0])
@@ -176,3 +179,30 @@ def test_live_mesh_has_outward_faces_and_matching_dimensions():
 def test_clearance_requires_observed_body_pose():
     with pytest.raises(ValueError, match="observed articulated"):
         check_clearance({"pose": None, "objects": {}})
+
+
+def test_contact_points_lie_on_their_visual_surface():
+    from promethee.object_models import CONTACT_POINTS, OBJECT_MODELS
+
+    for asset, contacts in CONTACT_POINTS.items():
+        for point in contacts.values():
+            distances = [
+                np.linalg.norm(
+                    (np.asarray(point) - part["center"]) / (np.asarray(part["size"]) / 2)
+                )
+                for part in OBJECT_MODELS[asset]
+            ]
+            assert min(distances) == pytest.approx(1.0)
+
+
+def test_second_geometry_cannot_spawn_over_existing_object(objects):
+    spawn(objects)
+    before = copy.deepcopy(objects[1].get_world()["objects"])
+    command(
+        objects,
+        "overlap",
+        "spawn",
+        {"object_id": "ball", "asset": "ball", "position": [0, 1.3, 0.25]},
+    )
+    assert objects[1].get("overlap")["status"] == "failed"
+    assert objects[1].get_world()["objects"] == before

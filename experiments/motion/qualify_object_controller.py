@@ -14,6 +14,7 @@ import numpy as np
 from promethee.avatar_viewer import motion_document
 from promethee.execution import ExecutionService
 from promethee.kinematic import KinematicController
+from promethee.object_models import CONTACT_POINTS
 from promethee.runtime import Runtime
 
 
@@ -44,6 +45,7 @@ def main():
     parser.add_argument("--heading-degrees", type=float, default=0)
     parser.add_argument("--offset-xz", type=float, nargs=2, default=[0, 0])
     parser.add_argument("--object-position", type=float, nargs=3, default=[0, 1.15, 0.25])
+    parser.add_argument("--asset", choices=sorted(CONTACT_POINTS), default="plush")
     args = parser.parse_args()
     if not np.isfinite([args.heading_degrees, *args.offset_xz, *args.object_position]).all():
         parser.error("Trial coordinates must be finite.")
@@ -131,7 +133,7 @@ def main():
         perform(
             "spawn",
             "spawn",
-            {"object_id": "sample", "asset": "plush", "position": point(args.object_position)},
+            {"object_id": "sample", "asset": args.asset, "position": point(args.object_position)},
             "completed",
         )
         perform("take", "take", {"object_id": "sample"}, "completed")
@@ -155,7 +157,7 @@ def main():
         perform(
             "floor-intersection",
             "spawn",
-            {"object_id": "bad", "asset": "plush", "position": [1, 0, 1]},
+            {"object_id": "bad", "asset": args.asset, "position": [1, 0, 1]},
             "failed",
         )
         perform("missing", "take", {"object_id": "absent"}, "rejected")
@@ -177,6 +179,7 @@ def main():
         "heading_degrees": args.heading_degrees,
         "offset_xz": args.offset_xz,
         "object_position_before_world_transform": args.object_position,
+        "asset": args.asset,
         "object_spawn_orientation": "world identity, not rotated with the trial",
         "samples": len(observations),
         "sample_period_seconds": 0.05,

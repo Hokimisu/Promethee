@@ -228,7 +228,7 @@ Ajouter à ce stade une commande cible `run` pour ouvrir explicitement une sessi
 ## T08 — Donner des usages vérifiables aux objets
 
 Première capacité expérimentale livrée : création, approche, attachement,
-levée et dépôt d'un doudou géométrique via `--object-interactions`. Le contrôleur
+levée et dépôt d'un doudou ou d'une balle géométrique via `--object-interactions`. Le contrôleur
 utilise la [portée du bras Core](arm-reaching.md), vérifie les enveloppes de
 collision et persiste corps et objet dans la même transaction. Le
 [parcours réel depuis une pose Core archivée](spatial-objects.md) couvre aussi
@@ -237,10 +237,9 @@ La lecture VRM adapte la main visible ; les commandes directes sont disponibles
 dans le visualiseur Core. Aucun objet n'est créé automatiquement.
 
 T08 reste ouvert : doigts et peau ne sont pas modélisés, les contraintes de
-portée VRM restent propres au replay, et les essais sur plusieurs géométries ne
-sont pas terminés. Quatre parcours couvrent maintenant des positions latérales,
-une rotation de 90° et une translation dans la pièce. Une prise cinématique ne
-valide pas la physique.
+portée VRM restent propres au replay. Six parcours couvrent maintenant les deux
+géométries, des positions latérales, des rotations de ±90° et des translations
+dans la pièce. Une prise cinématique ne valide pas la physique.
 
 **À modifier :** catalogue, validation, contrôleur et rendu.
 **À créer :** tests des interactions et fiche de provenance pour chaque asset introduit.

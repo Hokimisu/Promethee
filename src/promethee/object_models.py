@@ -3,6 +3,7 @@
 # Each part is an ellipsoid: centre, full XYZ dimensions, RGB colour.
 # Authored for Promethee under the repository MIT license; no downloaded asset.
 OBJECT_MODELS = {
+    "ball": [{"center": [0, 0, 0], "size": [0.12, 0.12, 0.12], "color": "#679ac4"}],
     "plush": [
         {"center": [0, -0.02, 0], "size": [0.12, 0.14, 0.09], "color": "#c99c73"},
         {"center": [0, 0.065, 0], "size": [0.09, 0.085, 0.075], "color": "#c99c73"},
@@ -16,6 +17,13 @@ OBJECT_MODELS = {
         {"center": [0.019, 0.075, 0.034], "size": [0.008, 0.008, 0.008], "color": "#302c29"},
         {"center": [0, 0.057, 0.039], "size": [0.012, 0.009, 0.008], "color": "#302c29"},
     ],
+}
+
+# Surface points in each object's local frame. These define point attachment,
+# not finger closure or a physical grasp. Unlisted models have no take action.
+CONTACT_POINTS = {
+    "plush": {"right": [-0.082, -0.015, 0], "left": [0.082, -0.015, 0]},
+    "ball": {"right": [-0.06, 0, 0], "left": [0.06, 0, 0]},
 }
 
 

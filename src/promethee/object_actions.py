@@ -1,4 +1,4 @@
-"""Kinematic point attachment to the geometric plush, with conservative clearance.
+"""Kinematic point attachment to explicit object surfaces, with conservative clearance.
 
 No gravity, finger closure or compliant contact is simulated. Free objects stay
 at their observed world transforms. These actions must be enabled explicitly.
@@ -8,7 +8,7 @@ import copy
 import math
 
 from promethee.arm_reach import ARMS, reach_arm
-from promethee.object_models import OBJECT_MODELS
+from promethee.object_models import CONTACT_POINTS, OBJECT_MODELS
 from promethee.spatial import follow_attachment
 
 IDENTITY = [[1.0, 0, 0], [0, 1.0, 0], [0, 0, 1.0]]
@@ -111,7 +111,7 @@ def prepare_object_action(observation, skeleton, action):
     if kind == "take":
         object_id = args["object_id"]
         obj = current["objects"][object_id]
-        if obj["asset"] != "plush":
+        if obj["asset"] not in CONTACT_POINTS:
             raise ValueError("No contact geometry is defined for this object model.")
         if "spatial" not in obj or obj["spatial"]["attachment"] is not None:
             raise ValueError("Taking requires an unattached spatial object.")
@@ -119,10 +119,11 @@ def prepare_object_action(observation, skeleton, action):
         failures = []
         for side, sign in (("right", -1), ("left", 1)):
             try:
-                # Outer surface of the corresponding plush arm ellipsoid.
-                contact = np.array(obj["spatial"]["position"]) + np.array(
-                    obj["spatial"]["rotation"]
-                ) @ [sign * 0.082, -0.015, 0]
+                # An explicit surface point from this object's geometry.
+                contact = (
+                    np.array(obj["spatial"]["position"])
+                    + np.array(obj["spatial"]["rotation"]) @ CONTACT_POINTS[obj["asset"]][side]
+                )
                 rotation = np.array(obj["spatial"]["rotation"]) @ HAND_ROTATION
                 palm = np.array([sign * 0.045, 0, 0])
                 target = contact - rotation @ palm
