@@ -68,8 +68,24 @@ réponse texte a été conservée, pas prononcée. Une fin de lecture ne prouve 
 que l'utilisateur l'a entendue ; `heard_by_user` reste inconnu.
 
 L'historique natif conserve les réponses générées, même si leur audio est coupé.
-La restitution détaillée de ce qui a réellement été diffusé dans le contexte
-conversationnel reste à compléter pour T11.
+Chaque réponse vocale possède maintenant un compte rendu de diffusion séparé :
+`preparing`, `playing`, `completed`, `interrupted`, `failed` ou `text_only`.
+Il conserve le tour, la génération audio, la date et le fait qu'un démarrage
+de lecture a été signalé. Il ne contient ni enregistrement ni estimation des
+mots entendus : `heard_by_user` et `heard_text` restent inconnus.
+
+Le monde expose les huit comptes rendus les plus récemment mis à jour dans
+`recent_speech_deliveries`, avec un indicateur si d'autres sont omis. Astra peut
+les consulter via `read_world` avant d'affirmer qu'une réponse a été prononcée.
+Une interruption pendant la préparation se distingue d'une interruption après
+le démarrage du lecteur. Même `completed` atteste seulement la fin du lecteur,
+pas l'audition par l'utilisateur. Le préfixe effectivement diffusé n'est pas
+mesuré dans ce diagnostic.
+
+La migration explicite vers le schéma 11 ajoute une valeur inconnue aux anciens
+tours, sans inventer leur diffusion. Au redémarrage de l'hôte, les préparations
+et lectures restées ouvertes deviennent `interrupted` avec la raison
+`host_restarted`. Aucune synthèse ni lecture ne reprend automatiquement.
 
 ## Bornes et mesures
 
@@ -118,6 +134,25 @@ ni le microphone, ni les haut-parleurs.
 Restent à vérifier : accès effectif, qualité française, coût d'une session
 réelle, latence utile, interruption automatique et synchronisation avec des
 mouvements réellement exécutés. T11 reste en cours.
+
+Le compte rendu de diffusion est couvert par les tests de lecture terminée,
+arrêt avant/après démarrage, erreur du lecteur, retour tardif, génération
+incorrecte, reprise et migration 10 → 11 avec rollback. Les 371 tests passent,
+deux sont ignorés ; lint, format et construction réussissent.
+
+`experiments/agent/qualify_speech_context.py` emploie deux appels réels à Astra
+avec l'authentification ChatGPT native de Hermes, dans un monde neuf de
+qualification. Ses arguments de connexion sont ceux de
+`qualify_hermes_codex.py` ; fournir un nouveau `--output` et `--model gpt-6-astra`.
+Entre les deux appels, le script enregistre explicitement des événements audio
+simulés, puis rouvre l'hôte. Il n'utilise aucun fournisseur audio ni périphérique.
+
+Dans `.local/astra-speech-context-01`, Astra génère la phrase demandée en
+14,04 s. Au second appel, il lit `read_world` et explique correctement en
+23,40 s que la lecture commencée a été interrompue, sans pouvoir garantir un
+seul mot entendu. Aucun audio ni aucune action n'est relancé. Les appels natifs,
+réponses, compte rendu et sources du code sont archivés. Cette mesure valide
+le raisonnement sur le compte rendu simulé, pas une diffusion acoustique réelle.
 
 ## Interfaces vérifiées
 

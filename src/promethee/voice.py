@@ -147,9 +147,16 @@ class VoiceHost:
         self.state = "idle"
         self.generation = None
         self.started = None
+        self.delivery = None
         self.world_id = text_host.store.service.runtime.require_session()["world_id"]
 
-    def interrupt(self):
+    def _delivery(self, status):
+        if self.delivery:
+            self.text_host.store.speech_delivery(*self.delivery, status)
+            if status in {"completed", "interrupted", "failed", "text_only"}:
+                self.delivery = None
+
+    def interrupt(self, *, delivery_status="interrupted"):
         started = self.clock()
         generation = self.generation
         self.generation = None  # Fence provider output before any potentially slow cleanup.
@@ -158,11 +165,14 @@ class VoiceHost:
             self.device.stop()  # Discard queued playback before waiting on model processes.
         finally:
             try:
-                self.text_host.close()  # Fences tools; does not cancel the body.
+                self._delivery(delivery_status)
             finally:
-                if self.worker:
-                    self.worker.close()
-                    self.worker = None
+                try:
+                    self.text_host.close()  # Fences tools; does not cancel the body.
+                finally:
+                    if self.worker:
+                        self.worker.close()
+                        self.worker = None
         return {
             "status": "interrupted",
             "cutoff_seconds": self.clock() - started,
@@ -210,7 +220,11 @@ class VoiceHost:
 
     def poll(self):
         generation = self.generation
-        result = self._poll()
+        try:
+            result = self._poll()
+        except (ValueError, OSError):
+            self.interrupt(delivery_status="failed")
+            raise
         if result is not None:
             result.update(
                 world_id=self.world_id,
@@ -233,7 +247,7 @@ class VoiceHost:
             self.finish_listening()
         if self.worker:
             if self.clock() >= self.deadline:
-                self.interrupt()
+                self.interrupt(delivery_status="failed")
                 return {"status": "failed", "code": "audio_deadline_exceeded"}
             result = self.worker.poll()
             if result is None:
@@ -241,7 +255,7 @@ class VoiceHost:
             self.worker.close()
             self.worker = None
             if result.get("generation") != self.generation or result.get("type") != "result":
-                self.interrupt()
+                self.interrupt(delivery_status="failed")
                 return {"status": "failed", "code": "audio_provider_or_obsolete_response"}
             if self.state == "transcribing":
                 text = result.get("text")
@@ -253,6 +267,7 @@ class VoiceHost:
                 return {"status": "transcribed", "text": text}
             pcm = decode_pcm(result.get("pcm"), OUTPUT_BYTES)
             self.device.play(pcm)
+            self._delivery("playing")
             self.state = "speaking"
             return {
                 "status": "playback_started",
@@ -268,14 +283,18 @@ class VoiceHost:
                 self.state = "idle"
                 return result
             text = result["text"]
+            self.delivery = (self.text_host.turn_id, self.generation)
             # Preserve the complete text answer; never truncate or summarize it with another brain.
             if len(text) > 2000:
+                self._delivery("text_only")
                 self.state = "idle"
                 return {"status": "text_only", "code": "speech_text_limit", "text": text}
+            self._delivery("preparing")
             self._audio("speak", text=text, voice=self.voice)
             return {"status": "answered", "text": text}
         if self.state == "speaking" and not self.device.active:
             self.device.stop()
+            self._delivery("failed" if self.device.error else "completed")
             self.state = "idle"
             return {
                 "status": "failed" if self.device.error else "playback_finished",

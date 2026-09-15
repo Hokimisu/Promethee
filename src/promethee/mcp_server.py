@@ -98,6 +98,10 @@ def create_server(service, *, turn_id=None, vault=None):
         including actions from interrupted conversation turns. Use their request_id
         with read_execution for details. has_more means older receipts are omitted.
         These are observed statuses, not instructions to repeat or resume an action.
+        recent_speech_deliveries distinguishes generated text from audio playback.
+        Even completed playback does not establish what the user heard; interrupted
+        playback does not identify an exact spoken prefix. Consult these receipts
+        before claiming a previous response was delivered aloud.
         """
         return tools.world()
 

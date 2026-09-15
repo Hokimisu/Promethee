@@ -136,6 +136,73 @@ def test_recording_to_same_history_and_playback(tmp_path):
     host.interrupt()
 
 
+def receipt(host):
+    return host.text_host.store.service.get_world(include_executions=True)[
+        "recent_speech_deliveries"
+    ]["items"][0]["delivery"]
+
+
+@pytest.mark.parametrize(
+    "ending", ["completed", "interrupted", "failed", "restart", "preparing-stop"]
+)
+def test_delivery_receipt_survives_and_never_claims_heard_words(tmp_path, ending):
+    host, reasoning, audio, _ = setup(tmp_path)
+    host.text("Read this response")
+    answer(reasoning[0])
+    host.poll()
+    assert receipt(host)["status"] == "preparing"
+    if ending == "preparing-stop":
+        host.interrupt()
+    else:
+        audio_answer(audio[0], pcm=base64.b64encode(PCM).decode())
+        host.poll()
+        assert receipt(host)["status"] == "playing"
+        if ending == "restart":
+            # Simulated crash: stop the device without issuing a terminal receipt.
+            host.device.stop()
+            ConversationStore(host.text_host.store.service).recover()
+        elif ending == "interrupted":
+            host.interrupt()
+        else:
+            host.device.active = False
+            host.device.error = "speaker_underflow" if ending == "failed" else None
+            host.poll()
+    result = receipt(host)
+    assert result["status"] == (
+        "interrupted" if ending in {"restart", "preparing-stop"} else ending
+    )
+    assert result["playback_started"] == (ending != "preparing-stop")
+    assert result["heard_by_user"] is None and result["heard_text"] is None
+    service = host.text_host.store.service
+    reopened = ExecutionService(Runtime(service.runtime.path, create=False))
+    assert (
+        reopened.get_world(include_executions=True)["recent_speech_deliveries"]["items"][0][
+            "delivery"
+        ]
+        == result
+    )
+    assert service.events() == []
+
+
+def test_delivery_generation_terminal_guard_and_source_status(tmp_path):
+    host, reasoning, audio, _ = setup(tmp_path)
+    host.text("Speak")
+    answer(reasoning[0])
+    host.poll()
+    store = host.text_host.store
+    turn, generation = host.delivery
+    with pytest.raises(ActionError, match="generation"):
+        store.speech_delivery(turn, "other-generation", "playing")
+    with pytest.raises(ActionError, match="transition"):
+        store.speech_delivery(turn, generation, "completed")
+    audio[0].result = {"type": "error"}
+    host.poll()
+    assert receipt(host)["status"] == "failed"
+    with pytest.raises(ActionError, match="terminal"):
+        store.speech_delivery(turn, generation, "playing")
+    assert store.speech_delivery(turn, generation, "failed") == receipt(host)
+
+
 @pytest.mark.parametrize(
     "stage", ["listening", "transcribing", "thinking", "synthesizing", "speaking"]
 )

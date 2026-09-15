@@ -17,7 +17,7 @@ ou créer un monde vide sans corps avec `promethee --data-dir CHEMIN_SESSION ini
 Pour ajouter la mémoire, initialiser un coffre neuf selon le [guide mémoire](memory.md),
 puis ajouter `--vault CHEMIN_COFFRE` à `chat`. Les anciennes sessions non classées
 peuvent converser mais ne sont pas admissibles à cette mémoire.
-Une base existante doit être au schéma 10 ; arrêter ses processus avant d'appliquer
+Une base existante doit être au schéma 11 ; arrêter ses processus avant d'appliquer
 la [migration explicite](contracts.md). Installer l'extra `agent` dans le Python
 de Promethee et utiliser l'installation Hermes 0.20.5 qualifiée ci-dessous.
 Pour l'API, configurer `PROMETHEE_OPENAI_API_KEY` localement, sans la mettre dans

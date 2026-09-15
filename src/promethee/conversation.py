@@ -35,6 +35,21 @@ class ConversationStore:
     def recover(self):
         """A replacement exclusive host discards pending calls without resubmission."""
         with self.service._transaction() as (conn, _):
+            for turn_id, data in conn.execute(
+                "SELECT turn_id,data FROM conversation_turns"
+            ).fetchall():
+                record = json.loads(data)
+                delivery = record.get("speech_delivery")
+                if delivery and delivery["status"] in {"preparing", "playing"}:
+                    delivery.update(
+                        status="interrupted",
+                        reason="host_restarted",
+                        updated_at=timestamp(self.service.clock()),
+                    )
+                    conn.execute(
+                        "UPDATE conversation_turns SET data=? WHERE turn_id=?",
+                        (encode(record), turn_id),
+                    )
             conn.execute(
                 "UPDATE conversation_turns SET status='interrupted' WHERE status='running'"
             )
@@ -91,6 +106,7 @@ class ConversationStore:
             "message": message,
             "created_at": timestamp(now),
             "trigger": trigger,
+            "speech_delivery": None,
         }
         conn.execute("UPDATE conversation_turns SET status='interrupted' WHERE status='running'")
         conn.execute(
@@ -152,6 +168,51 @@ class ConversationStore:
             world["revision"] += 1
             conn.execute("UPDATE world SET data=? WHERE id=1", (encode(world),))
         return result["text"]
+
+    def speech_delivery(self, turn_id, generation, status):
+        """Trusted audio host receipt; never asserts which words a listener heard."""
+        allowed = {"preparing", "playing", "completed", "interrupted", "failed", "text_only"}
+        if (
+            status not in allowed
+            or not isinstance(generation, str)
+            or not 1 <= len(generation) <= 128
+        ):
+            raise ValueError("Invalid speech delivery receipt.")
+        with self.service._transaction() as (conn, now):
+            turn_status, record = self._record(conn, turn_id)
+            if turn_status != "completed":
+                raise ActionError("Only a completed text response has speech delivery.")
+            previous = record.get("speech_delivery")
+            if previous:
+                if previous["generation"] != generation:
+                    raise ActionError("Speech generation does not match this response.")
+                if previous["status"] == status:
+                    return previous
+                if previous["status"] not in {"preparing", "playing"}:
+                    raise ActionError("Speech delivery is already terminal.")
+                transitions = {
+                    "preparing": {"playing", "interrupted", "failed"},
+                    "playing": {"completed", "interrupted", "failed"},
+                }
+                if status not in transitions[previous["status"]]:
+                    raise ActionError("Invalid speech delivery transition.")
+            elif status not in {"preparing", "text_only"}:
+                raise ActionError("Speech must be registered before playback.")
+            delivery = {
+                "generation": generation,
+                "status": status,
+                "updated_at": timestamp(now),
+                "playback_started": status == "playing"
+                or bool(previous and previous["playback_started"]),
+                "heard_by_user": None,
+                "heard_text": None,
+                "source": "chained-voice-diagnostic",
+            }
+            record["speech_delivery"] = delivery
+            conn.execute(
+                "UPDATE conversation_turns SET data=? WHERE turn_id=?", (encode(record), turn_id)
+            )
+            return delivery
 
     def abort(self, turn_id, *, status="failed"):
         """Close only this call; preserve user input and never cancel the body."""

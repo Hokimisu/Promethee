@@ -113,6 +113,20 @@ Une seule exécution peut être active. Une nouvelle mutation concurrente reçoi
 
 Les cinq derniers états sont terminaux. Les événements paginés portent `seq`, `kind`, `recorded_at` et l'exécution, contenant sa requête, sa session de contrôleur et sa provenance. Une observation reçue est conservée avec `observed_at`. Les événements, le résultat et le monde sont écrits dans la même transaction.
 
+## Diffusion vocale
+
+Le schéma 11 ajoute `speech_delivery` dans les enregistrements de conversation.
+La migration sauvegarde d'abord la base, préserve les messages et initialise
+ce champ à `null` : les anciens textes ne prouvent aucune diffusion audio.
+Le seul hôte vocal peut enregistrer préparation, lecture, fin ou interruption
+pour une réponse texte terminée et sa génération audio. Un retour d'une autre
+génération ou la réouverture d'un résultat terminal est refusé.
+
+Le pont `read_world` expose jusqu'à huit comptes rendus récents dans
+`recent_speech_deliveries`, séparément des exécutions corporelles. Ces lectures
+ne modifient ni le corps ni l'historique natif. Les états et limites sont décrits
+dans le [contrat vocal](voice.md). Un compte rendu ne prouve pas les mots entendus.
+
 ## Pilote et observations
 
 Le schéma 10 ajoute `appearance`, nul tant qu'aucune pose d'apparence préparée

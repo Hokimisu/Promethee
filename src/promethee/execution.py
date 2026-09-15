@@ -163,6 +163,20 @@ class ExecutionService:
                     ],
                     "has_more": len(rows) > 8,
                 }
+                deliveries = conn.execute(
+                    "SELECT data FROM conversation_turns "
+                    "WHERE json_type(data, '$.speech_delivery')='object' "
+                    "ORDER BY json_extract(data, '$.speech_delivery.updated_at') DESC, "
+                    "seq DESC LIMIT 9"
+                ).fetchall()
+                world["recent_speech_deliveries"] = {
+                    "items": [
+                        {"turn_id": record["turn_id"], "delivery": record["speech_delivery"]}
+                        for (data,) in deliveries[:8]
+                        for record in [json.loads(data)]
+                    ],
+                    "has_more": len(deliveries) > 8,
+                }
             return world
 
     def get(self, request_id):

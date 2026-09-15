@@ -155,7 +155,7 @@ def test_v2_upgrade_preserves_origin_revision_and_adds_execution_storage(tmp_pat
             conn.execute(f"DROP TABLE {table}")
     before = contents(path)
     backup = tmp_path / "before-v3.sqlite3"
-    assert migrate(path, backup)["schema_version"] == 10
+    assert migrate(path, backup)["schema_version"] == 11
     assert contents(backup) == before
     world = Runtime(path).require_session()
     assert world["revision"] == 7
@@ -184,8 +184,8 @@ def test_v9_migration_does_not_invent_an_appearance(tmp_path, articulated_pose, 
             migrate(path, backup)
         assert contents(path) == before
     else:
-        assert migrate(path, backup)["schema_version"] == 10
-        assert Runtime(path).snapshot() == {**old, "schema_version": 10, "appearance": None}
+        assert migrate(path, backup)["schema_version"] == 11
+        assert Runtime(path).snapshot() == {**old, "schema_version": 11, "appearance": None}
     assert contents(backup) == before
 
 

@@ -192,7 +192,7 @@ def test_v8_migration_preserves_logical_objects_without_inventing_spatial_data(t
         with sqlite3.connect(path) as conn:
             assert json.loads(conn.execute("SELECT data FROM world").fetchone()[0]) == old
     else:
-        assert migrate(path, backup)["schema_version"] == 10
-        assert Runtime(path).snapshot() == {**old, "schema_version": 10, "appearance": None}
+        assert migrate(path, backup)["schema_version"] == 11
+        assert Runtime(path).snapshot() == {**old, "schema_version": 11, "appearance": None}
     with sqlite3.connect(backup) as conn:
         assert json.loads(conn.execute("SELECT data FROM world").fetchone()[0]) == old
