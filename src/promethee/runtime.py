@@ -18,11 +18,13 @@ def encode(value):
 
 
 class Runtime:
-    def __init__(self, path, *, data_origin=None):
+    def __init__(self, path, *, data_origin=None, create=True):
         if data_origin not in (None, "fixture", "session"):
             raise ValueError("New worlds must have fixture or session origin.")
         self.path = Path(path)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.create = create
+        if create:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.connection() as conn:
             conn.execute("BEGIN IMMEDIATE")
             exists = conn.execute(
@@ -34,6 +36,8 @@ class Runtime:
                 if data_origin is not None and state["data_origin"] != data_origin:
                     raise ValueError("Existing world's data origin cannot be changed.")
                 return
+            if not create:
+                raise ValueError("The database does not contain a Promethee world.")
             conn.execute("CREATE TABLE world (id INTEGER PRIMARY KEY CHECK(id=1), data TEXT)")
             conn.execute("""CREATE TABLE commands (
                     seq INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -59,7 +63,8 @@ class Runtime:
 
     @contextmanager
     def connection(self):
-        conn = sqlite3.connect(self.path, timeout=10)
+        target = self.path if self.create else self.path.resolve().as_uri() + "?mode=rw"
+        conn = sqlite3.connect(target, timeout=10, uri=not self.create)
         try:
             with conn:
                 yield conn

@@ -6,7 +6,7 @@ Un avatar IA doté d'un corps, d'une mémoire et de capacités d'action dans un 
 
 Le projet fournit un espace que l'avatar peut percevoir et modifier, des objets utilisables et une mémoire consultable dans Obsidian. Un agent peut former et réviser ses intentions ; le monde lui renvoie ce qui s'est effectivement passé. Aucun scénario de vie, routine ou préférence d'objet n'est prescrit.
 
-**État actuel : socle local et premier pilote cinématique ARDY.** La démonstration reste une fixture déterministe dans un monde logique. Le rendu optionnel permet désormais un pilotage manuel du squelette avec progression et arrêt confirmés. La [qualification T07](docs/motion-validation.md) reste en cours : postures et contacts présentent encore des défauts mesurés. La voix et Hermes restent à intégrer. Aucun appel réseau, aucune clé API et aucun GPU ne sont nécessaires pour lancer le socle logique.
+**État actuel : socle local et premier pilote cinématique ARDY.** La démonstration reste une fixture déterministe dans un monde logique. Le rendu optionnel permet un pilotage manuel du squelette avec progression et arrêt confirmés. La [qualification T07](docs/motion-validation.md) reste en cours : plusieurs déplacements échouent aux contrôles de contact. Le [pont MCP](docs/hermes-setup.md) est reconnu par Hermes ; la conversation avec Astra et la voix restent à intégrer. Aucun appel réseau, aucune clé API et aucun GPU ne sont nécessaires pour lancer le socle logique.
 
 ## Essayer
 
@@ -50,12 +50,13 @@ Cette commande réalise une transition instantanée, sans activité préécrite 
 | Actions validées et identifiants de requête idempotents | Exécutable |
 | Plan sauvegardé, pause, reprise après redémarrage | Exécutable |
 | Origine des données, révisions et migration sauvegardée | Exécutable ; séparation fixture / session / legacy |
-| Suivi asynchrone, annulation et récupération du corps | API CPU et contrôleur de test ; pilote 3D encore à intégrer |
+| Suivi asynchrone, annulation et récupération du corps | API CPU et pilote ARDY ; arrêt et reprise vérifiés |
 | Catalogue logique chaise / pancarte / doudou / lit / TV | Exécutable ; les usages lit/TV sont à implémenter |
 | Journal Markdown lisible dans Obsidian | Export exécutable ; recherche mémoire à connecter |
 | Contrôles automatiques et tests de comportement | Fournis |
-| Astra dans Hermes, voix GPT-Live | Architecture proposée ; adaptateurs à développer |
-| ARDY Core et rendu Viser | Modèle réel qualifié ; monde et squelette visibles en lecture seule ; contrôleur et contacts à intégrer |
+| Pont d'outils Hermes | MCP stdio vérifié ; conversation Astra et voix à raccorder |
+| ARDY Core et rendu Viser | Pilotage cinématique manuel ; qualification des déplacements incomplète |
+| Apparence anime en VRM | Asset pixiv importé et licence vérifiée ; animation à raccorder |
 | Initiative autonome et services externes | Jalons ultérieurs |
 
 ## Architecture cible
@@ -105,6 +106,8 @@ docs/            Vision, architecture, contrats et jalons
 - [Feuille de route et critères d'acceptation](docs/roadmap.md)
 - [Plan d'implémentation pour le développeur](docs/implementation-plan.md)
 - [Avancement vérifié des tickets](docs/progress.md)
+- [Pont Hermes et accès au modèle](docs/hermes-setup.md)
+- [Provenance de l'avatar VRM](docs/assets/pixiv-vrm-sample.md)
 - [Contribuer](CONTRIBUTING.md)
 - [Instructions pour les agents de développement](AGENTS.md)
 

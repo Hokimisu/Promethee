@@ -13,10 +13,14 @@ dependencies = []
 
 [project.optional-dependencies]
 viewer = ["numpy==2.4.6", "viser @ git+https://github.com/nv-tlabs/kimodo-viser.git@7c82ad8f8640bad9dff8ded5c5eee908eeb08f11"]
+agent = [
+    "mcp==2.0.0",
+]
 
 [project.scripts]
 promethee = "promethee.cli:main"
 promethee-view = "promethee.viewer:main"
+promethee-mcp = "promethee.mcp_server:main"
 
 [dependency-groups]
 dev = ["pytest>=8,<10", "ruff>=0.12,<1"]

@@ -1,6 +1,6 @@
 # Contrats exécutables — monde version 4
 
-Ces exemples décrivent l'API Python locale. Le rendu utilise HTTP/WebSocket sur l'interface de boucle locale. `run` propose des boutons de pilotage qui passent par le service d'exécution ; aucune API REST d'action ni MCP n'est encore livrée.
+Ces exemples décrivent l'API Python locale. Le rendu utilise HTTP/WebSocket sur l'interface de boucle locale. `run` propose des boutons de pilotage qui passent par le service d'exécution. Le [pont MCP stdio](hermes-setup.md) expose cinq opérations de ce même service ; aucune API REST d'action n'est livrée.
 
 ## Pilotage manuel
 
@@ -73,6 +73,10 @@ La pause des plans intervient entre deux actions logiques instantanées. Les pla
 Le snapshot comporte aussi `data_origin` (`fixture`, `session`, `legacy`) et `revision`. La révision augmente uniquement lors d'une modification effective du monde, dans la même transaction. Les lectures, rejets, actions sans effet et retransmissions ne l'augmentent pas.
 
 `Runtime(path)` crée un monde `fixture` lorsqu'il n'existe pas ; `Runtime(path, data_origin="session")` crée explicitement une session vide. Rouvrir une base conserve son origine ; une origine explicitement différente est refusée. `require_session()` refuse les données `fixture` et `legacy`. Les commandes logiques et plans de démonstration refusent les mondes `session`, qui attendent le contrôleur du corps.
+
+`Runtime(path, create=False)` ouvre uniquement une base existante contenant un
+monde à jour, sans créer de dossier ni initialiser un fichier SQLite vide. Le
+serveur MCP utilise cette option et exige ensuite `require_session()`.
 
 ## Migration explicite
 
