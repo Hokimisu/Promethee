@@ -59,7 +59,47 @@ invalider les décisions dépassées avant soumission d'une action. Une reconnex
 ne doit pas rejouer silencieusement les travaux. Les comptes rendus de lecture
 restent distincts des résultats du cerveau et des résultats corporels.
 
-Restent à implémenter et vérifier : ce raccord au même hôte Hermes, le transport
+## Processus de transport
+
+`src/promethee/live_worker.py` s'exécute avec l'environnement séparé ci-dessus.
+Il ne charge ni Hermes ni le contrôleur et n'ouvre aucun périphérique audio :
+
+```sh
+.local/openai-live-env/Scripts/python.exe -X utf8 src/promethee/live_worker.py --model gpt-live-1 --voice marin --max-seconds 120
+```
+
+L'accès distant utilise uniquement `PROMETHEE_OPENAI_API_KEY`, vers l'endpoint
+officiel. L'entrée et la sortie sont des événements JSON, un par ligne. Le parent
+attend `session.started`, draine continuellement la sortie et cadence le PCM à
+24 kHz. Chaque bloc d'entrée doit contenir au plus une seconde de PCM16 mono.
+La file d'entrée contient au plus huit événements ; une ligne dépassant
+1 Mio ou une commande invalide déclenche la fermeture. Les append de contexte
+acceptent au plus 4 000 octets UTF-8 ; le parent doit aussi respecter les
+500 tokens du service, cette limite en octets n'étant pas un comptage de tokens.
+
+La fin de l'entrée, `session.close` ou la durée maximale déclenche une fermeture
+explicite. Le processus attend jusqu'à 15 secondes le bilan `session.closed` :
+une durée d'usage finie et non négative ainsi qu'une fermeture normale sont
+nécessaires pour sortir avec succès. Une erreur, un bilan absent ou une coupure
+sort avec le code 1 ; une clé absente avec le code 2. Les messages d'erreur du
+fournisseur ne sont pas recopiés, car ils peuvent contenir des données privées.
+Le parent doit garder une échéance et pouvoir tuer le processus si ses propres
+canaux sont bloqués. Il n'y a ni reconnexion ni rejeu automatique.
+
+Qualification du processus réel, avec serveur WebSocket local et clé factice :
+
+```sh
+.local/openai-live-env/Scripts/python.exe -X utf8 experiments/agent/qualify_live_worker.py --output .local/essai-live-worker-neuf
+```
+
+L'essai `.local/live-worker-qualification-01` a vérifié sous Windows l'échange
+PCM et le retour au même ID opaque, la fermeture sur fin d'entrée, le rejet
+d'une commande mal formée, la coupure réseau, le bilan sans usage et l'expiration
+de l'attente finale. Chacun des cinq cas ouvre une seule connexion. Le mode
+`--test-url` refuse toute adresse hors `ws://127.0.0.1:<port>/v1` et emploie
+toujours une clé factice, même si une clé de compte existe dans l'environnement.
+
+Restent à implémenter et vérifier : le raccord au même hôte Hermes, le transport
 audio continu avec coupure des buffers, la gestion des corrections et la reprise
 de contexte. Restent ensuite à qualifier avec le compte : accès effectif,
 conversation française, latence, coût, périphériques et mouvements réels.
