@@ -227,6 +227,10 @@ Ajouter à ce stade une commande cible `run` pour ouvrir explicitement une sessi
 
 ## T08 — Donner des usages vérifiables aux objets
 
+Préparation livrée : [portée géométrique du bras Core](arm-reaching.md), avec
+douze essais locaux et inspection VRM d'une cible haute. Ce calcul n'est pas
+une prise et n'est pas exposé au contrôleur. T08 reste ouvert.
+
 **À modifier :** catalogue, validation, contrôleur et rendu.
 **À créer :** tests des interactions et fiche de provenance pour chaque asset introduit.
 
