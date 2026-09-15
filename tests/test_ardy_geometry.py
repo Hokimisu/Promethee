@@ -2,7 +2,22 @@ import math
 
 import pytest
 
-from promethee.ardy_geometry import floor_lift_envelope
+from promethee.ardy_geometry import floor_lift_envelope, floor_settle_offsets
+
+
+def test_posture_grounding_removes_float_and_penetration_without_an_envelope():
+    heights = [0.008, 0.004, -0.003, -0.001]
+    offsets = floor_settle_offsets(heights)
+    assert offsets == pytest.approx([-0.008, -0.004, 0.003, 0.001])
+    assert [h + o for h, o in zip(heights, offsets, strict=True)] == [0.0] * 4
+
+
+@pytest.mark.parametrize(
+    "heights", [[], [math.nan], [math.inf], [0.051], [-0.051], [0, 0.016], [0, -0.016]]
+)
+def test_posture_grounding_refuses_large_or_abrupt_adjustments(heights):
+    with pytest.raises(ValueError):
+        floor_settle_offsets(heights)
 
 
 def test_lift_anticipates_and_leaves_a_peak_without_cutting_through_floor():

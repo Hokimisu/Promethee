@@ -50,7 +50,9 @@ def main():
         ),
         encoding="utf-8",
     )
-    service = ExecutionService(Runtime(args.output / "world.sqlite3", data_origin="session"))
+    service = ExecutionService(
+        Runtime(args.output / "world.sqlite3", data_origin="session", session_kind="qualification")
+    )
     worker = start_ardy_process(
         python=args.ardy_python,
         checkpoint_root=args.checkpoint_root,

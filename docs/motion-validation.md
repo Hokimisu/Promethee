@@ -295,6 +295,54 @@ La fiabilité directionnelle, la revue complète des vidéos et la correction de
 pics de glissement du maillage restent à résoudre. Le nouveau rejet les expose
 mais ne constitue pas une correction de la marche.
 
-L'[avatar anime](assets/pixiv-vrm-sample.md) suit les mouvements enregistrés dans
-une vue séparée en lecture seule. Les interactions corporelles avec objets,
-la conversation Hermes/Astra, la mémoire d'agent et la voix restent à livrer.
+L'[avatar anime](assets/pixiv-vrm-sample.md) dispose désormais d'une
+[session interactive](live-avatar.md) et d'interactions cinématiques avec deux
+géométries d'objet. Le raccord réel à Astra et à la voix reste à qualifier.
+
+## Correction de hauteur pour les postures
+
+L'essai hors pilote [signed_grounding_trial.py](../experiments/motion/signed_grounding_trial.py)
+reprend les dix enregistrements des séries 09–10, désormais utilisés comme
+calibration. Une translation verticale signée amène le sommet Core le plus
+bas au sol à chaque image. Elle conserve les rotations, les longueurs et les
+coordonnées XZ. Les sources, empreintes, corrections et mesures avant/après
+sont conservées dans `.local/signed-grounding-calibration-01`.
+
+Les quatre postures passent les limites de glissement après cette correction,
+avec un contact de surface sur leurs 120 images. Les quatre déplacements
+échouent toujours : maxima respectifs 1,854, 2,830, 2,513 et 0,810 m/s.
+L'un d'eux exige également un pas vertical de 17,44 mm, au-delà des 15 mm
+autorisés. Poser un pied qui flottait peut révéler son glissement ; ce n'est
+donc pas une correction suffisante de la marche.
+
+Le pilote applique cette translation signée uniquement aux commandes de
+posture. Il refuse une correction absolue supérieure à 5 cm ou un changement
+supérieur à 15 mm par image ; il ne lisse pas le rejet en maintenant le corps
+au-dessus du sol. Le raccord à la pose initiale et tous les autres contrôles
+restent actifs. L'initialisation et les déplacements conservent leur traitement
+précédent. Les observations d'objets tenus suivent la pose corrigée du corps.
+
+Deux nouvelles séries réelles, graines 2001–2005 et 2101–2105, ont été lancées
+après cette décision. Les mondes de ces essais sont explicitement marqués
+`session_kind: qualification` et restent exclus de la mémoire personnelle.
+
+| Série / posture | Surface en contact | Glissement max / P95 (m/s) | Résultat |
+|---|---:|---:|---|
+| 11 / bras levés | 120 / 120 images | 0,06534 / 0,02032 | Terminé, 9,08 s |
+| 11 / debout | 120 / 120 images | 0,03776 / 0,02576 | Terminé, 8,73 s |
+| 12 / bras levés | 120 / 120 images | 0,08449 / 0,06174 | Refusé avant lecture : P95 > 0,05 |
+| 12 / debout | 120 / 120 images | 0,04651 / 0,03540 | Terminé, 8,58 s |
+
+Les erreurs de hauteur de surface sont inférieures à 4 × 10⁻⁹ m sur ces quatre
+postures. Cela supprime le flottement Core observé sans certifier une force
+d'appui ni l'équilibre. Les déplacements terminent 0 / 2 dans la série 11 et
+1 / 2 dans la série 12 ; leur algorithme n'a pas changé. Le mouvement accepté
+de la série 12 ne constitue pas une nouvelle validation générale de la marche.
+
+La vidéo `.local/video-posture-grounding-11/motion.mp4` conserve les 120 images
+du vrai maillage, à 20 Hz et sans correction supplémentaire du rendu. La lecture
+a été vérifiée dans le navigateur, avec inspection du départ, du milieu et de
+l'arrivée : le corps reste debout et les bras arrivent au-dessus de la tête.
+Les chaussures du VRM ont une autre morphologie ; cette mesure Core ne prouve
+pas leur contact. T07 reste ouvert pour le glissement, la marche et les appuis
+de l'apparence finale.

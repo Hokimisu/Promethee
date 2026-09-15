@@ -17,6 +17,19 @@ def floor_lift_envelope(required, max_step=0.015):
     return values
 
 
+def floor_settle_offsets(heights):
+    """Signed posture grounding; refuse excessive corrections instead of floating above them."""
+    values = list(heights)
+    if not values or any(not math.isfinite(value) for value in values):
+        raise ValueError("A nonempty finite mesh-height sequence is required.")
+    offsets = [-value for value in values]
+    if max(abs(value) for value in offsets) > 0.05:
+        raise ValueError("Required floor correction exceeds the calibrated 5 cm envelope.")
+    if any(abs(a - b) > 0.015 + 1e-9 for a, b in zip(offsets, offsets[1:], strict=False)):
+        raise ValueError("Required posture floor correction exceeds 15 mm per frame.")
+    return offsets
+
+
 def continue_from_pose(values, initial, skeleton, fade_frames=16):
     """Fade the initial local-rotation/root error into the original ARDY trajectory.
 
@@ -80,31 +93,44 @@ def posture_goal(skeleton, skin, initial_rotations, initial_positions, heading, 
     return points, rotations
 
 
-def ground_motion(values, skin):
-    """Lift whole poses only enough to clear the actual skin; preserve XZ and rotations.
+def ground_motion(values, skin, *, settle=False):
+    """Ground actual skin while preserving XZ and rotations.
 
     `values` contains one unbatched trajectory, modified in place. The caller saves
-    the original separately. This does not solve balance or horizontal sliding.
+    the original separately. Postures may settle downward with explicit magnitude
+    and step limits; locomotion retains its nonnegative lift envelope. This does
+    not solve balance or horizontal sliding.
     """
     import numpy as np
     import torch
 
     points, rotations = values["posed_joints"], values["global_rot_mats"]
-    lifts = []
+    heights = []
     with torch.inference_mode():
         for joints, matrices in zip(points, rotations, strict=True):
             mesh = skin.skin(
                 torch.from_numpy(matrices[None]), torch.from_numpy(joints[None]), rot_is_global=True
             )
-            lifts.append(max(0.0, -float(mesh[..., 1].min())))
-    lift = np.asarray(floor_lift_envelope(lifts), dtype=points.dtype)
+            heights.append(float(mesh[..., 1].min()))
+    lift = np.asarray(
+        floor_settle_offsets(heights)
+        if settle
+        else floor_lift_envelope([max(0.0, -height) for height in heights]),
+        dtype=points.dtype,
+    )
     if not np.isfinite(lift).all() or lift.max() > 0.05:
         raise ValueError("Required floor correction exceeds the calibrated 5 cm envelope.")
     points[:, :, 1] += lift[:, None]
     values["root_positions"][:, 1] += lift
     return {
-        "max_lift_m": float(lift.max()),
-        "first_lift_m": float(lift[0]),
+        "max_lift_m": max(0.0, float(lift.max())),
+        "first_lift_m": max(0.0, float(lift[0])),
+        "max_lower_m": max(0.0, -float(lift.min())),
+        "first_lower_m": max(0.0, -float(lift[0])),
         "max_lift_step_m": float(np.abs(np.diff(lift)).max()) if len(lift) > 1 else 0.0,
-        "method": "positive-Y whole-body Core mesh-floor projection with 15 mm/frame envelope",
+        "method": (
+            "signed whole-body Core posture grounding, bounded to 5 cm and 15 mm/frame"
+            if settle
+            else "positive-Y whole-body Core mesh-floor projection with 15 mm/frame envelope"
+        ),
     }
