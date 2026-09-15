@@ -10,7 +10,7 @@ from pathlib import Path
 from websockets.asyncio.server import serve
 
 
-async def main(output):
+async def main(output, mode):
     done = asyncio.get_running_loop().create_future()
     report = {"connections": 0, "audio_chunks": 0, "results": [], "audio_times": []}
 
@@ -38,6 +38,22 @@ async def main(output):
                     report["audio_chunks"] += 1
                     report["audio_times"].append(time.monotonic() - started)
                     if report["audio_chunks"] == 1:
+                        if mode == "expired":
+                            await asyncio.sleep(0.1)
+                            await socket.send(
+                                json.dumps(
+                                    {
+                                        "type": "session.closed",
+                                        "event_id": "expired-1",
+                                        "reason": "expired",
+                                        "session": {"id": "live-session-fixture"},
+                                        "usage": {"seconds": 0.02},
+                                    }
+                                )
+                            )
+                            await socket.wait_closed()
+                            done.set_result(None)
+                            return
                         for fragment in [
                             {
                                 "type": "session.input_transcript.delta",
@@ -133,4 +149,6 @@ async def main(output):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--report", type=Path, required=True)
-    asyncio.run(main(parser.parse_args().report))
+    parser.add_argument("--mode", choices=["exchange", "expired"], default="exchange")
+    args = parser.parse_args()
+    asyncio.run(main(args.report, args.mode))

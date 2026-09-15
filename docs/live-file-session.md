@@ -27,6 +27,12 @@ Un bilan manquant reste inconnu, jamais assimilé à zéro coût. En cas d'erreu
 les processus sont arrêtés et le rapport indique l'échec ; la finalisation
 distante peut alors rester non confirmée. Aucun rejeu ni reconnexion automatiques.
 
+`input_samples` compte les échantillons mis en file vers le processus, pas une
+confirmation de leur réception par le service. Un résultat Hermes porte
+`delivery: queued` lorsqu'il est mis en file, ou `not_sent_transport_closed`
+si l'entrée s'est fermée pendant le calcul. Aucun de ces états ne prouve des
+mots entendus. Les sorties du processus sont également consignées avec leur code.
+
 L'envoi de blocs de 480 échantillons tourne indépendamment des démarrages et
 arrêts de Hermes. Les files de communication sont bornées ; une saturation
 échoue explicitement. Le processus enfant et ses lecteurs/rédacteurs sont
@@ -60,6 +66,27 @@ absent ou associé à une autre session. 399 tests passent, deux sont ignorés.
 Les dépendances SDK ont également été réinstallées dans un environnement neuf,
 depuis `experiments/agent/live-requirements.lock`, avec vérification des empreintes.
 Les cinq cas de transport y passent (`.local/live-worker-locked-01`).
+
+### Fermeture décidée par le serveur
+
+L'option `--fixture-mode expired` du même script provoque une expiration après
+le premier bloc entrant. Elle n'effectue aucun appel Astra. L'essai
+`.local/live-session-expiry-02` s'est fermé en 3,09 s, avec une connexion,
+zéro tour Hermes, zéro action et un processus sorti avec le code 0. Le bilan
+simulé annonce 0,02 s ; 3 360 échantillons avaient été mis en file côté client.
+Cette différence illustre pourquoi le compteur local ne remplace pas le bilan.
+
+Une erreur d'écriture ne masque plus le bilan final en attente sur la sortie.
+L'entrée audio s'arrête, les décisions Hermes sont invalidées et le lecteur
+attend une fermeture confirmée. À réception du bilan, les commandes encore
+en file sont abandonnées et l'entrée standard du SDK est fermée. Le premier
+essai réel de cette variante recevait le bilan mais le processus ne sortait
+pas proprement ; la fermeture explicite de cette entrée a corrigé le parcours.
+
+Les tests couvrent aussi une réponse Hermes qui finit pendant cette fermeture :
+elle n'est ni envoyée ni rejouée. Un code de sortie non nul, des données mal
+formées ou un événement fournisseur après le bilan restent des échecs, même
+si un bilan d'usage valide les précède.
 
 T11 reste ouvert : périphériques, interruption du son en lecture, reprise du
 contexte vocal, accès au service distant, conversation réelle, latence et coût

@@ -119,7 +119,15 @@ def _run_session(transport, bridge, read_pcm, write_pcm, record, *, duration, cl
             if event is None:
                 break
             kind = event["type"]
+            if kind == "transport.input_closed":
+                if pacers:
+                    pacers[0].close()
+                bridge.close()
+                closing = clock() if closing is None else closing
+                record({"source": "transport", "event": event})
+                continue
             if kind == "transport.exited":
+                record({"source": "transport", "event": event})
                 if event["returncode"] != 0 or receipt is None:
                     raise ValueError("Live worker exited without successful finalization.")
                 return {
@@ -130,6 +138,8 @@ def _run_session(transport, bridge, read_pcm, write_pcm, record, *, duration, cl
                     "elapsed_seconds": clock() - started,
                     "playback_verified": False,
                 }
+            if receipt is not None:
+                raise ValueError("Live provider event arrived after its final receipt.")
             record({"source": "live", "event": event})
             if kind in {"transport.error", "error"}:
                 raise ValueError("Live provider or transport failed.")
@@ -149,6 +159,8 @@ def _run_session(transport, bridge, read_pcm, write_pcm, record, *, duration, cl
                     raise ValueError("Final usage belongs to a different Live session.")
                 receipt = event
                 pacers[0].close()
+                if not getattr(transport, "input_failed", False):
+                    transport.finish(discard=True)
                 bridge.close()
                 closing = clock() if closing is None else closing
             elif closing is None:
@@ -162,11 +174,22 @@ def _run_session(transport, bridge, read_pcm, write_pcm, record, *, duration, cl
                         )
                     )
         if ready and closing is None:
+            if getattr(transport, "input_failed", False):
+                # Drain the final stdout events on the next iteration before
+                # interpreting a concurrent audio-write failure. Launch no work.
+                sleep(0.005)
+                continue
             if pacers[0].error:
                 raise ValueError(pacers[0].error)
             for result in bridge.poll():
-                transport.send(result["event"])
-                record({"source": "hermes", "result": result})
+                delivery = "queued"
+                try:
+                    transport.send(result["event"])
+                except ValueError:
+                    if not getattr(transport, "input_failed", False):
+                        raise
+                    delivery = "not_sent_transport_closed"
+                record({"source": "hermes", "result": result, "delivery": delivery})
         sleep(0.005)
 
 

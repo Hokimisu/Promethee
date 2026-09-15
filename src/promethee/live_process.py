@@ -16,6 +16,7 @@ class LiveProcess:
         self.incoming, self.outgoing = queue.Queue(maxsize=64), queue.Queue(maxsize=8)
         self.stopped, self.read_done = threading.Event(), threading.Event()
         self.error, self.ending, self.exited = None, False, False
+        self.input_failed, self.input_failure_reported = False, False
         self.job = None
         self.process = subprocess.Popen(
             argv,
@@ -79,10 +80,13 @@ class LiveProcess:
                 self.process.stdin.write(payload)
                 self.process.stdin.flush()
         except Exception:
-            self.error = "live_pipe_write_failed"
+            # The peer may have closed input while its final receipt is still
+            # queued on stdout. Keep reading; the session owner checks that
+            # receipt and the process exit rather than assuming success.
+            self.input_failed = True
 
     def send(self, event):
-        if self.ending or self.stopped.is_set():
+        if self.ending or self.input_failed or self.stopped.is_set():
             raise ValueError("Live input is closed.")
         payload = json.dumps(command(event), ensure_ascii=False, allow_nan=False).encode() + b"\n"
         try:
@@ -90,9 +94,16 @@ class LiveProcess:
         except queue.Full as exc:
             raise ValueError("Live input backpressure limit reached.") from exc
 
-    def finish(self):
-        """EOF requests graceful finalization after already queued commands."""
+    def finish(self, *, discard=False):
+        """Send EOF; after provider closure, discard commands it cannot consume."""
         if not self.ending:
+            if discard:
+                self.ending = True
+                while True:
+                    try:
+                        self.outgoing.get_nowait()
+                    except queue.Empty:
+                        break
             self.outgoing.put_nowait(None)
             self.ending = True
 
@@ -102,6 +113,9 @@ class LiveProcess:
         try:
             return self.incoming.get_nowait()
         except queue.Empty:
+            if self.input_failed and not self.input_failure_reported:
+                self.input_failure_reported = True
+                return {"type": "transport.input_closed"}
             code = self.process.poll()
             if code is not None and self.read_done.is_set() and not self.exited:
                 self.exited = True

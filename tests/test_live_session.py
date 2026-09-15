@@ -133,7 +133,9 @@ class Transport:
                 ]
             )
 
-    def finish(self):
+    def finish(self, *, discard=False):
+        if discard:
+            return
         raise AssertionError("Fixture should complete before the duration limit.")
 
 
@@ -171,3 +173,85 @@ def test_incomplete_or_mismatched_final_usage_is_not_success(options):
     count = len(transport.sent)
     time.sleep(0.05)
     assert len(transport.sent) == count  # Input thread stopped despite validation failure.
+
+
+@pytest.mark.parametrize("late_result", [False, True])
+def test_provider_expiry_keeps_final_receipt_despite_inflight_pipe_writes(late_result):
+    script = """
+import json,os,time
+print(json.dumps({'type':'session.started','session':{'id':'fixture-session'}}),flush=True)
+time.sleep(.05)
+os.close(0)
+time.sleep(.05)
+print(json.dumps({'type':'session.closed','reason':'expired',
+ 'session':{'id':'fixture-session'},'usage':{'seconds':.1}}),flush=True)
+"""
+    process = LiveProcess([sys.executable, "-c", script])
+
+    class SlowBridge(Bridge):
+        def poll(self):
+            time.sleep(0.35)
+            return (
+                [
+                    {
+                        "event": {
+                            "type": "session.commentary.append",
+                            "delegation_id": "opaque",
+                            "content": "Late result.",
+                        }
+                    }
+                ]
+                if late_result
+                else []
+            )
+
+    bridge = SlowBridge()
+    events = []
+    try:
+        result = run_session(
+            process, bridge, lambda frames: b"", lambda pcm: None, events.append, duration=5
+        )
+        assert result["reason"] == "expired"
+        assert result["usage"] == {"seconds": 0.1}
+        assert bridge.closed
+        if late_result:
+            assert [e["delivery"] for e in events if e["source"] == "hermes"] == [
+                "not_sent_transport_closed"
+            ]
+    finally:
+        process.close()
+
+
+@pytest.mark.parametrize(
+    "ending",
+    [
+        "raise SystemExit(7)",
+        "print('invalid private trailer',flush=True)",
+        "print(json.dumps({'type':'session.output_audio.delta','delta':'AAA='}),flush=True)",
+    ],
+)
+def test_final_receipt_does_not_hide_worker_failure_or_malformed_trailer(ending):
+    script = (
+        """
+import json,os,time
+print(json.dumps({'type':'session.started','session':{'id':'fixture-session'}}),flush=True)
+time.sleep(.05)
+os.close(0)
+print(json.dumps({'type':'session.closed','reason':'expired',
+ 'session':{'id':'fixture-session'},'usage':{'seconds':.1}}),flush=True)
+"""
+        + ending
+    )
+    process = LiveProcess([sys.executable, "-c", script])
+    try:
+        with pytest.raises(ValueError):
+            run_session(
+                process,
+                Bridge(),
+                lambda frames: b"",
+                lambda pcm: None,
+                lambda event: None,
+                duration=5,
+            )
+    finally:
+        process.close()

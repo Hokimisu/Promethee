@@ -32,6 +32,9 @@ confirmée ; zéro exécution. La [boucle sur fichier audio](live-file-session.m
 est exécutable : un essai de 60 s relie le vrai SDK à Astra, avec serveur Live
 et PCM simulés, une délégation, un bilan final et zéro action. Les périphériques
 et la voix du service distant restent à raccorder et à qualifier.
+Une expiration imposée par le serveur local ferme désormais aussi le vrai SDK
+proprement : bilan conservé, commandes en attente abandonnées, zéro appel Hermes.
+Les erreurs du processus restent distinctes d'une fermeture confirmée.
 
 La branche [codex/execution-receipts-after-interruption](https://github.com/Hokimisu/Promethee/tree/codex/execution-receipts-after-interruption)
 rend les huit résultats d'exécution les plus récemment mis à jour consultables

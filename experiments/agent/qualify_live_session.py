@@ -20,6 +20,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ("output", "live-python", "hermes-python", "hermes-root", "hermes-auth-root"):
         parser.add_argument("--" + name, type=Path, required=True)
+    parser.add_argument("--fixture-mode", choices=["exchange", "expired"], default="exchange")
     args = parser.parse_args()
     output = args.output.resolve()
     output.mkdir(exist_ok=False)
@@ -43,6 +44,8 @@ def main():
             str(source),
             "--report",
             str(output / "server.json"),
+            "--mode",
+            args.fixture_mode,
         ]
     )
     try:
@@ -108,17 +111,21 @@ def main():
             time.sleep(0.02)
         with runtime.connection() as conn:
             assert conn.execute("SELECT count(*) FROM executions").fetchone()[0] == 0
+            expected_turns = 1 if args.fixture_mode == "exchange" else 0
             assert (
                 conn.execute(
                     "SELECT count(*) FROM conversation_turns WHERE status='completed'"
                 ).fetchone()[0]
-                == 1
+                == expected_turns
             )
         report = json.loads((output / "session/report.json").read_text())
         wire = json.loads((output / "server.json").read_text())
-        assert report["input_samples"] == wire["audio_chunks"] * 480
-        assert report["output_samples"] == 480
-        assert (output / "session/output.pcm").stat().st_size == 960
+        if args.fixture_mode == "exchange":
+            assert report["input_samples"] == wire["audio_chunks"] * 480
+        else:
+            assert report["reason"] == "expired"
+        assert report["output_samples"] == expected_turns * 480
+        assert (output / "session/output.pcm").stat().st_size == expected_turns * 960
         print(
             json.dumps(
                 {"report": report, "results": wire["results"], "connections": wire["connections"]},
