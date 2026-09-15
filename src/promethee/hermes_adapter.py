@@ -20,7 +20,30 @@ MEMORY_TOOLS = frozenset(
 )
 
 
-def create_agent(*, model, api_key, base_url, api_mode, session_id, memory_enabled=False):
+CODEX_BASE_URL = "https://chatgpt.com/backend-api/codex"
+
+
+def resolve_hermes_codex_credentials(*, model, base_url, api_mode):
+    """Use Hermes' existing profile authentication; never export credentials."""
+    if base_url != CODEX_BASE_URL or api_mode != "codex_responses":
+        raise ValueError("Hermes ChatGPT authentication requires its official Codex endpoint.")
+    from hermes_cli.runtime_provider import resolve_runtime_provider
+
+    credentials = resolve_runtime_provider(requested="openai-codex", target_model=model)
+    if (
+        credentials.get("provider") != "openai-codex"
+        or credentials.get("api_mode") != api_mode
+        or credentials.get("base_url") != base_url
+        or not isinstance(credentials.get("api_key"), str)
+        or not credentials["api_key"].strip()
+    ):
+        raise ValueError("Hermes resolved a different provider or an unavailable credential.")
+    return credentials
+
+
+def create_agent(
+    *, model, api_key, base_url, api_mode, session_id, memory_enabled=False, provider="openai"
+):
     """Use the installed Hermes loop, with no project context or fallback model.
 
     HERMES_HOME and cwd must already identify the dedicated profile before any
@@ -34,6 +57,10 @@ def create_agent(*, model, api_key, base_url, api_mode, session_id, memory_enabl
         raise ValueError("Explicit provider credentials, model, endpoint and session are required.")
     if api_mode not in {"chat_completions", "codex_responses"}:
         raise ValueError("Use an explicitly verified Hermes API mode.")
+    if provider not in {"openai", "openai-codex"}:
+        raise ValueError("Use an explicitly supported Hermes provider.")
+    if provider == "openai-codex" and (base_url != CODEX_BASE_URL or api_mode != "codex_responses"):
+        raise ValueError("Hermes ChatGPT authentication requires its official Codex endpoint.")
     if type(memory_enabled) is not bool:
         raise ValueError("Memory scope must be explicitly enabled or disabled.")
     expected = WORLD_TOOLS | MEMORY_TOOLS if memory_enabled else WORLD_TOOLS
@@ -45,7 +72,7 @@ def create_agent(*, model, api_key, base_url, api_mode, session_id, memory_enabl
         raise RuntimeError("The dedicated profile differs from its explicit Promethee tool scope.")
     agent = AIAgent(
         model=model,
-        provider="openai",
+        provider=provider,
         api_key=api_key,
         base_url=base_url,
         api_mode=api_mode,
@@ -60,7 +87,13 @@ def create_agent(*, model, api_key, base_url, api_mode, session_id, memory_enabl
         fallback_model=None,
         checkpoints_enabled=False,
     )
-    if set(agent.valid_tool_names) != expected or agent._fallback_chain:
+    if (
+        set(agent.valid_tool_names) != expected
+        or agent._fallback_chain
+        or agent.provider != provider
+        or agent.model != model
+        or agent.api_mode != api_mode
+    ):
         raise RuntimeError(
             "Hermes scope differs from the qualified tool and provider configuration."
         )

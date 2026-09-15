@@ -4,8 +4,8 @@ Le pont local expose cinq outils du monde, plus quatre outils de mémoire lorsqu
 `--vault` désigne un coffre configuré. Il utilise le même runtime que le contrôleur
 cinématique. La commande `chat` lance désormais la boucle native Hermes dans
 son environnement séparé, avec historique persistant et interruption des appels.
-T09 reste ouvert : ce raccord est vérifié avec un fournisseur de test local,
-pas avec Astra. L'[initiative](initiative.md) reste désactivée sans configuration
+T09 reste ouvert : Astra a conversé, lu le monde et retrouvé l'historique après
+redémarrage ; son pilotage corporel reste à qualifier. L'[initiative](initiative.md) reste désactivée sans configuration
 explicite de son budget dans la session.
 
 ## Conversation textuelle
@@ -18,9 +18,8 @@ peuvent converser mais ne sont pas admissibles à cette mémoire.
 Une base existante doit être au schéma 10 ; arrêter ses processus avant d'appliquer
 la [migration explicite](contracts.md). Installer l'extra `agent` dans le Python
 de Promethee et utiliser l'installation Hermes 0.20.5 qualifiée ci-dessous.
-Configurer `PROMETHEE_OPENAI_API_KEY` localement, sans la mettre dans Git ni dans
-la commande. Le modèle et le mode d'API sont explicites, car leur compatibilité
-avec l'accès Astra du compte n'est pas encore validée.
+Pour l'API, configurer `PROMETHEE_OPENAI_API_KEY` localement, sans la mettre dans
+Git ni dans la commande. Le modèle et le mode d'API sont explicites.
 
 ```sh
 python -m promethee.cli --data-dir CHEMIN_SESSION chat --hermes-python CHEMIN_PYTHON_HERMES --hermes-root CHEMIN_HERMES --model MODELE_AUTORISE --api-mode chat_completions
@@ -30,6 +29,27 @@ Cette commande utilise par défaut `https://api.openai.com/v1` ; `--base-url`
 permet un endpoint explicitement choisi et `--api-mode codex_responses` sélectionne
 l'autre mode accepté par l'adaptateur. Aucun autre fournisseur ni modèle n'est
 essayé automatiquement. Une clé absente ou un monde absent échoue avant l'appel.
+
+Une connexion ChatGPT **déjà configurée dans Hermes** peut aussi être utilisée
+par sa boucle native, sans clé API ni passage par `codex_app_server` :
+
+```sh
+python -m promethee.cli --data-dir CHEMIN_SESSION chat --hermes-python CHEMIN_PYTHON_HERMES --hermes-root CHEMIN_HERMES --model gpt-6-astra --api-mode codex_responses --auth hermes-codex --hermes-auth-root RACINE_DONNEES_HERMES
+```
+
+`RACINE_DONNEES_HERMES` désigne la racine existante contenant l'authentification
+Hermes, pas son dépôt de code. Le programme crée un profil neuf sous
+`RACINE_DONNEES_HERMES/profiles/promethee-IDENTIFIANT_TOUR`. Hermes résout lui-même
+l'authentification partagée ; Promethee ne copie pas les fichiers de connexion
+dans ces profils. Il n'active aucun profil global, plugin ou outil personnel.
+Le modèle, le fournisseur, le mode natif et la liste d'outils sont vérifiés
+après construction de l'agent. Un écart provoque un refus.
+
+Ce mode n'accepte que `https://chatgpt.com/backend-api/codex`. Un autre endpoint
+est refusé avant la résolution des credentials. Les appels consomment l'accès
+ChatGPT existant ; ils ne prouvent pas l'accès à l'API audio. Pour configurer une
+connexion manquante, utiliser le parcours d'authentification de Hermes en dehors
+de Promethee, puis relancer la commande.
 
 Saisir un message par ligne. Un nouveau message invalide l'appel précédent avant
 de fermer son processus, puis démarre le nouvel échange. `/cancel` coupe seulement
@@ -43,7 +63,8 @@ au modèle n'est fait pendant l'attente d'un message.
 Un verrou détenu par le système autorise un seul hôte de conversation par monde.
 Le redémarrage ferme les anciens tours, conserve les messages restés sans réponse
 et ne réémet aucune action. Chaque appel reçoit un profil neuf dans
-`conversation-profiles/`, lié au tour et limité aux cinq outils du monde, ou neuf
+`conversation-profiles/` en mode API, ou sous la racine Hermes explicitement
+choisie en mode ChatGPT, lié au tour et limité aux cinq outils du monde, ou neuf
 avec la mémoire. Ces profils
 contiennent des données privées ; ils ne sont pas des coffres à importer.
 Le contexte natif conservé dans la base fait autorité pour la reprise.
@@ -291,10 +312,45 @@ ou un message différent ne suffit pas. Les tests de sous-processus couvrent aus
 l'arrêt des descendants après perte du parent, la récupération du verrou après
 une coupure et la fermeture sur échéance.
 
-Restent nécessaires : accès effectif à Astra et conversations variées avec ce
-modèle pour vérifier ses décisions et la restitution des résultats corporels.
+Restent nécessaires : conversations variées avec Astra pour vérifier ses
+décisions et la restitution des résultats corporels.
 Le fournisseur de test ne prouve aucune qualité de raisonnement. T07 conserve
 également ses limites de déplacement ; la conversation vocale reste dans T11.
+
+## Essai réel de la boucle native avec Astra
+
+Le 15 septembre 2026, `.local/hermes-astra-access-02` a vérifié un premier appel
+réel avec `provider=openai-codex`, `model=gpt-6-astra` et
+`api_mode=codex_responses`. Seuls les cinq outils du monde étaient disponibles.
+Astra a lu le monde vide, signalé l'absence de confirmation du corps et n'a
+soumis aucune action. Le premier essai, avec un profil placé en dehors de la
+racine native, avait échoué à résoudre l'authentification ; il reste archivé.
+
+La série `.local/hermes-codex-host-01` utilise ensuite `open_text_host`, le
+processus public du worker et un monde `qualification` neuf. L'hôte est fermé
+puis rouvert entre les trois messages :
+
+| Vérification | Observation | Durée totale |
+|---|---|---|
+| Conversation seule | « bonjour », aucun appel d'outil | 14,71 s |
+| Lecture du monde | Un appel `read_world`, état corporel non confirmé correctement distingué | 21,77 s |
+| Historique après redémarrage | Premier message cité exactement, aucun nouvel appel d'outil | 15,19 s |
+
+Les profils, sources du raccord, messages natifs et résultats sont conservés
+hors Git. Aucun fichier `auth.json` n'a été créé dans les trois profils de cet
+essai. Aucune exécution corporelle n'a été demandée. Ces durées incluent le
+démarrage froid de Hermes et ne sont pas des latences de voix interactive.
+Ces données techniques restent exclues de la mémoire personnelle.
+
+Pour reproduire ces trois appels réels avec un dossier de sortie neuf :
+
+```sh
+python experiments/agent/qualify_hermes_codex.py --output .local/essai-astra-neuf --hermes-python CHEMIN_PYTHON_HERMES --hermes-root CHEMIN_HERMES --hermes-auth-root RACINE_DONNEES_HERMES --model gpt-6-astra
+```
+
+Ce script n'active ni microphone ni initiative et ne lance aucun contrôleur
+corporel. Il vérifie le raccord réel et la reprise de contexte, pas l'ensemble
+des critères T09–T12.
 
 ## Piste Codex vérifiée, raccord non activé
 
@@ -330,6 +386,7 @@ projet. Ces possibilités restent à qualifier ensemble : absence d'outils et
 de contexte personnels hérités, modèle demandé réellement utilisé, continuité
 des échanges, outils monde/mémoire liés au tour courant, interruption et
 fermeture de tous les processus. La découverte du catalogue ne suffit pas à
-cocher ces critères. Le chemin `chat` publié conserve ses deux modes API
-qualifiés avec doublon ; aucune migration de configuration personnelle n'est
-effectuée automatiquement.
+cocher ces critères. Le chemin `chat` publié utilise la boucle native Hermes,
+avec la qualification réelle décrite plus haut ; `codex_app_server` n'est pas
+activé. Aucune migration de configuration personnelle n'est effectuée
+automatiquement.

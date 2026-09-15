@@ -16,7 +16,8 @@ uv sync --locked --extra agent --extra voice
 ```
 
 Configurer localement `PROMETHEE_OPENAI_API_KEY` et une session existante selon
-le [guide Hermes](hermes-setup.md). L'accès Astra configuré répond HTTP 401 ;
+le [guide Hermes](hermes-setup.md). Astra fonctionne en texte avec la connexion
+ChatGPT native de Hermes ; la clé API configurée avait répondu HTTP 401 et
 aucun accès effectif aux modèles audio du compte n'est revendiqué. Les trois
 modèles sont explicitement configurés.
 
@@ -27,6 +28,11 @@ python -m promethee.cli --data-dir CHEMIN_SESSION voice --hermes-python CHEMIN_P
 `--vault CHEMIN_COFFRE` ouvre la même mémoire que `chat`. Un seul hôte, texte ou
 voix, peut posséder la conversation d'un monde. `--base-url` permet un endpoint
 explicite différent ; aucun fournisseur de secours n'est choisi.
+
+`--auth hermes-codex --hermes-auth-root RACINE_DONNEES_HERMES` peut sélectionner
+la connexion ChatGPT pour le raisonnement. La transcription et la synthèse
+exigent toujours `PROMETHEE_OPENAI_API_KEY` et utilisent alors l'API officielle
+`https://api.openai.com/v1`. L'accès ChatGPT n'est pas une authentification audio.
 
 - Entrée ouvre le microphone ; une seconde pression termine l'enregistrement.
 - Le microphone se ferme automatiquement après dix secondes. Il reste fermé

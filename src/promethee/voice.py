@@ -6,6 +6,7 @@ only handle bounded PCM buffers. This is not the GPT-Live integration.
 
 import base64
 import json
+import os
 import queue
 import sys
 import threading
@@ -295,6 +296,10 @@ def configure(parser):
 
 
 def run_voice(args):
+    if not os.environ.get("PROMETHEE_OPENAI_API_KEY"):
+        raise ValueError(
+            "Configure PROMETHEE_OPENAI_API_KEY for transcription and speech synthesis."
+        )
     incoming = queue.Queue(maxsize=16)
 
     def read_input():
@@ -315,7 +320,11 @@ def run_voice(args):
             transcription_model=args.transcription_model,
             speech_model=args.speech_model,
             voice=args.voice,
-            base_url=args.base_url,
+            base_url=(
+                "https://api.openai.com/v1"
+                if getattr(args, "auth", "api-key") == "hermes-codex"
+                else args.base_url or "https://api.openai.com/v1"
+            ),
             timeout=args.audio_timeout,
         )
         threading.Thread(target=read_input, daemon=True).start()

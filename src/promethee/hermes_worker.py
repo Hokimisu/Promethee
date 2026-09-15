@@ -40,12 +40,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--hermes-root", type=Path, required=True)
     parser.add_argument("--profile", type=Path, required=True)
+    parser.add_argument("--auth", choices=["api-key", "hermes-codex"], default="api-key")
     args = parser.parse_args()
     profile = args.profile.resolve()
     hermes_root = args.hermes_root.resolve()
     protocol = sys.stdout
     key = os.environ.get("PROMETHEE_OPENAI_API_KEY")
-    if not key:
+    if not key and args.auth == "api-key":
         protocol.write(json.dumps({"type": "error", "code": "credentials_missing"}) + "\n")
         return
     try:
@@ -76,6 +77,22 @@ def main():
         os.environ["HERMES_HOME"] = str(profile)
         os.chdir(profile)
         sys.path.insert(0, str(hermes_root))
+        provider = "openai"
+        if args.auth == "hermes-codex":
+            # The native profile path inherits authentication through Hermes,
+            # while config, context and memory remain in this fresh profile.
+            if profile.parent.name != "profiles":
+                raise ValueError("Hermes authentication requires a native dedicated profile.")
+            with contextlib.redirect_stdout(sys.stderr):
+                from hermes_adapter import resolve_hermes_codex_credentials
+
+                credentials = resolve_hermes_codex_credentials(
+                    model=request["model"],
+                    base_url=request["base_url"],
+                    api_mode=request["api_mode"],
+                )
+            key = credentials["api_key"]
+            provider = credentials["provider"]
         log = RedactedLog(sys.stderr, key)
         with contextlib.redirect_stdout(log), contextlib.redirect_stderr(log):
             from hermes_adapter import create_agent
@@ -89,6 +106,7 @@ def main():
                     api_mode=request["api_mode"],
                     session_id=request["session_id"],
                     memory_enabled="--vault" in params,
+                    provider=provider,
                 )
                 result = agent.run_conversation(
                     request["message"],

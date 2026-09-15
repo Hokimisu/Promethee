@@ -34,8 +34,11 @@ Les tickets T03–T05 du [plan d'implémentation](implementation-plan.md) préci
 
 `chat.py` lance la boucle native Hermes avec un historique persistant et des
 outils MCP limités au monde. Une correction invalide le tour précédent avant
-la fermeture de ses processus. Le raccord est qualifié avec un fournisseur de
-test local ; l'accès Astra configuré répond encore HTTP 401.
+la fermeture de ses processus. La boucle native Hermes utilise soit une clé
+API explicite, soit sa connexion ChatGPT existante dans un profil dédié.
+Astra a conversé, lu un monde vide et retrouvé le contexte après redémarrage ;
+son pilotage corporel reste à qualifier. L'accès à l'API par la clé configurée
+avait répondu HTTP 401 ; il est distinct de ce raccord ChatGPT.
 
 `memory.py` ajoute quatre outils lorsque l'hôte configure un coffre neuf lié
 à une session interactive. SQLite conserve les sources et les liens de

@@ -246,7 +246,13 @@ def configure(parser):
     parser.add_argument("--hermes-python", type=Path, required=True)
     parser.add_argument("--hermes-root", type=Path, required=True)
     parser.add_argument("--model", required=True)
-    parser.add_argument("--base-url", default="https://api.openai.com/v1")
+    parser.add_argument("--base-url")
+    parser.add_argument("--auth", choices=["api-key", "hermes-codex"], default="api-key")
+    parser.add_argument(
+        "--hermes-auth-root",
+        type=Path,
+        help="Existing Hermes root whose authentication is shared with fresh native profiles.",
+    )
     parser.add_argument(
         "--api-mode", choices=["chat_completions", "codex_responses"], required=True
     )
@@ -256,8 +262,26 @@ def configure(parser):
 
 @contextlib.contextmanager
 def open_text_host(args):
-    if not os.environ.get("PROMETHEE_OPENAI_API_KEY"):
+    auth = getattr(args, "auth", "api-key")
+    auth_root = getattr(args, "hermes_auth_root", None)
+    if auth not in {"api-key", "hermes-codex"}:
+        raise ValueError("Unknown authentication mode.")
+    if auth == "api-key" and not os.environ.get("PROMETHEE_OPENAI_API_KEY"):
         raise ValueError("Configure PROMETHEE_OPENAI_API_KEY locally before starting the chat.")
+    from promethee.hermes_adapter import CODEX_BASE_URL
+
+    base_url = args.base_url or (
+        CODEX_BASE_URL if auth == "hermes-codex" else "https://api.openai.com/v1"
+    )
+    if auth == "hermes-codex":
+        if auth_root is None or not auth_root.is_dir():
+            raise ValueError(
+                "Select the existing Hermes authentication root with --hermes-auth-root."
+            )
+        if base_url != CODEX_BASE_URL or args.api_mode != "codex_responses":
+            raise ValueError(
+                "Hermes ChatGPT authentication requires codex_responses and its official endpoint."
+            )
     if not args.hermes_python.is_file() or not args.hermes_root.is_dir():
         raise ValueError("The configured Hermes Python and installation must exist.")
     data_dir = args.data_dir.resolve()
@@ -272,6 +296,8 @@ def open_text_host(args):
 
     def factory(request):
         profile = data_dir / "conversation-profiles" / request["turn_id"]
+        if auth == "hermes-codex":
+            profile = auth_root.resolve() / "profiles" / ("promethee-" + request["turn_id"])
         prepare_profile(profile, data_dir, request["turn_id"], vault=vault)
         return WorkerProcess(
             [
@@ -283,6 +309,8 @@ def open_text_host(args):
                 str(args.hermes_root.resolve()),
                 "--profile",
                 str(profile),
+                "--auth",
+                auth,
             ],
             request,
         )
@@ -292,7 +320,7 @@ def open_text_host(args):
             store,
             factory,
             model=args.model,
-            base_url=args.base_url,
+            base_url=base_url,
             api_mode=args.api_mode,
             timeout=args.timeout,
         )
