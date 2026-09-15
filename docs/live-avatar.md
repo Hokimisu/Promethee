@@ -202,3 +202,40 @@ termine les deux postures et le retour vers `[0.28, -0.07]`, à 9 mm de la cible
 Les trois préparations acceptées ont 120 contacts de surface sur 120 poses et
 un écart initial inférieur à 0,02 mm. Le premier déplacement vers `[-0.17, 0.19]`
 reste refusé par la limite d'abaissement. T07 n'est pas clôturé par cette correction.
+
+## Panne du contrôleur et reprise du VRM préparé
+
+L'essai `prepared-crash-qualification-04` complète la preuve de récupération
+du parcours courant. Il copie une base de qualification avec apparence préparée,
+migre cette copie de v10 à v11 avec sauvegarde, puis lance le véritable
+`KinematicController` et le préparateur VRM dans un processus possédé par l'essai.
+Le squelette vient d'une archive réelle ; aucun nouveau mouvement ARDY n'est
+généré. La prise du doudou utilise le contrôleur d'objets cinématique.
+
+Le processus est tué à l'image 10, à un checkpoint confirmé, avant son nettoyage.
+Après expiration du bail, le corps devient `unconfirmed` et l'action
+`interrupted`. Un nouveau contrôleur restaure exactement corps, objets et
+apparence, confirme la pose et ne relance aucune action. L'historique conserve
+l'interruption. Deux exécutions de cette qualification ont retrouvé ces résultats.
+
+La lecture locale de 80 poses compare le checkpoint avant panne (0–39) à celui
+après reprise (40–79). Les images 0 et 60 ont été inspectées dans le navigateur :
+même silhouette, position des chaussures, bras et doudou. Il s'agit d'une
+comparaison de checkpoints, pas d'une vidéo continue de la panne ni d'une
+validation d'équilibre physique. Entre deux checkpoints, une panne peut perdre
+jusqu'à l'intervalle de persistance ; cet essai ne prétend pas récupérer une pose
+éphémère jamais enregistrée.
+
+Reproduction depuis l'environnement Promethee avec les extras de rendu :
+
+```sh
+python experiments/motion/qualify_prepared_crash.py --source .local/prepared-controller-qualification-03/world.sqlite3 --skeleton .local/runtime-holdout-09/motions/conventions.json --avatar .local/assets/pixiv-vrm/VRM1_Constraint_Twist_Sample.vrm --output .local/nouvel-essai-panne
+```
+
+Le dossier neuf conserve la configuration, les sources Python, les empreintes,
+la sauvegarde, le journal du processus, les snapshots, événements et fichiers de
+lecture. `report.json` laisse la revue visuelle en attente pour chaque nouvelle
+exécution : le script ne peut pas attester lui-même une inspection humaine.
+Les critères cinématiques de T07 sont couverts avec cet essai et les séries
+précédentes ; la fiabilité générale d'ARDY, les collisions entre les jambes et
+la physique restent hors des garanties mesurées.

@@ -15,11 +15,12 @@ de session. Une réussite ancienne n'atteste pas automatiquement le raccord actu
 | Mesures à la cible et latence | Même essai : postures 10,228 et 10,349 s ; déplacement 13,138 s, erreur 8,92 mm | Ces valeurs incluent la préparation ; elles ne décrivent pas toutes les requêtes possibles |
 | Contacts et continuité du VRM | Trois préparations acceptées : 120 contacts de surface sur 120 poses, raccord initial inférieur à 0,02 mm ; limite de correction du bassin conservée à 5 cm | Mesures géométriques, sans force, équilibre ni garantie de collision entre les jambes |
 | Arrêt à différents moments | Tests avant envoi, pendant génération et lecture ; essai réel Astra annulé à l'image 10, registre `cancelled`, pose finale conservée | L'arrêt n'est pas une confirmation de la posture demandée |
-| Perte du contrôleur et reprise | `manual-session-01/crash-measurement.json` : `interrupted`, corps non confirmé, pose conservée. `restart-measurement.json` : même pose, ancienne exécution toujours interrompue, aucun travail moteur en attente | Preuve réelle de l'ancien parcours Core ; reprise après perte brutale du parcours VRM préparé actuel à vérifier |
+| Perte du contrôleur et reprise | Ancien parcours Core : `manual-session-01/crash-measurement.json` et `restart-measurement.json`. Parcours préparé : `prepared-crash-qualification-04`, processus tué à l'image 10, bail expiré, reprise par le contrôleur courant | Corps non confirmé après perte, puis checkpoint exactement restauré ; ancienne action interrompue, aucun rejeu. Rendu avant/après inspecté |
 | Session explicite, commandes manuelles et données exclues | `python -m promethee.run --help`, `run.py`, tests HTTP et de checkpoints ; [commande et reprise](live-avatar.md) | Implémenté ; tests distinguent demande d'arrêt et retour du corps |
 
-T07 reste ouvert pour vérifier la perte brutale et la reprise du parcours
-VRM préparé actuel, avec comparaison du rendu, du checkpoint et du registre.
+La vérification supplémentaire du parcours préparé est décrite dans la
+[qualification de panne](live-avatar.md#panne-du-contrôleur-et-reprise-du-vrm-préparé).
+Elle ferme le manque de preuve identifié pour T07 dans cet audit.
 Un refus géométrique documenté n'impose pas à lui seul une nouvelle boucle
 d'optimisation : le plan exige un résultat fidèle et des limites mesurées,
 pas un taux d'acceptation de 100 % pour ARDY.
