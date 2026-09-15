@@ -171,7 +171,9 @@ async def run(args):
                     if closing is not None and time.monotonic() >= closing:
                         emit({"type": "transport.error", "code": "live_finalization_timeout"})
                         return 1
-                    done, _ = await asyncio.wait({pending}, timeout=0.02)
+                    # Input arrives at 50 Hz; a 20 ms wait per command cannot
+                    # keep up once scheduling overhead or context events accrue.
+                    done, _ = await asyncio.wait({pending}, timeout=0.005)
                     if not done:
                         continue
                     received = pending.result()

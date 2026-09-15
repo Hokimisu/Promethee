@@ -12,11 +12,13 @@ neuf. Exemple Windows effectivement exécuté :
 
 ```sh
 uv venv --python 3.13 .local/openai-live-env
-uv pip install --python .local/openai-live-env/Scripts/python.exe openai==3.14.0 websockets==15.0.1
+uv pip sync --python .local/openai-live-env/Scripts/python.exe --require-hashes experiments/agent/live-requirements.lock
 .local/openai-live-env/Scripts/python.exe experiments/agent/qualify_live_sdk.py --output .local/essai-live-sdk-neuf
 ```
 
-Le script refuse d'autres versions. Il utilise une clé factice explicite et
+Le verrouillage fixe aussi les dépendances indirectes et leurs empreintes. Il
+correspond aux versions de l'environnement essayé sous Windows/Python 3.13.
+Le script refuse d'autres versions du SDK et de websockets. Il utilise une clé factice explicite et
 des adresses de boucle locale pour tous les appels ; aucune authentification
 du compte n'est chargée. Les messages et sources sont enregistrés dans la
 sortie. L'essai complet a un délai maximal de 30 secondes.
@@ -105,7 +107,8 @@ toujours une clé factice, même si une clé de compte existe dans l'environneme
 du transport et utilise le `TextHost` existant. L'appelant sérialise `accept`,
 `poll` et `close`. Chaque résultat contient un `event` destiné au transport et
 le texte complet destiné à l'affichage ; sa présence ne prouve ni envoi ni lecture
-audio. Le lancement de bout en bout et les périphériques restent à raccorder.
+audio. Le [lancement sur fichier audio](live-file-session.md) est exécutable ;
+les périphériques restent à raccorder.
 
 Le contexte distingue `user_transcript` de `live_output_transcript`, conserve
 l'ordre d'arrivée et les horodatages, et indique explicitement que la phrase
@@ -146,8 +149,10 @@ la perte du transport. L'essai se reproduit avec
 `experiments/agent/qualify_live_delegation.py --help` et les chemins Hermes
 documentés dans le [guide de configuration](hermes-setup.md).
 
-Restent à implémenter et vérifier : la boucle qui raccorde transport, délégation
-et périphériques, l'audio continu avec coupure des buffers et la reprise du
+La [session sur fichier](live-file-session.md) relie le transport à la délégation.
+Restent à implémenter et vérifier : le raccord aux périphériques, l'audio continu
+avec coupure des buffers de lecture et la reprise du
 contexte vocal après perte de session. Restent ensuite à qualifier avec le compte : accès effectif,
 conversation française, latence, coût, périphériques et mouvements réels.
-La [voix de diagnostic](voice.md) reste le seul mode vocal exécutable de Promethee.
+La [chaîne de diagnostic](voice.md) reste le mode prévu pour le microphone ;
+la session GPT-Live ci-dessus travaille actuellement sur fichier audio.

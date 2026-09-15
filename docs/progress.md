@@ -28,8 +28,10 @@ la coupure réseau et les bilans finaux absents ou incomplets. Il ne se reconnec
 pas automatiquement. Le [raccord de délégation](live-integration.md#délégation-au-même-hôte-hermes)
 transmet désormais des fragments sourcés au même Hermes. Deux appels Astra réels
 sur événements Live simulés distinguent une affirmation vocale d'une action
-confirmée ; zéro exécution. La boucle transport/périphériques et la voix du
-service distant restent à qualifier.
+confirmée ; zéro exécution. La [boucle sur fichier audio](live-file-session.md)
+est exécutable : un essai de 60 s relie le vrai SDK à Astra, avec serveur Live
+et PCM simulés, une délégation, un bilan final et zéro action. Les périphériques
+et la voix du service distant restent à raccorder et à qualifier.
 
 La branche [codex/execution-receipts-after-interruption](https://github.com/Hokimisu/Promethee/tree/codex/execution-receipts-after-interruption)
 rend les huit résultats d'exécution les plus récemment mis à jour consultables

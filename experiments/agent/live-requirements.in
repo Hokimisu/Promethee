@@ -1,0 +1,3 @@
+# Separate SDK environment; never install into the native Hermes environment.
+openai==3.14.0
+websockets==15.0.1
