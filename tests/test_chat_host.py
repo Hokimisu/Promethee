@@ -65,13 +65,24 @@ def alive(pid):
         finally:
             api.CloseHandle(handle)
     status = Path(f"/proc/{pid}/stat")
-    if status.exists() and status.read_text().split()[2] == "Z":
-        return False
+    if sys.platform == "linux":
+        try:
+            if status.read_text().split()[2] == "Z":
+                return False
+        except FileNotFoundError:
+            return False
     try:
         os.kill(pid, 0)
         return True
     except ProcessLookupError:
         return False
+
+
+def read_pid(path):
+    try:
+        return int(path.read_text())
+    except (FileNotFoundError, ValueError):
+        return None
 
 
 def make_host(tmp_path, *, timeout=5):
@@ -102,8 +113,7 @@ def test_native_shape_response_and_correction_through_real_processes(tmp_path):
     host, workers = make_host(tmp_path)
     try:
         old = host.start("wait")
-        until((tmp_path / "child.pid").exists)
-        child = int((tmp_path / "child.pid").read_text())
+        child = until(lambda: read_pid(tmp_path / "child.pid"))
         original_close = workers[0].close
 
         def close_after_fence():
@@ -144,12 +154,16 @@ def test_crash_and_orphan_cleanup(tmp_path, message):
     host, workers = make_host(tmp_path, timeout=0.5)
     try:
         host.start(message)
+        child = None
+        if message == "orphan":
+            child = until(lambda: read_pid(tmp_path / "child.pid"))
+            until(lambda: workers[0].process.poll() is not None)
+            assert alive(child)  # The orphan is actually alive after its parent exits.
         result = until(host.poll)
         assert result["status"] == "failed"
         assert workers[0].process.poll() is not None
-        child_file = tmp_path / "child.pid"
-        if child_file.exists():
-            until(lambda: not alive(int(child_file.read_text())))
+        if child:
+            until(lambda: not alive(child))
         assert host.store.service.get_world()["conversation"] is None
     finally:
         host.close()
