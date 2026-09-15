@@ -57,6 +57,7 @@ def test_disabled_default_no_initial_wake_and_exhausted_budget(tmp_path):
         assert initiative.open_turn(store) is None
         finish(store, opened)
         state = initiative.observe()
+        assert state["active_turn"] is None
         assert (state["used"], state["remaining"]) == (used, 2 - used)
         assert not state["pending"]["world_changed"]  # Own conversation writes do not wake it.
     clock[0] += 100
@@ -90,6 +91,72 @@ def test_slow_turn_coalesces_events_without_queueing_calls(tmp_path):
     finish(store, opened)
     assert initiative.open_turn(store) is None
     assert initiative.observe()["used"] == 2
+
+
+@pytest.mark.parametrize(
+    "ending", ["abort", "expired", "recover", "correction", "legacy-correction", "end"]
+)
+def test_terminal_or_replaced_wake_clears_active_reference_without_refunding(tmp_path, ending):
+    initiative, store, clock = setup(tmp_path)
+    initiative.configure(budget=2, interval=1)
+    clock[0] += 1
+    opened = initiative.open_turn(store)
+    assert initiative.observe()["active_turn"] == opened["turn_id"]
+    if ending == "recover":
+        ConversationStore(store.service).recover()
+    elif ending == "correction":
+        user = store.begin("Correction")
+        assert store.service.get_world()["conversation"]["turn_id"] == user["turn_id"]
+    elif ending == "legacy-correction":
+        user = store.service.begin_turn()
+        assert store.service.get_world()["conversation"]["turn_id"] == user
+    elif ending == "end":
+        store.service.end_turn(opened["turn_id"])
+    else:
+        if ending == "expired":
+            clock[0] += 100
+        store.abort(opened["turn_id"])
+    state = initiative.observe()
+    assert state["active_turn"] is None
+    assert (state["used"], state["remaining"]) == (1, 1)
+
+
+def test_restart_clears_historical_completed_wake_and_is_idempotent(tmp_path):
+    initiative, store, clock = setup(tmp_path)
+    initiative.configure(budget=1, interval=1)
+    clock[0] += 1
+    opened = initiative.open_turn(store)
+    finish(store, opened)
+    with store.service.runtime.connection() as conn:
+        world = read_world(conn)
+        world["initiative"]["active_turn"] = opened["turn_id"]
+        conn.execute("UPDATE world SET data=? WHERE id=1", (encode(world),))
+    store.recover()
+    world = store.service.get_world()
+    assert world["initiative"]["active_turn"] is None
+    assert world["initiative"]["used"] == 1
+    store.recover()
+    assert store.service.get_world() == world
+    with store.service.runtime.connection() as conn:
+        assert conn.execute("SELECT status FROM conversation_turns").fetchone()[0] == "completed"
+
+
+def test_finishing_wake_rolls_back_active_reference_with_reply(tmp_path):
+    initiative, store, clock = setup(tmp_path)
+    initiative.configure(budget=1, interval=1)
+    clock[0] += 1
+    opened = initiative.open_turn(store)
+    before = store.service.get_world()
+    with store.service.runtime.connection() as conn:
+        conn.execute(
+            "CREATE TRIGGER fail_reply BEFORE UPDATE ON world "
+            "BEGIN SELECT RAISE(ABORT, 'reply rollback'); END;"
+        )
+    with pytest.raises(sqlite3.IntegrityError, match="reply rollback"):
+        finish(store, opened)
+    assert store.service.get_world() == before
+    with store.service.runtime.connection() as conn:
+        assert conn.execute("SELECT status FROM conversation_turns").fetchone()[0] == "running"
 
 
 def test_pause_persists_across_restart_and_fences_old_turn(tmp_path):

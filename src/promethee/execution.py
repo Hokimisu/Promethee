@@ -199,6 +199,8 @@ class ExecutionService:
         with self._transaction() as (conn, now):
             world = read_world(conn)
             world["conversation"] = {"turn_id": turn_id, "expires_at": now + timeout}
+            if world.get("initiative"):
+                world["initiative"]["active_turn"] = None
             world["revision"] += 1
             conn.execute("UPDATE world SET data=? WHERE id=1", (encode(world),))
         return turn_id
@@ -215,6 +217,8 @@ class ExecutionService:
             self._check_turn(conn, turn_id, now)
             world = read_world(conn)
             world["conversation"] = None
+            if world.get("initiative") and world["initiative"]["active_turn"] == turn_id:
+                world["initiative"]["active_turn"] = None
             world["revision"] += 1
             conn.execute("UPDATE world SET data=? WHERE id=1", (encode(world),))
 

@@ -39,8 +39,11 @@ class ConversationStore:
                 "UPDATE conversation_turns SET status='interrupted' WHERE status='running'"
             )
             world = read_world(conn)
-            if world["conversation"] is not None:
+            initiative = world.get("initiative")
+            if world["conversation"] is not None or (initiative and initiative["active_turn"]):
                 world["conversation"] = None
+                if initiative:
+                    initiative["active_turn"] = None
                 world["revision"] += 1
                 conn.execute("UPDATE world SET data=? WHERE id=1", (encode(world),))
 
@@ -95,6 +98,8 @@ class ConversationStore:
             (turn_id, "running", encode(record)),
         )
         world["conversation"] = {"turn_id": turn_id, "expires_at": now + timeout}
+        if world.get("initiative"):
+            world["initiative"]["active_turn"] = None
         world["revision"] += 1
         conn.execute("UPDATE world SET data=? WHERE id=1", (encode(world),))
         return {"turn_id": turn_id, "session_id": world["world_id"], "history": history}
@@ -142,6 +147,8 @@ class ConversationStore:
             )
             world = read_world(conn)
             world["conversation"] = None
+            if world.get("initiative") and world["initiative"]["active_turn"] == turn_id:
+                world["initiative"]["active_turn"] = None
             world["revision"] += 1
             conn.execute("UPDATE world SET data=? WHERE id=1", (encode(world),))
         return result["text"]
@@ -160,8 +167,14 @@ class ConversationStore:
                 (status, encode(record), turn_id),
             )
             world = read_world(conn)
+            changed = False
             if world["conversation"] and world["conversation"]["turn_id"] == turn_id:
                 world["conversation"] = None
+                changed = True
+            if world.get("initiative") and world["initiative"]["active_turn"] == turn_id:
+                world["initiative"]["active_turn"] = None
+                changed = True
+            if changed:
                 world["revision"] += 1
                 conn.execute("UPDATE world SET data=? WHERE id=1", (encode(world),))
         return True

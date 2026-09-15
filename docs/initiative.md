@@ -63,6 +63,12 @@ du fournisseur consomme ce tour : aucune reprise implicite ne contourne la borne
 Une correction utilisateur invalide la décision précédente selon le même contrat
 que T09. Aucune quantité minimale d'activité n'est recherchée.
 
+`active_turn` désigne uniquement une décision autonome encore ouverte. Sa fin,
+son échec ou son remplacement efface cette référence dans la transaction qui
+met à jour la conversation, sans rembourser le budget. La reprise de l'hôte
+nettoie aussi les références anciennes à des tours déjà terminés. Elle ne
+réémet pas leur décision et conserve leur statut historique.
+
 ## Historique et mémoire
 
 Les enregistrements de conversation indiquent `trigger: user` ou `initiative`.
@@ -94,9 +100,54 @@ et aucun second tour n'a été lancé. La série vérifie aussi correction, dél
 refus fournisseur et reprise de la CLI. Son fournisseur déterministe local ne
 valide ni Astra ni une capacité à former des intentions cohérentes.
 
-T12 reste à qualifier avec le vrai modèle dans plusieurs sessions sollicitées et
-non sollicitées, historiques et capacités. Les répétitions doivent être examinées
-dans leur contexte ; inactivité et nouveauté ne sont pas des scores de réussite.
-L'accès Astra est désormais vérifié avec l'authentification ChatGPT native de
-Hermes, selon le [guide d'intégration](hermes-setup.md). Aucune initiative n'a été activée dans
-une session personnelle pendant ces essais.
+L'accès Astra est vérifié avec l'authentification ChatGPT native de Hermes,
+selon le [guide d'intégration](hermes-setup.md). Aucune initiative n'a été
+activée dans une session personnelle pendant ces essais.
+
+## Observations avec Astra et ARDY réels
+
+```sh
+python experiments/agent/qualify_astra_initiative.py --output .local/essai-initiative-astra-neuf --hermes-python CHEMIN_PYTHON_HERMES --hermes-root CHEMIN_HERMES --hermes-auth-root RACINE_AUTH_HERMES --model gpt-6-astra --ardy-python PYTHON_ARDY --checkpoint-root DOSSIER_POIDS --wsl Ubuntu-22.04 --avatar CHEMIN_AVATAR_VRM
+```
+
+Le script ouvre deux mondes de qualification neufs. Le premier n'a ni historique
+ni contrôleur et reçoit un seul réveil autonome. Le second utilise réellement
+ARDY et l'apparence préparée ; une question utilisateur sur les capacités crée
+un historique, puis deux réveils autonomes sont autorisés. Entre eux, la pause
+est conservée après réouverture de l'hôte et le contrôleur est fermé. Les
+capacités `move` et `posture` disparaissent effectivement, et le corps devient
+non confirmé. Une cadence d'une seconde sert seulement à vérifier les bornes
+de cet essai court ; ce n'est pas un réglage recommandé pour une session.
+
+Les réponses, historiques natifs, événements et sources du code sont archivés.
+Les mondes restent classés `qualification`, sans coffre mémoire ni voix. Une
+seule instance ARDY doit utiliser le GPU pendant cet essai ; fermer auparavant
+le pilote manuel si nécessaire, puis le relancer sur sa base existante.
+
+La série `.local/astra-initiative-qualification-01` (graine 148123) a effectué
+trois réveils et une réponse utilisateur avec `gpt-6-astra`. Astra a consulté
+le monde à chaque réveil, laissé les deux mondes sans action, puis signalé le
+corps non confirmé après fermeture du contrôleur. Les budgets sont passés de
+1 à 0 et de 2 à 0 ; aucun appel ne s'est ajouté après épuisement. La pause du
+second monde a tenu après redémarrage alors qu'il restait un appel disponible.
+Les durées des réveils sont 21,19 s, 20,86 s et 20,18 s ; la réponse sollicitée
+sur les capacités a pris 23,10 s.
+
+Cette première série a révélé une référence `active_turn` conservée après une
+réponse terminée. Elle n'a pas provoqué d'appel supplémentaire, mais rendait le
+statut incohérent. Le correctif et ses tests couvrent fin, échec, expiration
+traitée par l'hôte, correction utilisateur, reprise et rollback du résultat.
+
+La série suivante `.local/astra-initiative-qualification-02` (graine 158123)
+répète les deux contextes avec le correctif. Les trois réveils terminent en
+21,02 s, 20,52 s et 22,05 s ; la question utilisateur en 25,41 s. Chaque fin
+vérifie maintenant `active_turn: null`, et les deux budgets restent épuisés
+sans nouveau tour. Les archives confirment zéro exécution corporelle. Le corps
+non confirmé est de nouveau reconnu après fermeture du vrai ARDY. Les 363
+tests passent, deux sont ignorés ; lint, format et construction réussissent.
+
+Les choix d'inaction de ces essais ne prouvent ni absence ni présence d'une
+capacité générale à former des projets. Les réponses similaires sont cohérentes
+avec deux mondes vides, mais cette série courte ne mesure pas les répétitions
+sur une longue durée. T12 conserve sa dépendance à la voix réelle T11 ; la
+qualification textuelle ne valide pas une session autonome vocale.
