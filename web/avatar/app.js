@@ -5,6 +5,7 @@ import { VRMLoaderPlugin } from "@pixiv/three-vrm";
 import { CoreRetarget, validateArmProfile } from "./retarget.js";
 import { ObjectVisuals } from "./objects.js";
 import { startLive } from "./live.js";
+import { FootGeometry, footSurfaceSummary } from "./foot-geometry.js";
 
 const status = document.querySelector("#status"),
     slider = document.querySelector("#frame");
@@ -212,6 +213,8 @@ try {
                 highestMinimum = -Infinity,
                 maxRootError = 0;
             const handErrors = { rightHand: 0, leftHand: 0 };
+            const footGeometry = new FootGeometry(vrm);
+            const footSamples = [];
             const meshes = [];
             vrm.scene.traverse((node) => {
                 if (node.isSkinnedMesh) meshes.push(node);
@@ -220,6 +223,7 @@ try {
                 actual = new THREE.Vector3();
             for (let i = 0; i < data.frames.length; i++) {
                 display(i);
+                footSamples.push(footGeometry.sample());
                 let frameMinimum = Infinity;
                 vrm.humanoid.getRawBoneNode("hips").getWorldPosition(actual);
                 maxRootError = Math.max(
@@ -279,6 +283,7 @@ try {
                     highest_lowest_vertex_y_m: highestMinimum,
                     floor_correction_applied: false,
                     foot_support_validated: false,
+                    foot_surface: footSurfaceSummary(footSamples),
                 },
                 null,
                 2,

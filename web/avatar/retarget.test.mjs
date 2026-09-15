@@ -10,6 +10,21 @@ import {
 } from "./retarget.js";
 import { ObjectVisuals } from "./objects.js";
 import { alignHand } from "./align-hand.js";
+import { footSurfaceSummary } from "./foot-geometry.js";
+
+test("VRM foot surface measurements distinguish floating feet from contact", () => {
+    const summary = footSurfaceSummary([
+        { left: [[0, 0.002, 0]], right: [[0, 0, 0]] },
+        { left: [[0, -0.01, 0]], right: [[0, 0.02, 0]] },
+        { left: [[0, 1e-8, 0]], right: [[0, 0.03, 0]] },
+    ]);
+    assert.equal(summary.left.frames_with_surface_contact, 1);
+    assert.equal(summary.right.frames_with_surface_contact, 1);
+    assert.equal(summary.left.lowest_vertex_y_m, -0.01);
+    assert.equal(summary.right.highest_lowest_vertex_y_m, 0.03);
+    assert.equal(summary.left.frames, 3);
+    assert.throws(() => footSurfaceSummary([]), /Aucune pose/);
+});
 
 test("appearance profile refuses changed scale, geometry and parentage", () => {
     const profile = JSON.parse(

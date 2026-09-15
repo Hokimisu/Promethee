@@ -27,6 +27,11 @@ archivées n'a pas identifié d'amélioration générale. Le checkpoint est limi
 mais aggraver l'inclinaison ou faire échouer un déplacement auparavant accepté.
 Le pilote conserve son réglage, sans nouvelle tentative cachée.
 
+La [mesure du maillage des chaussures](avatar-foot-contact.md) retrouve zéro
+image en contact VRM sur trois séquences où Core garde un appui sur 120 images
+sur 120. Le lecteur et un outil local permettent désormais de vérifier cette
+différence ; sa correction reste nécessaire.
+
 L'[apparence VRM](avatar-rendering.md) dispose d'une lecture animée en textures,
 vérifiée sur un déplacement et une posture ARDY. Les hanches sont conservées,
 mais les chaussures flottent de 1 à 4 cm sur ces essais ; les appuis ne sont

@@ -45,6 +45,10 @@ Les dépendances graphiques ne sont pas nécessaires aux tests du socle Python.
 
 ## Correspondance des poses
 
+Les [mesures des chaussures](avatar-foot-contact.md) sont disponibles par pied,
+dans le lecteur et dans un outil local sans GPU. Elles confirment que les
+appuis Core corrigés ne suffisent pas à poser l'apparence VRM au sol.
+
 Le lecteur utilise l'[API humanoïde normalisée de three-vrm](https://pixiv.github.io/three-vrm/docs/classes/three-vrm.VRMHumanoid.html).
 Les articulations sont associées par leur nom dans l'export Core, jamais par
 les indices bruts des os du VRM. Les matrices Core sont mondiales et agissent
