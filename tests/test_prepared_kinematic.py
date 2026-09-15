@@ -168,6 +168,7 @@ def test_preparation_failure_preserves_the_confirmed_visible_pose(prepared_drive
 
 
 def test_spawn_preserves_appearance_without_repreparing_the_body(prepared_driver):
+    pytest.importorskip("numpy")
     controller, service, _, preparation, _, _ = prepared_driver
     appearance = copy.deepcopy(controller.observation["appearance"])
     service.submit(
