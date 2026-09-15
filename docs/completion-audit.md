@@ -37,8 +37,9 @@ Restent requis :
 - Interruption acoustique pendant écoute, raisonnement, parole et mouvement,
   sans reprise d'une ancienne sortie distante. Vider le buffer à réception
   d'une transcription ne prouve pas ce comportement.
-- Continuité du contexte vocal non délégué après perte de session : ses
-  fragments restent actuellement dans `events.jsonl`.
+- Qualification réelle de la continuité vocale : les fragments non délégués
+  sont maintenant persistés dans le même registre Hermes ; redémarrage,
+  doublons et arrivées pendant un raisonnement sont couverts par tests.
 - Mesures de réponse utile, coupure et coût d'une session réelle, avec
   distinction entre intention, mouvement en cours et résultat confirmé.
 

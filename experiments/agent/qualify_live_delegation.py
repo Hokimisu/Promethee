@@ -118,7 +118,12 @@ def main():
             rows = [json.loads(row[0]) for row in conn.execute(f"SELECT data FROM {table}")]
             (args.data_dir / f"{table}.json").write_text(encode(rows), encoding="utf-8")
         assert conn.execute("SELECT count(*) FROM executions").fetchone()[0] == 0
-        assert conn.execute("SELECT count(*) FROM conversation_turns").fetchone()[0] == 2
+        assert (
+            conn.execute(
+                "SELECT count(*) FROM conversation_turns WHERE status!='context'"
+            ).fetchone()[0]
+            == 2
+        )
 
 
 if __name__ == "__main__":

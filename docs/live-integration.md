@@ -185,7 +185,9 @@ documentés dans le [guide de configuration](hermes-setup.md).
 La [session sur fichier](live-file-session.md) relie le transport à la délégation.
 Le raccord explicite `--microphone` et la coupure des buffers locaux sont
 couverts avec des périphériques simulés. Restent à implémenter et vérifier :
-la coupure acoustique sans reprise de parole obsolète et la reprise du
-contexte vocal après perte de session. Restent ensuite à qualifier avec le compte : accès effectif,
+la coupure acoustique sans reprise de parole obsolète. Les fragments non délégués
+sont désormais persistés dans le contexte Hermes, sans relancer une demande au
+redémarrage ; les tests vérifient leur provenance et leurs doublons.
+Restent à qualifier avec le compte : accès effectif,
 conversation française, latence, coût, périphériques et mouvements réels.
 La [chaîne de diagnostic](voice.md) reste disponible séparément.

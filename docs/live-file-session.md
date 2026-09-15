@@ -26,6 +26,29 @@ Live/Hermes et identifiants corrélés, `output.pcm` en PCM16 mono à 24 kHz, et
 consignes de voix et la vue historique transmise au démarrage, issue du même
 contexte Hermes. Les fichiers restent locaux,
 peuvent contenir la conversation et ne sont pas des souvenirs personnels.
+Les fragments de transcription validés sont aussi conservés dans le registre
+de conversation du monde, même sans délégation. Chaque entrée porte
+`status: context`, `trigger: live_context`, l'ID de session et l'ID d'événement,
+la source utilisateur ou sortie vocale, et les temps fournis par Live.
+Ce ne sont ni des appels au modèle ni des phrases réputées complètes ou entendues.
+Le prochain tour Hermes et le prochain démarrage vocal retrouvent ces données
+historiques. Elles n'ouvrent pas de tour actif et n'autorisent aucune action.
+
+Le stockage réutilise l'enveloppe de message existante du schéma 11, sans
+migration. Les doublons identiques sont ignorés ; un ID réutilisé avec un autre
+contenu échoue. Le contexte natif reste borné à 512 Kio : une saturation échoue
+sans tronquer silencieusement. Après une réponse Hermes, son contexte natif
+est conservé, puis les fragments arrivés pendant ce raisonnement sont ajoutés.
+Les compteurs d'appels excluent explicitement les entrées `context`.
+
+L'essai `live-history-session-01` a utilisé le vrai SDK et un appel Astra
+(15,88 s), avec serveur et audio simulés. Le registre conserve deux entrées de
+contexte et une réponse native, sans action du monde. La session se ferme en
+60,26 s avec une seule connexion ; l'usage de 57,16 s vient du serveur simulé,
+pas d'une facture réelle. La reprise `live-history-restart-01` sur copie de ce
+monde se ferme en 3,43 s, sans nouvel appel Hermes ni action malgré une demande
+de délégation artificielle au démarrage. Cette qualification ne valide pas
+le comportement du fournisseur vocal réel.
 Un bilan manquant reste inconnu, jamais assimilé à zéro coût. En cas d'erreur,
 les processus sont arrêtés et le rapport indique l'échec ; la finalisation
 distante peut alors rester non confirmée. Aucun rejeu ni reconnexion automatiques.

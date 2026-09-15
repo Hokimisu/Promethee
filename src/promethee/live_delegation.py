@@ -131,6 +131,7 @@ class LiveDelegation:
                 self.last_input = self.clock()
                 if self.turn_id is not None:
                     self._interrupt("new_input_fragment")
+            self.host.store.record_live_fragment(self.session, identifier, fragment)
         else:
             delegation = event.get("delegation")
             if not isinstance(delegation, dict) or delegation.get("target") != "client":

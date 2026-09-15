@@ -61,7 +61,9 @@ def main():
     runtime = Runtime(world / "world.sqlite3", data_origin="session", session_kind="qualification")
     with runtime.connection() as conn:
         previous_executions = conn.execute("SELECT count(*) FROM executions").fetchone()[0]
-        previous_all_turns = conn.execute("SELECT count(*) FROM conversation_turns").fetchone()[0]
+        previous_all_turns = conn.execute(
+            "SELECT count(*) FROM conversation_turns WHERE status!='context'"
+        ).fetchone()[0]
         previous_turns = conn.execute(
             "SELECT count(*) FROM conversation_turns WHERE status='completed'"
         ).fetchone()[0]
@@ -147,7 +149,9 @@ def main():
             )
             expected_turns = 1 if args.fixture_mode == "exchange" else 0
             assert (
-                conn.execute("SELECT count(*) FROM conversation_turns").fetchone()[0]
+                conn.execute(
+                    "SELECT count(*) FROM conversation_turns WHERE status!='context'"
+                ).fetchone()[0]
                 == previous_all_turns + expected_turns
             )
             assert (

@@ -98,7 +98,11 @@ def test_fragments_around_delegation_keep_provenance_and_exact_id(tmp_path):
     assert result["event"]["delegation_id"] == "item_opaque"
     assert result["status"] == "completed"
     with store.service.runtime.connection() as conn:
-        record = json.loads(conn.execute("SELECT data FROM conversation_turns").fetchone()[0])
+        record = json.loads(
+            conn.execute("SELECT data FROM conversation_turns WHERE status='completed'").fetchone()[
+                0
+            ]
+        )
         assert record["trigger"] == "live"
         assert record["speech_delivery"] is None
     bridge.accept(delegation("duplicate-new-event"))
@@ -125,7 +129,12 @@ def test_late_fragment_fences_tools_before_cleanup_and_drops_old_result(tmp_path
     assert workers[0].closed
     assert bridge.poll() == [] and len(workers) == 1
     with store.service.runtime.connection() as conn:
-        assert conn.execute("SELECT status FROM conversation_turns").fetchone()[0] == "interrupted"
+        assert (
+            conn.execute(
+                "SELECT status FROM conversation_turns WHERE status!='context'"
+            ).fetchone()[0]
+            == "interrupted"
+        )
 
 
 def test_changed_duplicate_fails_closed(tmp_path):
