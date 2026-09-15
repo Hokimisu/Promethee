@@ -1,12 +1,12 @@
 # Essai ARDY
 
-Qualification T02 en cours. Le modèle réel génère des poses dans le visualiseur officiel ; les mesures reproductibles sur des cas distincts restent à compléter. Les données, poids et environnements restent hors Git.
+Essai T02 avec le modèle réel, sur des cas de calibration et de vérification distincts. Voir la [décision ARDY/Viser](../../docs/decisions/001-motion-stack.md) pour les conventions, licences et limites. Les données, poids et environnements restent hors Git.
 
 ## Environnement observé
 
 Le 15 septembre 2026 : Windows 11 x86_64, WSL Ubuntu 22.04, Python 3.11.16, RTX 4080 (16 376 MiB), pilote 596.21. WSL dispose d'environ 15 GiB de RAM et 4 GiB de swap. Un calcul PyTorch sur CUDA a réussi.
 
-Le code ARDY est épinglé à `693f74d13b3d04a0a22ce127ee79c929dd89756b6c`. Le checkpoint téléchargé est `nvidia/ARDY-Core-RP-20FPS-Horizon40`, révision `abe6c43beb28c867c950acb824b9c4ef3d63fb76`. Son fichier de configuration indique 20 poses/s, un horizon de 40 images, des jetons de 4 images et 10 étapes de diffusion. Ce sont des paramètres du modèle, pas des performances mesurées.
+Le code ARDY est épinglé à `693f74d13b3d04a0a22ce127ee79c929dd89756b`. Le checkpoint téléchargé est `nvidia/ARDY-Core-RP-20FPS-Horizon40`, révision `abe6c43beb28c867c950acb824b9c4ef3d63fb76`. Son fichier de configuration indique 20 poses/s, un horizon de 40 images, des jetons de 4 images et 10 étapes de diffusion. Ce sont des paramètres du modèle, pas des performances mesurées.
 
 Installation effectuée dans un environnement WSL indépendant avec uv 0.12.5 :
 
@@ -49,7 +49,7 @@ Gradio 6.27.0 exige une version de huggingface-hub incompatible avec Transformer
 
 ## Premières observations réelles
 
-Le service local de l'essai est `.local/encoder_service.py` ; ses copies préparées sont sous `/root/.local/share/promethee/text-encoders/`. Ce script exploratoire reste à transformer en commande reproductible documentée avant la clôture de T02.
+Le premier service local était `.local/encoder_service.py`. Il est remplacé par les scripts reproductibles ci-dessous, exercés avec les vrais poids et l'interface `TextEncoderAPI`.
 
 Depuis le clone ARDY, après démarrage du service :
 
@@ -79,6 +79,68 @@ Deux exports locaux issus du visualiseur ont été relus :
 
 Captures locales sous `.local/ardy/.cache/image_export/`, notamment `promethee-t02-velocity-01.png`. La caméra de suivi était trop éloignée pour juger les contacts : améliorer le cadrage et conserver des vidéos avant cette validation. Les exports pickle sont produits localement par cet essai ; ne pas charger de pickle non fiable.
 
-## Preuves restantes
+## Reproduire dans WSL ou Ubuntu
 
-Fournir les scripts et versions verrouillées permettant de reproduire l'encodeur séparé ; exporter les conventions articulaires ; mesurer séparément première pose exploitable et blocs suivants sur des graines, départs, cibles et instructions variés, avec calibration et vérification distinctes. Vérifier séparément les licences du code, des checkpoints, de l'encodeur et des assets avant toute redistribution. Le choix de Viser pour T06 est étayé par cet essai, mais la décision et la qualification T02 ne sont pas encore closes.
+Prérequis système de l'essai : Ubuntu 22.04 x86_64, pilote NVIDIA fonctionnel dans WSL, Git, compilateur C++, CMake et uv 0.12.5 disponible dans `PATH`. Prévoir environ 16 Go pour les seuls poids Llama, plus les environnements CUDA et leur cache. Les commandes suivantes s'exécutent dans **Bash**, depuis la racine du dépôt Promethee. `ROOT` désigne un dossier neuf ; les scripts refusent d'écraser une installation ou des résultats existants.
+
+```sh
+ROOT="$HOME/.local/share/promethee/reproduction"
+PROJECT="$(pwd)"
+bash experiments/motion/install.sh "$ROOT"
+"$ROOT/ardy-env/bin/python" experiments/motion/prepare_encoder.py --directory "$ROOT/adapters"
+"$ROOT/ardy-env/bin/python" experiments/motion/prepare_checkpoint.py --directory "$ROOT/checkpoints"
+"$ROOT/encoder-env/bin/python" experiments/motion/encoder_server.py --adapters "$ROOT/adapters" --output "$ROOT/embeddings"
+```
+
+Laisser le dernier processus ouvert jusqu'à l'affichage de `http://127.0.0.1:9550`. Il garde l'encodeur en mémoire. Aucun token n'est nécessaire pour la copie publique vérifiée ; la licence Llama reste applicable. La préparation écrit `provenance.json` avec les révisions et SHA-256 annoncés, et ne modifie jamais le cache partagé. Les dépendances complètes sont dans [ardy-requirements.txt](ardy-requirements.txt) et [encoder-requirements.txt](encoder-requirements.txt). Le script installe d'abord les roues CUDA officielles, puis ces versions exactes et le clone ARDY épinglé ; il termine par deux contrôles de compatibilité des dépendances.
+
+Dans un autre terminal Bash, depuis la même racine, redéfinir `ROOT` et `PROJECT` comme ci-dessus, puis :
+
+```sh
+"$ROOT/ardy-env/bin/python" experiments/motion/qualify.py --phase calibration --output .local/calibration-new --checkpoint-root "$ROOT/checkpoints"
+"$ROOT/ardy-env/bin/python" experiments/motion/qualify.py --phase verification --output .local/verification-new --checkpoint-root "$ROOT/checkpoints"
+"$ROOT/ardy-env/bin/python" experiments/motion/qualify.py --phase holdout --output .local/holdout-new --checkpoint-root "$ROOT/checkpoints"
+"$ROOT/ardy-env/bin/python" experiments/motion/qualify.py --phase calibration --frames 40 --output .local/first-block-new --checkpoint-root "$ROOT/checkpoints"
+uv run python experiments/motion/check_measurements.py .local/holdout-new/measurements.json
+```
+
+Les cas sont dans [qualify.py](qualify.py). Chaque dossier garde le script exact, les mesures, les conventions du squelette et les NPZ bruts/post-traités. Les critères de racine fixés après calibration sont dans [criteria.json](criteria.json). Le vérificateur exige trois cas distincts de 120 poses ; les essais de 40 poses servent uniquement à mesurer le premier bloc. Il ne valide pas le sens du geste, les pieds ou les collisions.
+
+Pour examiner les poses dans le visualiseur officiel :
+
+```sh
+cd "$ROOT/ardy"
+"$ROOT/ardy-env/bin/python" scripts/visualize.py "$PROJECT/.local/holdout-new" --port 2334
+```
+
+Ouvrir `http://localhost:2334`, choisir un fichier, activer le squelette, lire puis scruter les poses et les pieds. Le client Viser construit ses dépendances Web au premier lancement. Pour l'essai interactif avec changement de texte, depuis le clone :
+
+```sh
+TEXT_ENCODER_MODE=api LOCAL_CACHE=true "$ROOT/ardy-env/bin/python" scripts/run_demo.py --no-compile
+```
+
+Le visualiseur interactif utilise son propre chemin de cache et peut télécharger le checkpoint annoncé par son chargeur. Les mesures reproductibles ci-dessus imposent le dossier de checkpoint épinglé. Ne pas confondre un export interactif avec une batterie à graine fixée.
+
+## Résultats conservés le 15 septembre 2026
+
+| Dossier sous `.local/` | Résultat |
+|---|---|
+| `motion-calibration-01` | Échec de l'appel avec `progress_bar=None`, conservé ; remplacé par une fonction identité |
+| `motion-calibration-02` | Graines 101–103, 120 poses ; base de calibration |
+| `motion-verification-01` | Départs absolus mal interprétés : erreurs initiales de 0,67 à 1,10 m ; ne passe pas les critères |
+| `motion-verification-02` | Graines 201–203 après conversion locale ; critères de racine respectés. Ces cas ont servi au diagnostic, donc ne sont plus indépendants |
+| `motion-holdout-01` | Nouveaux cas 301–303 sans nouvelle correction ; trois réussites aux critères de racine |
+| `motion-first-block-01` | Trois essais de 40 poses pour la latence, sans mélange avec la batterie de 120 poses |
+| `motion-reproduction-01` | Trois séquences de 40 poses générées avec l'installation ARDY neuve `reproduction-03`, encodeur déjà chargé ; sorties finies |
+
+| Graine réservée | Erreur initiale | Erreur cible après traitement | Plus grand pas de racine | Encodage API | Génération de 120 poses |
+|---|---|---|---|---|---|
+| 301 | 1,52 mm | 2,89 cm | 5,93 cm | 10,65 s | 4,76 s |
+| 302 | 1,35 mm | 2,37 cm | 2,53 cm | 4,46 s | 0,94 s |
+| 303 | 0,75 mm | 0,30 cm | 0,14 cm | 3,31 s | 0,82 s |
+
+Le post-traitement de ces cas prend respectivement 1,08 s, 0,025 s et 0,017 s. Il ne remplace pas les trajectoires par leurs cibles. Les mesures dédiées de première pose sont de 0,518 / 0,198 / 0,225 s après encodage, soit 2,990 / 2,274 / 2,434 s texte compris ; ajouter 0,118 / 0,013 / 0,012 s pour le post-traitement. Ces durées excluent le rendu et son transport. Le premier bloc est nécessaire avant qu'une pose puisse être rendue : aucun streaming interne de diffusion n'est revendiqué.
+
+L'installation neuve `reproduction-03` a reconstruit les deux environnements et l'extension C++ ; leurs dépendances passent `uv pip check`. Les essais précédents restent intacts. Deux premières tentatives ont révélé une faute de transcription du SHA ARDY dans la documentation : le SHA de 40 caractères ci-dessus est celui vérifié avec Git et utilisé par le script corrigé.
+
+Les tests et captures ne constituent pas des souvenirs ni des consignes de vie. Les contacts du maillage, les annulations et les objets restent à qualifier lors de T07–T08. Une pose à la bonne cible ne prouve pas leur réussite.

@@ -6,13 +6,15 @@ Ce registre distingue le code livré des intégrations réellement vérifiées. 
 |---|---|---|
 | T00 | Vérifié sur CPU | Python 3.13.12, uv 0.12.5 ; 22 tests initiaux, lint, format et construction réussis ; pause/reprise dans deux processus |
 | T01 | Implémenté et vérifié sur CPU | Commandes `catalog` et `act` ; 29 tests passent, dont les tests en sous-processus de `tests/test_cli_actions.py` ; lint, format et construction passent |
-| T02 | Modèle réel et visualiseur exercés ; qualification en cours | ARDY Core génère sur RTX 4080 via un encodeur LLM2Vec séparé. Changement de texte et contrainte de vitesse exercés ; exports de 554 et 447 poses finies. Mesures reproductibles et conventions à finaliser ; voir [l'essai](../experiments/motion/README.md) |
+| T02 | Essai réel terminé ; ARDY Core et Viser retenus | Installation neuve reconstruite, génération réelle, changement de texte et contrainte de vitesse ; cas réservés 301–303 conformes aux critères de racine. Conventions, latences, provenance et limites dans la [décision](decisions/001-motion-stack.md) et [l'essai reproductible](../experiments/motion/README.md). Contacts physiques non validés |
 | T03 | Implémenté et vérifié sur CPU | Schéma v2, migration avec sauvegarde vérifiée, origine immuable et révisions ; 37 tests passent |
 | T04 | Implémenté et vérifié sur CPU | Suivi séparé, observation atomique, révision, `busy`, doublons et provenance du pilote ; contrôleur factice explicite |
 | T05 | Implémenté et vérifié sur CPU | Annulation, bail exclusif, réconciliation et coupures réelles de processus ; 60 tests passent, lint, format et construction réussis |
 | T06–T13 | À réaliser | Aucune intégration réelle revendiquée |
 
 Les journaux de test et données locales restent dans `.local/` et ne sont pas publiés.
+
+T02 est livré sur la branche [codex/motion-qualification](https://github.com/Hokimisu/Promethee/tree/codex/motion-qualification). Les scripts reproduisent les environnements séparés, les poids épinglés, le service d'encodage et les mesures brutes/post-traitées. Les erreurs de coordonnées initiales restent conservées et sont rejetées par le vérificateur ; les trois cas réservés passent. L'installation neuve génère également trois séquences de 40 poses. Le rendu officiel a été inspecté, mais l'analyse détaillée des contacts, l'annulation et le raccord au monde restent dans T06–T08.
 
 Pour T02, la copie [NousResearch/Meta-Llama-3-8B-Instruct](https://huggingface.co/NousResearch/Meta-Llama-3-8B-Instruct/tree/53346005fb0ef11d3b6a83b12c895cca40156b6c) est épinglée à `53346005fb0ef11d3b6a83b12c895cca40156b6c`. Le 15 septembre 2026, l'API Hugging Face annonce `gated: false` et les quatre fichiers Safetensors répondent HTTP 200 sans jeton. Leurs SHA-256 annoncés correspondent à ceux du dépôt `meta-llama/Meta-Llama-3-8B-Instruct`. La licence Llama 3 reste applicable. Les adaptateurs MNTP et supervised de McGill doivent tous deux être conservés ; le changement de provenance des poids ne suffit pas à valider le chargement ni l'inférence ARDY.
 

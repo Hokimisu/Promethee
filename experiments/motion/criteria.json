@@ -1,0 +1,8 @@
+{
+  "scope": "T02 Core horizon40, 120-frame root constraints; not contact or physics validation",
+  "calibration": "motion-calibration-02, seeds 101-103, 2026-09-15",
+  "max_target_error_m": 0.05,
+  "max_start_error_m": 0.05,
+  "max_root_frame_step_m": 0.12,
+  "require_all_finite": true
+}
