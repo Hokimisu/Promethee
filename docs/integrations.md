@@ -1,16 +1,18 @@
 # Intégrations à évaluer
 
-État de cadrage : 15 septembre 2026. Ces sources établissent des capacités des projets tiers ; elles ne prouvent pas leur intégration à Promethee. L'accès aux modèles, les performances locales et les conversions de squelette restent à tester.
+État vérifié : 15 septembre 2026. Les sources tierces établissent des capacités
+des projets amont ; les liens vers les qualifications Promethee précisent ce
+qui a réellement été essayé localement.
 
 | Composant | Choix de départ | Statut dans Promethee |
 |---|---|---|
-| Raisonnement | Astra via l'API Responses | Non connecté |
-| Agent persistant | Hermes Agent, réutilisé en amont | Non connecté |
+| Raisonnement | Astra, mode d'API explicite dans l'hôte | Accès OpenAI configuré : HTTP 401 ; aucune inférence Astra validée |
+| Agent persistant | Hermes Agent 0.20.5, réutilisé en amont | Hôte texte, historique et outils vérifiés avec fournisseur local de test ; [qualification](hermes-setup.md) |
 | Voix | GPT-Live avec délégation vers l'agent | Non connecté |
-| Mouvement | ARDY préentraîné, piloté par texte et contraintes | Non installé |
+| Mouvement | ARDY préentraîné, piloté par texte et contraintes | Génération et pilote cinématique réels ; déplacements encore peu fiables, [mesures](motion-validation.md) |
 | Contrôle physique éventuel | GPC / ProtoMotions ou contrôleur adapté | À évaluer après le premier essai |
-| Rendu | Moteur choisi après essai du squelette et de la latence | À décider |
-| Notes | Markdown consultable dans Obsidian | Export local livré |
+| Rendu | Viser pour le monde ; Three.js/VRM pour l'apparence | [Monde et squelette](rendering.md), [avatar animé en lecture seule](avatar-rendering.md) ; interactions corporelles non livrées |
+| Notes | Markdown consultable dans Obsidian | Sources, recherche et corrections raccordées à Hermes ; [contrat et tests](memory.md) |
 
 ## Astra et voix
 
@@ -19,11 +21,18 @@ Astra supporte les entrées texte/image et les sorties texte ; sa fiche ne décl
 - [Fiche Astra](https://developers.openai.com/api/docs/models/gpt-6-astra)
 - [Architectures vocales](https://developers.openai.com/api/docs/guides/voice-agents)
 
-Ne pas déduire l'accès API de la présence du modèle dans ChatGPT ou Codex. Ne pas ajouter de clé factice ni d'option d'environnement non consommée dans le socle. La configuration des fournisseurs sera introduite avec leur code d'intégration.
+Ne pas déduire l'accès API de la présence du modèle dans ChatGPT ou Codex. La
+commande `chat` utilise désormais `PROMETHEE_OPENAI_API_KEY`, un modèle et un mode
+d'API explicites ; elle ne choisit aucun fournisseur de secours. Le compte n'a
+pas encore permis de qualifier cette intégration réelle. GPT-Live et la chaîne
+transcription → Hermes → synthèse restent à raccorder et à mesurer.
 
 ## Hermes
 
-Hermes fournit mémoire, sessions, outils et compétences. Promethee lui exposera un ensemble réduit d'actions du monde avec des résultats vérifiables. Le moteur d'affichage et le corps devront continuer de fonctionner pendant ses appels de raisonnement.
+Hermes fournit mémoire, sessions, outils et compétences. Promethee expose cinq
+outils du monde et quatre outils mémoire optionnels, avec un historique natif
+persistant. Son profil désactive le contexte et la mémoire globale de Hermes.
+Le corps et l'affichage restent séparés des processus de conversation.
 
 - [Dépôt officiel](https://github.com/NousResearch/hermes-agent)
 - [Mémoire](https://hermes-agent.nousresearch.com/docs/user-guide/features/memory)
@@ -39,8 +48,16 @@ ARDY publie du code, des checkpoints et des démos de génération interactive, 
 - [Modèles préentraînés ProtoMotions](https://nvlabs.github.io/ProtoMotions/getting_started/pretrained_models.html)
 - [MotionBricks : capacités et état de publication](https://nvlabs.github.io/motionbricks/)
 
-Une séquence de poses ne prouve pas une prise, un appui ou une collision physique correcte. Avant de choisir le moteur de rendu : charger un checkpoint disponible, vérifier sa licence, adapter un squelette, réaliser une marche dirigée et une assise avec cibles explicites, puis observer les contacts et interruptions. Les politiques ProtoMotions ne sont pas interchangeables librement entre simulateurs ; lire leur fiche de modèle.
+Une séquence de poses ne prouve pas une prise, un appui ou une collision physique
+correcte. Les essais ARDY ont permis de retenir Core et Viser, puis de mesurer
+déplacements, postures et interruptions. Les appuis restent insuffisants et
+l'assise ciblée n'est pas livrée. Les politiques ProtoMotions ne sont pas
+interchangeables librement entre simulateurs ; lire leur fiche de modèle.
 
 ## Assets et redistribution
 
-Le catalogue initial ne contient que des capacités logiques. Aucun fichier de modèle, rig, texture, voix ou capture de mouvement n'est livré. Pour tout ajout ultérieur, enregistrer sa source, sa licence, sa version et ses conventions d'unités/axes. La licence MIT de Promethee ne remplace pas les licences tierces.
+Le catalogue d'objets reste logique. L'avatar VRM pixiv est téléchargé localement
+à une révision et une empreinte vérifiées ; sa [fiche de provenance](assets/pixiv-vrm-sample.md)
+précise sa licence. Les poids moteurs et les assets ne sont pas redistribués
+dans Git. Pour tout ajout, enregistrer source, licence, version et conventions
+d'unités/axes. La licence MIT de Promethee ne remplace pas les licences tierces.
