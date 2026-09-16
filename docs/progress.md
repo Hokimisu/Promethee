@@ -19,11 +19,26 @@ leurs limites décrivent la version de chaque essai, pas nécessairement la dern
 | T08 | Interactions cinématiques implémentées et vérifiées | Doudou et balle, plusieurs positions, géométries et orientations ; prise, dépôt, impossibilités, annulation avant/après contact et restauration. [Contrôleur](spatial-objects.md), [portée VRM](avatar-arm-reach.md) et [session en direct](live-avatar.md). Ni doigts physiques ni appuis validés |
 | T09 | Vérifié avec Astra et ARDY réels | Authentification ChatGPT native de Hermes, conversation sans action, lecture du monde, historique après redémarrage, posture exécutée et résultat observé. Après interruption pendant le mouvement, le nouveau tour retrouve l'annulation sans relancer l'action. Refus d'un objet absent. [Configuration, essais et limites](hermes-setup.md). Luna a ensuite commandé une posture pendant la présence via la [révision de commande](command-revision.md) |
 | T10 | Mémoire sourcée vérifiée sur CPU et avec Astra | Six appels réels dans deux mondes : recherche vide, proposition, correction retrouvée avec l'ancien terme, source relue et distinction du monde actuel. Deux notes dans le premier coffre, zéro dans le second, aucune action ; coffres ensuite exclus comme qualification. Retrait d'objet et contenus non fiables couverts par tests CPU ; pas de revue visuelle Obsidian. [Contrat et qualification](memory.md) |
-| T11 | Voix locale réelle qualifiée partiellement ; ticket ouvert | Essai Hermes/Luna → VoxCPM2 approuvé à l'écoute, phrases courtes et directions vocales, lecture navigateur et présence ARDY observées. Préchargement, contrat système et agent résident optionnel intégrés au socle. [Sources et lancement de la scène](../experiments/voice/realtime/README.md) livrés, sans microphone ; interruption acoustique et coût réel non qualifiés. [Mesures et limites](research/11-short-dialogue.md). Le raccord Live antérieur reste un diagnostic distinct avec fournisseur simulé |
+| T11 | Voix locale réelle qualifiée partiellement ; ticket ouvert | Essai Hermes/Luna → VoxCPM2 approuvé à l'écoute, phrases courtes et directions vocales. [Entrée locale](microphone.md) ajoutée : détecteur navigateur, ASR CPU et coupure testés avec des WAV injectés dans un MediaStream. Microphone physique, écho et coût réel non qualifiés. [Sources et lancement](../experiments/voice/realtime/README.md), [mesures vocales](research/11-short-dialogue.md). Le raccord Live antérieur reste un diagnostic distinct avec fournisseur simulé |
 | T12 | Initiative textuelle vérifiée avec Astra ; dépendance vocale ouverte | Deux séries réelles : mondes sans historique et après sollicitation, contrôleur ARDY actif puis retiré, pause après redémarrage et budgets épuisés. Aucun appel supplémentaire ni action corporelle. Référence active corrigée après fin de tour ; 363 tests passent. Aucune initiative personnelle activée ; T11 reste à qualifier. [Contrat et limites](initiative.md) |
 | T13 | Appuis corrigés et génération par blocs intégrée ; naturalité ouverte | [Recherche](research/humanlike-solutions-2026-09-15.md), [correction talon/pointe](avatar-foot-roll.md) et [mode continu expérimental](continuous-motion.md) : historique et futur séparés, génération pendant la lecture, annulation réelle conservant exactement la pose. Deux postures réussissent dans la série indépendante, deux déplacements échouent et cinq attentes persistent. Aucun entraînement ni connecteur supplémentaire revendiqué |
 
 Les journaux de test et données locales restent dans `.local/` et ne sont pas publiés.
+
+## Microphone local — 16 septembre 2026
+
+La [capture facultative](microphone.md) rejoint le même Hermes que le texte,
+avec clôture durable du tour interrompu avant acquittement et garde contre
+les sorties périmées. Le début de parole coupe la voix sans arrêter une action
+corporelle acceptée. Le bouton d'arrêt conserve sa portée sur le corps.
+
+Les tests Python et navigateur couvrent les absences, pannes, saturations,
+doubles envois, permissions tardives et huit courses de publication. Le vrai
+détecteur navigateur a révélé un défaut de minuteur, corrigé puis retesté.
+Un essai numérique complet donne deux réponses, une lecture interrompue et
+une complète ; il ne qualifie ni le microphone matériel ni la fluidité globale.
+Les environnements ASR et navigateur sont séparés et épinglés ; aucun poids
+ni audio capturé n'est ajouté au dépôt.
 
 ## Recherche Hermes et livraison de la scène — 16 septembre 2026
 

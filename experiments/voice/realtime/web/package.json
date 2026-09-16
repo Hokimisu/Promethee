@@ -1,5 +1,13 @@
 {
   "name": "promethee-realtime-voice-experiment",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node --test *.test.mjs"
+  },
+  "dependencies": {
+    "@ricky0123/vad-web": "0.0.31",
+    "onnxruntime-web": "1.22.0"
+  }
 }

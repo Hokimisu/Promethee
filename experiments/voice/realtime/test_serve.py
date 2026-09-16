@@ -204,6 +204,12 @@ class SessionContracts(unittest.TestCase):
         item.sid = "existing-session"
         item.active_sid = item.sid
         item.vox_ready = True
+        item.asr = None
+        item.asr_status = {"state": "disabled", "error": None}
+        item.input_capture = None
+        item.input_ids = set()
+        item.pending_audio = None
+        item.auto_continue = True
         item.state = {
             "ready": True,
             "session_id": item.sid,
@@ -396,7 +402,9 @@ class SessionContracts(unittest.TestCase):
         self.assertEqual(failures, [])
         self.assertTrue(original_queue.empty())
         self.assertNotEqual(item.sid, "existing-session")
-        item.think.assert_called_once_with("A neutral intervention", first=False)
+        item.think.assert_called_once_with(
+            "A neutral intervention", first=False, expected_sid=item.sid
+        )
 
     def test_invalid_or_not_ready_request_preserves_fence_and_queue(self):
         item = self.session

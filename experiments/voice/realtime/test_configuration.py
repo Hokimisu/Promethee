@@ -42,6 +42,12 @@ def test_paths_resolve_from_config_and_loading_creates_no_runtime(
     assert not config["data_dir"].exists()
     assert config["model"] == "gpt-5.6-luna"
     assert config["voice_command"] == configured[1]["voice_command"]
+    assert config["asr_command"] is None
+
+
+def test_optional_asr_command_is_an_unmodified_argument_list(configured):
+    configured[1]["asr_command"] = ["C:/some path/python.exe", "worker.py", "--model-path", "model"]
+    assert save(configured)["asr_command"] == configured[1]["asr_command"]
 
 
 @pytest.mark.parametrize(
@@ -51,6 +57,11 @@ def test_paths_resolve_from_config_and_loading_creates_no_runtime(
         ("voice_command", []),
         ("voice_command", ["python", None]),
         ("voice_command", ["python", "bad\x00arg"]),
+        ("asr_command", "python worker.py"),
+        ("asr_command", []),
+        ("asr_command", ["python", None]),
+        ("asr_command", ["python", " "]),
+        ("asr_command", ["python", "bad\x00arg"]),
         ("port", True),
         ("port", 80),
         ("port", 65536),

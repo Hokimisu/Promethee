@@ -5,6 +5,8 @@ import { createRoom } from "./room.js";
 import { PCMPlayer } from "./pcm-player.js";
 import { consumeEvents } from "./stream-events.mjs";
 import { AudioMouth } from "./audio-mouth.mjs";
+import { MicrophoneInput } from "./microphone.mjs";
+import { createSileroDetector } from "./silero-microphone.mjs";
 
 const $ = (id) => document.getElementById(id);
 const { renderer, scene, camera, orbit } = createRoom($("stage"));
@@ -54,6 +56,8 @@ const labels = {
     generating: "Ariane réfléchit…",
     synthesizing: "Préparation de la voix…",
     speaking: "Ariane parle",
+    listening: "Je vous écoute…",
+    transcribing: "Transcription locale…",
     running: "Essai en cours",
     moving: "En mouvement",
     stopping: "Arrêt…",
@@ -119,18 +123,92 @@ async function request(path, body, timeout = 6000) {
         );
     return data;
 }
+const microphone = new MicrophoneInput({
+    createContext: () =>
+        new AudioContext({ sampleRate: 48000, latencyHint: "interactive" }),
+    getUserMedia: (constraints) => {
+        if (!navigator.mediaDevices?.getUserMedia)
+            throw new Error(
+                "Le microphone nécessite un navigateur compatible sur localhost ou HTTPS.",
+            );
+        return navigator.mediaDevices.getUserMedia(constraints);
+    },
+    createDetector: createSileroDetector,
+    request: (path, body) => request(path, body, 20000),
+    canListen: () =>
+        connected && state?.ready && state?.asr?.state === "ready" && !pending,
+    interrupt: () => {
+        const epoch = stopLocal(false);
+        active = true;
+        showError(null);
+        return epoch;
+    },
+    adoptSession: (result, epoch) => {
+        if (epoch !== fence) return false;
+        session = result.session_id;
+        cursor = result.cursor;
+        // The body remains authoritative while capture and transcription run.
+        freezeMotion = false;
+        return true;
+    },
+    allowAudio: (whichSession, epoch) => {
+        if (epoch !== fence || session !== whichSession) return false;
+        audio.reset(session);
+        audioAllowed = true;
+        active = true;
+        return true;
+    },
+    onState: () => controls(),
+});
 function controls() {
+    const transcript =
+        typeof state?.transcript === "string" ? state.transcript.trim() : "";
+    $("transcript").textContent = transcript ? `Vous : ${transcript}` : "";
+    $("transcript").hidden = !transcript;
+    const inputError =
+        typeof state?.input_error === "string" ? state.input_error : "";
+    $("input-error").textContent = inputError;
+    $("input-error").hidden = !inputError;
     $("start").disabled =
         pending ||
         active ||
+        microphone.busy ||
         !connected ||
         !state?.ready ||
         !vrm ||
         Boolean(avatarError);
-    $("stop").disabled = !active && !pending;
-    $("message").disabled = !active || pending;
-    $("send").disabled = !active || pending;
+    $("stop").disabled =
+        !active && !pending && !microphone.enabled && !microphone.busy;
+    $("message").disabled = !connected || !state?.ready || pending;
+    $("send").disabled = $("message").disabled;
     $("scenario").disabled = active || pending;
+    $("microphone").textContent = microphone.enabled
+        ? "Couper le micro"
+        : "Activer le micro";
+    $("microphone").setAttribute("aria-pressed", String(microphone.enabled));
+    $("microphone").disabled =
+        !microphone.enabled &&
+        (pending ||
+            !connected ||
+            !state?.ready ||
+            state?.asr?.state !== "ready");
+    const micLabels = {
+        off: "Micro coupé",
+        opening: "Autorisation et chargement du détecteur…",
+        ready: "Micro actif · parlez pour interrompre Ariane",
+        listening: "Écoute · 12 secondes maximum",
+        transcribing: "Transcription locale…",
+        failed: "Micro indisponible",
+    };
+    $("microphone-status").textContent =
+        microphone.error ||
+        (state?.asr?.state === "loading"
+            ? "Préparation de la transcription locale…"
+            : state?.asr?.state === "failed"
+              ? state.asr.error || "Transcription locale indisponible."
+              : state?.asr?.state === "disabled"
+                ? "Transcription locale désactivée."
+                : micLabels[microphone.phase]);
     if (avatarError) {
         $("status").textContent = "Avatar indisponible";
         return;
@@ -171,6 +249,8 @@ function stopLocal(freeze = true) {
     return fence;
 }
 async function command(path, body) {
+    if (path === "/stop") microphone.disable();
+    else microphone.cancelInput();
     const epoch = stopLocal(path === "/stop");
     pending = true;
     showError(null);
@@ -222,11 +302,24 @@ $("start-form").onsubmit = (event) => {
 $("say-form").onsubmit = (event) => {
     event.preventDefault();
     const text = $("message").value.trim();
-    if (!text || !active || pending) return;
+    if (!text || !connected || !state?.ready || pending) return;
     $("message").value = "";
     void command("/say", { text });
 };
 $("stop").onclick = () => void command("/stop", {});
+$("microphone").onclick = () => {
+    if (microphone.enabled) {
+        microphone.disable();
+        return;
+    }
+    // Both contexts are created/resumed in this explicit user gesture.
+    const playbackReady = audio.enable();
+    const microphoneReady = microphone.enable();
+    const resource = microphone.resource;
+    void Promise.all([playbackReady, microphoneReady]).catch((error) => {
+        if (microphone.live(resource)) microphone.fail(error);
+    });
+};
 $("wide").onclick = () => {
     camera.position.set(1.6, 1.8, 5.8);
     orbit.target.set(-0.15, 1.05, -0.6);
@@ -338,15 +431,30 @@ function drawPose(now) {
 }
 async function pollState() {
     const epoch = fence;
+    const requestedSession = session;
+    const duringInputStart = microphone.waitingForStart;
     try {
         if (pending) return;
         const next = await request("/state.json", undefined, 3000);
         if (epoch !== fence) return;
+        // A read begun before input_start was acknowledged may still describe
+        // the previous session. Its observed body is usable, not its audio fence.
+        if (requestedSession !== session) {
+            receiveMotion(next.motion);
+            return;
+        }
         state = next;
         connected = true;
         connectionError = null;
-        if (session && next.session_id && next.session_id !== session) {
-            stopLocal(true);
+        if (
+            session &&
+            next.session_id &&
+            next.session_id !== session &&
+            !duringInputStart &&
+            !microphone.waitingForStart
+        ) {
+            microphone.cancelInput();
+            stopLocal(false);
             active = false;
             session = null;
             showError("La session a changé. Démarrez un nouvel essai.");
@@ -358,6 +466,16 @@ async function pollState() {
         )
             active = false;
         if (!pending) receiveMotion(next.motion);
+        microphone.observe(next.input);
+        if (
+            microphone.enabled &&
+            ["failed", "disabled"].includes(next.asr?.state)
+        )
+            microphone.fail(
+                new Error(
+                    next.asr.error || "Transcription locale indisponible.",
+                ),
+            );
         if (next.error || next.body_error || next.body_presence?.error)
             showError(
                 next.error || next.body_error || next.body_presence.error,
@@ -366,6 +484,7 @@ async function pollState() {
         if (epoch !== fence) return;
         connectionError = message(error);
         connected = false;
+        microphone.disable();
         if (audioAllowed) {
             stopLocal(true);
             active = false;
@@ -386,6 +505,7 @@ async function pollEvents() {
         cursor = consumeEvents(next, session, cursor, (event) => {
             if (!audioAllowed) return;
             if (event.event === "stop" && !event.id) {
+                microphone.disable();
                 stopLocal(true);
                 active = false;
                 controls();
@@ -395,6 +515,7 @@ async function pollEvents() {
         });
     } catch (error) {
         if (epoch === fence) {
+            microphone.disable();
             stopLocal(true);
             active = false;
             showError(error);
@@ -465,7 +586,10 @@ setInterval(() => {
             rendered_frames: renderedFrames,
         });
 }, 5000);
-addEventListener("pagehide", () => audio.reset());
+addEventListener("pagehide", () => {
+    microphone.disable();
+    audio.reset();
+});
 window.arianeRealtime = {
     stats: () => ({
         ...audio.stats,
@@ -477,8 +601,10 @@ window.arianeRealtime = {
         mouth_expression: mouth?.expression,
         mouth_weight: mouth?.value,
         rendered_rms: audio.renderedRms,
+        microphone: microphone.snapshot(),
     }),
     stopLocal: () => {
+        microphone.disable();
         stopLocal(true);
         active = false;
         controls();

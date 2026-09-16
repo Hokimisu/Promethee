@@ -24,6 +24,7 @@ jobs:
       - run: npm run format:check
       - run: npm test
       - run: npm run build
+      - run: npm --prefix ../../experiments/voice/realtime/web ci --ignore-scripts
       - run: node ../../experiments/voice/realtime/web/build.mjs
       - run: node --test ../../experiments/voice/realtime/web/*.test.mjs
       - run: npx --no-install prettier --check "../../experiments/voice/realtime/web/*.{js,mjs,html,css,json}" "!../../experiments/voice/realtime/web/bundle.js"

@@ -52,6 +52,22 @@ budget persistant raccordé à la scène vocale restent également ouverts.
 
 Le reste du document conserve les preuves de l'audit du 15 septembre.
 
+## Entrée vocale locale — 16 septembre 2026
+
+Le [raccord microphone](microphone.md) ajoute la capture facultative, le
+détecteur local, la transcription CPU et l'interruption anticipée du même
+contexte Hermes. Un premier essai numérique traverse réellement le navigateur,
+Silero, Faster Whisper small, Hermes résident et Vox : première lecture
+interrompue, seconde terminée, aucun ancien identifiant rejoué. Il a aussi
+révélé une perte du début de phrase, corrigée par un tampon plus long.
+
+Ce n'est pas un test du microphone physique ni de l'annulation d'écho.
+Les premières réponses à 7,21 et 10,01 secondes après fin des WAV ne valident
+pas une conversation fluide. Un refus de préparation VRM pendant cette session
+reste documenté séparément ; le succès de la voix ne prouve pas celui du corps.
+Le coût monétaire par tour Codex n'est pas disponible. T11 et la dépendance
+vocale de T12 restent ouverts.
+
 ## T07 — Corps et résultat observé
 
 | Exigence | Preuve inspectée | Conclusion |

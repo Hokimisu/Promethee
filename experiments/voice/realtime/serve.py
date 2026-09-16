@@ -1,8 +1,9 @@
-"""Experimental Hermes / live ARDY / streaming Vox session, no microphone."""
+"""Experimental Hermes / live ARDY / streaming Vox with optional local microphone."""
 
 import argparse
 import collections
 import contextlib
+import hashlib
 import json
 import queue
 import subprocess
@@ -15,6 +16,7 @@ from types import SimpleNamespace
 from urllib.parse import parse_qs, urlsplit
 from uuid import uuid4
 
+from asr import ASRProcess, validate_audio
 from body import BodyAdapter
 from configuration import load_configuration
 from delivery import DirectedWorker
@@ -46,6 +48,12 @@ class Session:
         self.active_sid = ""
         self.deliveries = {}
         self.vox_ready = False
+        self.asr = None
+        self.asr_status = {"state": "disabled", "error": None}
+        self.input_capture = None
+        self.input_ids = set()
+        self.pending_audio = None
+        self.auto_continue = True
         self.stopping = threading.Event()
         self.state = {
             "ready": False,
@@ -86,6 +94,10 @@ class Session:
                 "world": body.get("world"),
                 "body_error": body.get("error"),
                 "body_presence": body.get("presence"),
+                "asr": dict(self.asr_status),
+                "input": None
+                if self.input_capture is None
+                else {k: v for k, v in self.input_capture.items() if k != "audio_sha256"},
                 "cursor": self.cursor,
                 "elapsed_seconds": max(0, time.monotonic() - self.began)
                 if getattr(self, "began", None)
@@ -93,6 +105,8 @@ class Session:
             }
 
     def post(self, operation, value):
+        if operation in ("input_start", "input_audio", "input_cancel"):
+            return self._post_input(operation, value)
         if operation in ("start", "say"):
             field = "scenario" if operation == "start" else "text"
             text = value.get(field)
@@ -112,6 +126,175 @@ class Session:
                 session_id=sid, phase="thinking" if operation != "stop" else "stopping"
             )
             return {"session_id": sid, "cursor": self.cursor, "stopped": operation == "stop"}
+
+    def _post_input(self, operation, value):
+        input_id = value.get("input_id")
+        if (
+            not isinstance(input_id, str)
+            or not input_id.startswith("input-")
+            or not 7 <= len(input_id) <= 80
+            or any(c not in "abcdefghijklmnopqrstuvwxyz0123456789-_" for c in input_id)
+        ):
+            raise ValueError("Identifiant de prise de parole invalide.")
+        # Decode before taking the publication lock. Audio is never written to disk.
+        digest = (
+            hashlib.sha256(validate_audio(value)).hexdigest()
+            if operation == "input_audio"
+            else None
+        )
+        with self.lock:
+            capture = self.input_capture
+            if operation == "input_start":
+                if capture and capture["input_id"] == input_id:
+                    if capture["session_id"] != self.sid:
+                        raise ValueError("Cette prise de parole est périmée.")
+                    return {"session_id": self.sid, "cursor": self.cursor, "input_id": input_id}
+                if input_id in self.input_ids or len(self.input_ids) >= 256:
+                    raise ValueError("Cette prise de parole ne peut pas être réutilisée.")
+                if not self.asr or self.asr.state != "ready" or not self.snapshot()["ready"]:
+                    raise ValueError(
+                        "La transcription locale n’est pas prête. Le texte reste disponible."
+                    )
+                sid = uuid4().hex
+                started = time.monotonic()
+                self.commands.put_nowait((operation, {"session_id": sid, "input_id": input_id}))
+                # The owner may be cleaning a worker. Fence durable MCP authority
+                # before acknowledging input; never join its process on HTTP threads.
+                if self.turn_id:
+                    self.host.store.abort(self.turn_id, status="interrupted")
+                self.sid = sid
+                self.input_ids.add(input_id)
+                self.input_capture = {
+                    "input_id": input_id,
+                    "session_id": sid,
+                    "state": "listening",
+                    "started_at": started,
+                    "deadline": started + 18,
+                    "fence_seconds": time.monotonic() - started,
+                }
+                self.pending_audio = None
+                self.state.update(
+                    session_id=sid, phase="listening", status="Je t’écoute…", error=None
+                )
+                return {"session_id": sid, "cursor": self.cursor, "input_id": input_id}
+            if (
+                not capture
+                or capture["input_id"] != input_id
+                or capture["session_id"] != value.get("session_id")
+                or self.sid != value.get("session_id")
+            ):
+                raise ValueError("Cette prise de parole est périmée.")
+            if operation == "input_audio":
+                if "audio_sha256" in capture:
+                    if digest != capture["audio_sha256"]:
+                        raise ValueError("Cette prise de parole contient déjà un autre audio.")
+                    return {
+                        "ok": True,
+                        "session_id": self.sid,
+                        "input_id": input_id,
+                        "replayed": True,
+                    }
+                if capture["state"] != "listening" or time.monotonic() >= capture["deadline"]:
+                    raise ValueError("La prise de parole est terminée ou périmée.")
+                self.commands.put_nowait((operation, dict(value)))
+                capture.update(
+                    state="transcribing", audio_sha256=digest, deadline=time.monotonic() + 40
+                )
+                self.state.update(phase="transcribing", status="Transcription…")
+            else:
+                if capture["state"] in {"cancelled", "failed"}:
+                    return {
+                        "ok": True,
+                        "session_id": self.sid,
+                        "input_id": input_id,
+                        "replayed": True,
+                    }
+                if capture["state"] == "completed":
+                    raise ValueError("Cette prise de parole est déjà traitée.")
+                self.commands.put_nowait((operation, dict(value)))
+                capture["state"] = "cancelled"
+            return {"ok": True, "session_id": self.sid, "input_id": input_id}
+
+    def _handle_input(self, operation, value):
+        # Called only by the owner after checking session_id. Cleanup may block,
+        # so every later publication must check the session again.
+        if operation == "input_start":
+            self.interrupt(body=False, notify=False)
+            with self.lock:
+                if value["session_id"] != self.sid:
+                    return
+                self.running = False
+                self.auto_continue = False
+                self.began = None
+        elif operation == "input_audio":
+            with self.lock:
+                if (
+                    value["session_id"] == self.sid
+                    and self.input_capture["state"] == "transcribing"
+                ):
+                    self.pending_audio = value
+        else:
+            with self.lock:
+                if value["session_id"] != self.sid:
+                    return
+                self.pending_audio = None
+                self.running = False
+                self.update(phase="idle", status="Prête")
+
+    def _poll_input(self):
+        if not self.asr:
+            return
+        event = self.asr.poll()
+        with self.lock:
+            self.asr_status = {"state": self.asr.state, "error": self.asr.error}
+            capture = self.input_capture
+            if (
+                capture
+                and capture["session_id"] == self.sid
+                and capture["state"] in {"listening", "transcribing"}
+            ):
+                if time.monotonic() >= capture["deadline"] or self.asr.state == "failed":
+                    capture["state"] = "failed"
+                    self.pending_audio = None
+                    self.running = False
+                    self.update(
+                        phase="idle",
+                        status="Prête",
+                        input_error="Écoute interrompue. Tu peux écrire.",
+                    )
+            if event and event.get("event") in {"transcript", "error"}:
+                if (
+                    capture
+                    and capture["session_id"] == self.sid == event.get("id")
+                    and capture["state"] == "transcribing"
+                ):
+                    text = event.get("text")
+                    if (
+                        event["event"] == "transcript"
+                        and isinstance(text, str)
+                        and 1 <= len(text.strip()) <= 1200
+                    ):
+                        capture["state"] = "completed"
+                        capture["metrics"] = event.get("metrics", {})
+                        self.running = True
+                        self.update(transcript=text.strip(), input_error=None)
+                        self.think(text.strip(), expected_sid=self.sid)
+                    else:
+                        capture["state"] = "failed"
+                        self.running = False
+                        self.update(
+                            phase="idle",
+                            status="Prête",
+                            input_error="Parole non transcrite. Tu peux réessayer ou écrire.",
+                        )
+            if self.pending_audio and self.asr.state == "ready" and not self.asr.busy:
+                value, self.pending_audio = self.pending_audio, None
+                if (
+                    value["session_id"] == self.sid
+                    and capture
+                    and capture["state"] == "transcribing"
+                ):
+                    self.asr.submit(value["session_id"], value["pcm16"])
 
     def vox_send(self, value):
         self.vox.stdin.write(json.dumps(value, ensure_ascii=False) + "\n")
@@ -139,7 +322,7 @@ class Session:
                 # Existing terminal receipts must never be overwritten.
                 pass
 
-    def interrupt(self, *, body=False, notify=True):
+    def interrupt(self, *, body=False, notify=True, expected_sid=None):
         self.host.cancel()
         self.pending_text = None
         if self.speech:
@@ -148,18 +331,26 @@ class Session:
         self.speech = None
         with contextlib.suppress(RuntimeError):
             self.body.set_presence(False)
-        if notify:
-            self.emit("stop")
-        if body:
-            with contextlib.suppress(RuntimeError):
-                self.body.cancel()
+        with self.lock:
+            if expected_sid is not None and expected_sid != self.sid:
+                return
+            if notify:
+                self.emit("stop")
+            if body:
+                with contextlib.suppress(RuntimeError):
+                    self.body.cancel()
 
-    def think(self, text, first=False):
-        prompt = ("Contexte de départ : " if first else "Suite de la scène : ") + text
-        self.brain_started = time.monotonic()
-        self.turn_id = self.host.start(prompt)
-        self.calls += 1
-        self.update(turn_id=self.turn_id, phase="thinking", status="Ariane improvise…")
+    def think(self, text, first=False, *, expected_sid=None):
+        with self.lock:
+            if self.active_sid != self.sid or (
+                expected_sid is not None and expected_sid != self.sid
+            ):
+                return
+            prompt = ("Contexte de départ : " if first else "Message : ") + text
+            self.brain_started = time.monotonic()
+            self.turn_id = self.host.start(prompt)
+            self.calls += 1
+            self.update(turn_id=self.turn_id, phase="thinking", status="Ariane improvise…")
 
     def speak(self, item):
         with self.lock:
@@ -218,6 +409,16 @@ class Session:
         self.metric["voice_profile"] = self.voice_profile
         self.metric["dialogue_model"] = self.model
         try:
+            if self.config.get("asr_command"):
+                self._asr_log = (self.output / "asr.log").open("a", encoding="utf-8")
+                try:
+                    self.asr = ASRProcess(self.config["asr_command"], self._asr_log)
+                    self.asr_status = {"state": "loading", "error": None}
+                except Exception:
+                    self.asr_status = {
+                        "state": "failed",
+                        "error": "Transcription locale indisponible. Le texte reste disponible.",
+                    }
             args = SimpleNamespace(
                 data_dir=self.body.data_dir,
                 hermes_python=self.config["hermes_python"],
@@ -257,6 +458,10 @@ class Session:
             (self.output / "server-error.log").write_text(traceback.format_exc(), encoding="utf-8")
             self.update(status="Essai indisponible : " + str(exc), phase="error", error=str(exc))
         finally:
+            if self.asr:
+                self.asr.close()
+            if hasattr(self, "_asr_log"):
+                self._asr_log.close()
             if hasattr(self, "vox"):
                 with contextlib.suppress(Exception):
                     self.vox_send({"op": "shutdown"})
@@ -292,16 +497,41 @@ class Session:
                         self.active_sid = value["session_id"]
                 if not current_command:
                     continue
-                self.interrupt(body=operation in ("start", "stop"), notify=operation == "stop")
-                if operation == "stop":
-                    self.running = False
-                    self.update(status="Essai arrêté", phase="idle", text="")
+                if operation.startswith("input_"):
+                    self._handle_input(operation, value)
                     continue
-                self.running = True
-                self.began = None if operation == "start" else self.began
-                self.calls = 0 if operation == "start" else self.calls
-                self.scenario = value.get("scenario", getattr(self, "scenario", ""))
-                self.think(value.get("scenario", value.get("text")), first=operation == "start")
+                self.interrupt(
+                    body=operation in ("start", "stop"),
+                    notify=operation == "stop",
+                    expected_sid=value["session_id"],
+                )
+                with self.lock:
+                    if value["session_id"] != self.sid:
+                        continue
+                    self.pending_audio = None
+                    if self.input_capture and self.input_capture["state"] in {
+                        "listening",
+                        "transcribing",
+                    }:
+                        self.input_capture["state"] = "cancelled"
+                    if operation == "stop":
+                        self.running = False
+                        self.update(status="Essai arrêté", phase="idle", text="")
+                        continue
+                    self.running = True
+                    self.auto_continue = operation == "start" or (
+                        getattr(self, "auto_continue", True) and self.began is not None
+                    )
+                    self.began = None if operation == "start" else self.began
+                    self.calls = 0 if operation == "start" else self.calls
+                    self.scenario = value.get("scenario", getattr(self, "scenario", ""))
+                    self.think(
+                        value.get("scenario", value.get("text")),
+                        first=operation == "start",
+                        expected_sid=value["session_id"],
+                    )
+
+            self._poll_input()
 
             for _ in range(64):
                 try:
@@ -317,91 +547,128 @@ class Session:
                     raise RuntimeError("Le moteur vocal s’est fermé.")
                 if kind == "error" and event.get("id") is None:
                     raise RuntimeError(event.get("message", "Chargement vocal impossible"))
-                current = self.speech
-                if not current or event.get("id") != current["id"] or current["sid"] != self.sid:
-                    continue
-                if kind == "pcm":
-                    now = time.monotonic()
-                    if current["first"] is None:
-                        current["first"] = now
-                        if self.began is None:
-                            self.began = now + 0.5
-                    current["samples"] += event["samples"]
-                    current["end_estimate"] = current["first"] + 0.5 + current["samples"] / RATE
-                    self.emit("pcm", **{k: v for k, v in event.items() if k != "event"})
-                    self.update(status="En scène", phase="speaking")
-                elif kind == "done":
-                    current["done"] = True
-                    self.metric["voice_runs"].append(event.get("metrics", event))
-                    self.emit("speech_end", id=current["id"])
-                elif kind in ("error", "cancelled"):
-                    self.receipt("failed" if kind == "error" else "interrupted")
-                    self.emit("stop", id=current["id"])
-                    self.speech = None
-                    self.update(
-                        status="Synthèse interrompue",
-                        phase="error",
-                        error=event.get("message", kind),
-                    )
+                with self.lock:
+                    current = self.speech
+                    if (
+                        not current
+                        or event.get("id") != current["id"]
+                        or current["sid"] != self.sid
+                    ):
+                        continue
+                    if kind == "pcm":
+                        now = time.monotonic()
+                        if current["first"] is None:
+                            current["first"] = now
+                            if self.began is None:
+                                self.began = now + 0.5
+                        current["samples"] += event["samples"]
+                        current["end_estimate"] = current["first"] + 0.5 + current["samples"] / RATE
+                        self.emit("pcm", **{k: v for k, v in event.items() if k != "event"})
+                        self.update(status="En scène", phase="speaking")
+                    elif kind == "done":
+                        current["done"] = True
+                        self.metric["voice_runs"].append(event.get("metrics", event))
+                        self.emit("speech_end", id=current["id"])
+                    elif kind in ("error", "cancelled"):
+                        self.receipt("failed" if kind == "error" else "interrupted")
+                        self.emit("stop", id=current["id"])
+                        self.speech = None
+                        self.update(
+                            status="Synthèse interrompue",
+                            phase="error",
+                            error=event.get("message", kind),
+                        )
 
             result = self.host.poll()
-            if result:
-                self.metric["brain_seconds"].append(time.monotonic() - self.brain_started)
-                if result.get("timings"):
-                    self.metric["brain_timings"].append(result["timings"])
-                delivery = self.deliveries.pop(self.turn_id, None)
-                if result["status"] == "completed" and self.running and self.active_sid == self.sid:
-                    text = result["text"].strip()
-                    if len(text) > 1000:
-                        self.update(status="Réponse trop longue pour cet essai", phase="error")
+            with self.lock:
+                if result and self.active_sid == self.sid:
+                    self.metric["brain_seconds"].append(time.monotonic() - self.brain_started)
+                    if result.get("timings"):
+                        self.metric["brain_timings"].append(result["timings"])
+                    delivery = self.deliveries.pop(self.turn_id, None)
+                    if (
+                        result["status"] == "completed"
+                        and self.running
+                        and self.active_sid == self.sid
+                    ):
+                        text = result["text"].strip()
+                        if len(text) > 1000:
+                            self.update(status="Réponse trop longue pour cet essai", phase="error")
+                            self.running = False
+                        elif not delivery:
+                            self.update(status="Direction vocale absente", phase="error")
+                            self.running = False
+                        else:
+                            self.pending_text = {
+                                "id": uuid4().hex,
+                                "turn_id": self.turn_id,
+                                "text": text,
+                                "delivery": delivery,
+                                "sid": self.active_sid,
+                            }
+                    elif result["status"] != "completed":
+                        self.update(
+                            status="Ariane n’a pas terminé sa réponse",
+                            phase="error",
+                            error=result.get("code"),
+                        )
                         self.running = False
-                    elif not delivery:
-                        self.update(status="Direction vocale absente", phase="error")
-                        self.running = False
-                    else:
-                        self.pending_text = {
-                            "id": uuid4().hex,
-                            "turn_id": self.turn_id,
-                            "text": text,
-                            "delivery": delivery,
-                            "sid": self.active_sid,
-                        }
-                elif result["status"] != "completed":
-                    self.update(
-                        status="Ariane n’a pas terminé sa réponse",
-                        phase="error",
-                        error=result.get("code"),
-                    )
-                    self.running = False
 
             now = time.monotonic()
-            if self.running and self.began and now - self.began >= 60:
-                self.interrupt(body=True)
-                self.running = False
-                self.update(status="Essai de 60 secondes terminé", phase="idle")
-            if self.speech and self.speech["done"]:
-                if self.speech["terminal"] or now > (self.speech["end_estimate"] or now) + 2:
-                    # Without an actual browser receipt, do not claim successful playback.
-                    if not self.speech["terminal"]:
-                        self.receipt("interrupted")
-                    self.speech = None
-            if self.running and not self.speech and self.pending_text:
-                pending, self.pending_text = self.pending_text, None
-                self.speak(pending)
             if (
-                self.running
-                and self.active_sid == self.sid
-                and self.speech
-                and self.speech["first"]
-                and not self.host.worker
-                and not self.pending_text
-                and self.calls < 12
-                and (not self.began or now - self.began < 54)
+                self.active_sid == self.sid
+                and self.running
+                and getattr(self, "auto_continue", True)
+                and self.began
+                and now - self.began >= 60
             ):
-                self.think(
-                    "Poursuis naturellement, sans répéter. Tiens compte du monde observé et "
-                    "du contexte précédent. Une intervention utilisateur reste prioritaire."
-                )
+                expired_sid = self.active_sid
+                self.interrupt(body=True, expected_sid=expired_sid)
+                with self.lock:
+                    if self.sid == expired_sid:
+                        self.running = False
+                        self.update(status="Essai de 60 secondes terminé", phase="idle")
+            with self.lock:
+                if self.active_sid == self.sid:
+                    if self.speech and self.speech["done"]:
+                        if (
+                            self.speech["terminal"]
+                            or now > (self.speech["end_estimate"] or now) + 2
+                        ):
+                            # Without an actual browser receipt, do not claim successful playback.
+                            if not self.speech["terminal"]:
+                                self.receipt("interrupted")
+                            self.speech = None
+                    if self.running and not self.speech and self.pending_text:
+                        pending, self.pending_text = self.pending_text, None
+                        self.speak(pending)
+                    if (
+                        self.running
+                        and not getattr(self, "auto_continue", True)
+                        and not self.speech
+                        and not self.pending_text
+                        and not self.host.worker
+                    ):
+                        with contextlib.suppress(RuntimeError):
+                            self.body.set_presence(False)
+                        self.running = False
+                        self.update(status="Prête", phase="idle")
+                    if (
+                        self.running
+                        and getattr(self, "auto_continue", True)
+                        and self.active_sid == self.sid
+                        and self.speech
+                        and self.speech["first"]
+                        and not self.host.worker
+                        and not self.pending_text
+                        and self.calls < 12
+                        and (not self.began or now - self.began < 54)
+                    ):
+                        self.think(
+                            "Poursuis naturellement, sans répéter. Tiens compte du monde "
+                            "observé et du contexte précédent. Une intervention utilisateur "
+                            "reste prioritaire."
+                        )
             if self.vox_ready and self.body.poll()["ready"] and not self.running:
                 if self.state["phase"] == "loading":
                     self.update(status="Prête", phase="idle")
@@ -439,6 +706,13 @@ def main():
         "/bundle.js.LEGAL.txt": ("text/plain; charset=utf-8", HERE / "web/bundle.js.LEGAL.txt"),
         "/avatar.vrm": ("model/gltf-binary", config["avatar"]),
     }
+    for name, mime in {
+        "vad.worklet.bundle.min.js": "text/javascript",
+        "silero_vad_v5.onnx": "application/octet-stream",
+        "ort-wasm-simd-threaded.mjs": "text/javascript",
+        "ort-wasm-simd-threaded.wasm": "application/wasm",
+    }.items():
+        assets["/vad/" + name] = (mime, HERE / "web/vad" / name)
 
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
@@ -505,12 +779,21 @@ def main():
             if not self.allowed(True):
                 self.close_connection = True
                 return self.send(403, {"error": "Same-origin only"})
-            if self.path not in ("/start", "/say", "/stop", "/telemetry"):
+            if self.path not in (
+                "/start",
+                "/say",
+                "/stop",
+                "/telemetry",
+                "/input_start",
+                "/input_audio",
+                "/input_cancel",
+            ):
                 self.close_connection = True
                 return self.send(404, {"error": "Unknown route"})
             try:
                 length = int(self.headers.get("Content-Length", "0"))
-                if not 0 < length <= 16384 or self.headers.get("Transfer-Encoding"):
+                limit = 520000 if self.path == "/input_audio" else 16384
+                if not 0 < length <= limit or self.headers.get("Transfer-Encoding"):
                     raise ValueError("Invalid message size")
                 if self.headers.get("Content-Type", "").split(";")[0] != "application/json":
                     raise ValueError("JSON required")

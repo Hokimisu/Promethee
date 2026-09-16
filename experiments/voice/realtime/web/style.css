@@ -143,6 +143,16 @@ textarea {
     line-height: 1.5;
     margin: 0;
 }
+#microphone[aria-pressed="true"] {
+    border-color: #d6b08a;
+    background: #574451;
+}
+#microphone-status {
+    margin: 9px 0 0;
+    color: #bfb4b8;
+    font-size: 12px;
+    line-height: 1.5;
+}
 #notice {
     margin: 0;
     color: #aaa1a7;

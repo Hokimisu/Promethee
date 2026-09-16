@@ -2,9 +2,10 @@
 
 Hermes produit une réplique courte et sa direction de jeu ; VoxCPM2 envoie le
 PCM au navigateur pendant qu'ARDY génère la présence corporelle. Le même monde
-enregistre les observations et les résultats d'outils. Cet essai de 60 secondes
-reçoit des **interventions écrites**. Il ne valide pas encore le microphone,
-l'interruption acoustique ou l'initiative persistante de T12.
+enregistre les observations et les résultats d'outils. On peut écrire dès que
+la scène est prête, lancer un essai de 60 secondes, ou activer la transcription
+locale facultative. Les essais numériques ne valident pas encore l'acoustique
+du microphone de l'utilisateur ni l'initiative persistante de T12.
 
 Les sources sont livrées ; les modèles, références vocales, caches et sessions
 restent locaux. Chaque lancement crée une nouvelle session de qualification,
@@ -19,6 +20,7 @@ clone neuf :
 ```sh
 uv sync --locked --extra agent --extra avatar
 npm --prefix web/avatar ci --ignore-scripts
+npm --prefix experiments/voice/realtime/web ci --ignore-scripts
 node experiments/voice/realtime/web/build.mjs
 ```
 
@@ -109,6 +111,8 @@ puis remplacer ses chemins. Les chemins du socle sont relatifs au fichier de
 configuration. Les arguments de `voice_command` et les chemins d'ARDY sont
 transmis tels quels, donc utiliser des chemins absolus du système qui les exécute.
 Une commande vocale est une liste d'arguments, jamais une commande shell.
+La même règle s'applique à `asr_command`, facultative ; `null` garde le mode
+texte sans charger de reconnaissance vocale.
 
 Pour Windows + WSL, définir `body.wsl` sur le nom de la distribution et utiliser
 des chemins Linux pour `ardy_python` et `checkpoint_root`. Commencer
@@ -125,6 +129,57 @@ Ouvrir l'URL locale affichée après construction du navigateur, attendre « Pr�
 et invalide ses décisions tardives ; le bouton Arrêter demande aussi l'arrêt du
 corps. Une commande acceptée n'est pas une action terminée. Le lancement refuse
 un port occupé avant de charger les modèles.
+
+## Entrée vocale locale facultative
+
+Installer [les dépendances ASR](asr-requirements.txt) dans un environnement
+séparé. Le jeu de 26 versions a été installé et testé sur Windows x86_64 avec
+Python 3.13.12 ; les autres plateformes ne sont pas qualifiées. Le moteur
+utilise Faster Whisper sur CPU, en int8, quatre threads, langue française et
+beam size 1. Il ne partage pas le GPU de Vox et ARDY.
+
+```sh
+uv venv .local/asr-env --python 3.13
+uv pip install --python .local/asr-env/Scripts/python.exe -r experiments/voice/realtime/asr-requirements.txt
+uv pip check --python .local/asr-env/Scripts/python.exe
+```
+
+Télécharger les quatre fichiers `config.json`, `model.bin`, `tokenizer.json`
+et `vocabulary.txt` du [modèle small épinglé](https://huggingface.co/Systran/faster-whisper-small/tree/536b0662742c02347bc0e980a01041f333bce120)
+vers un dossier local, par exemple avec `snapshot_download` et son argument
+`allow_patterns`. Définir ensuite dans la configuration locale :
+
+```json
+"asr_command": [
+  "C:/path/to/asr-env/Scripts/python.exe", "-X", "utf8",
+  "C:/path/to/Promethee/experiments/voice/realtime/asr_worker.py",
+  "--model-path", "C:/path/to/faster-whisper-small/536b0662742c02347bc0e980a01041f333bce120"
+]
+```
+
+Le worker refuse un dossier incomplet et charge uniquement les fichiers
+locaux. Faster Whisper, CTranslate2, Whisper et ce modèle converti sont sous
+licence MIT ; les licences du détecteur navigateur et d'ONNX Runtime sont
+conservées dans [THIRD_PARTY_NOTICES.txt](web/THIRD_PARTY_NOTICES.txt).
+
+« Activer le micro » demande l'accès au périphérique ; aucun microphone n'est
+ouvert au chargement de la page. Silero v5 détecte la parole dans le navigateur,
+avec ses fichiers servis localement. Le navigateur demande suppression d'écho
+et de bruit, dont l'efficacité dépend du matériel. Chaque segment dure au plus
+12 secondes. Le PCM reste en mémoire ; seule sa transcription rejoint le même
+contexte Hermes que les messages écrits. Une fermeture, un arrêt ou « Couper
+le micro » libère les pistes.
+
+Le début de parole coupe immédiatement la lecture locale ; l'acquittement du
+serveur confirme l'invalidation durable du tour précédent. L'action corporelle
+déjà acceptée reste active. La réponse suivante attend la fin du segment et sa
+transcription. Une panne ASR, une permission refusée, un microphone absent ou
+une capture périmée laisse le texte disponible. Le moteur ne se relance pas
+automatiquement après panne : redémarrer la scène pour le réinitialiser.
+
+Les résultats et limites de cette étape figurent dans
+[la qualification microphone](../../../docs/microphone.md). Une transcription
+peut se tromper ; l'interface affiche le texte reconnu.
 
 Le préchauffage Hermes est activé dans cet essai. `resident` reste faux par
 défaut dans la configuration ; le définir à `true` conserve une instance entre
@@ -144,8 +199,10 @@ Les tests Python emploient des doublons pour les modèles. Les tests navigateur
 vérifient buffers, annulation, ordre des événements et bouche liée au PCM joué.
 Deux vérifications de médias privés sont ignorées sans `PROMETHEE_TEST_AVATAR`
 (chemin VRM) et `PROMETHEE_TEST_VOICE` (WAV mono 48 kHz/16 bits). Avec les fichiers
-locaux qualifiés, les 16 tests navigateur passent ; sans eux, 14 passent et 2
-sont explicitement ignorés. Une suite verte ne prouve pas la fluidité du modèle.
+locaux qualifiés, elles vérifient réellement les morphs et le WAV ; sans eux,
+elles sont explicitement ignorées. Les tests micro utilisent des captures
+simulées et couvrent aussi les permissions tardives, le nettoyage et les
+réponses HTTP périmées. Une suite verte ne prouve pas la qualité acoustique.
 
 La [qualification avec le résident](../../../docs/research/11-short-dialogue.md#scène-livrée-avec-hermes-résident)
 utilise cet environnement vocal neuf et ces sources : dix réponses en 3,55 à
@@ -154,8 +211,8 @@ une coupure à l'échéance, sans sous-alimentation PCM. Un essai antérieur ava
 échoué côté réseau ; le serveur réutilise désormais ses connexions HTTP. Ces
 observations ne garantissent pas toutes les latences futures.
 
-Le conflit de révision lors d'une
-action explicite pendant la présence reste ouvert. Le compteur de 12 appels
+Le [conflit de révision pendant la présence](../../../docs/command-revision.md)
+est corrigé et qualifié avec une vraie posture ARDY. Le compteur de 12 appels
 et la fenêtre de 60 s appartiennent à cet essai ; ils ne remplacent pas le
 budget persistant de l'initiative T12. Aucune conversation acoustique complète
 n'est revendiquée par ce lancement.

@@ -18,7 +18,7 @@ def load_configuration(path):
     }
     if not isinstance(value, dict) or not required <= value.keys():
         raise ValueError("Configuration requires explicit body, voice and Hermes paths.")
-    if value.keys() - required - {"port", "model", "resident"}:
+    if value.keys() - required - {"port", "model", "resident", "asr_command"}:
         raise ValueError("Unknown configuration field.")
     result = dict(value)
     for key in required - {"body", "voice_command"}:
@@ -41,6 +41,14 @@ def load_configuration(path):
         raise ValueError("voice_command must be an argument list, never a shell string.")
     if any("\x00" in item for item in command):
         raise ValueError("Invalid voice command argument.")
+    asr = value.get("asr_command")
+    if asr is not None and (
+        not isinstance(asr, list)
+        or not asr
+        or any(not isinstance(item, str) or not item.strip() or "\x00" in item for item in asr)
+    ):
+        raise ValueError("asr_command must be a local argument list, never a shell string.")
+    result["asr_command"] = asr
     body = value["body"]
     if (
         not isinstance(body, dict)

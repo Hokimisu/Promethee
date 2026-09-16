@@ -48,8 +48,26 @@
                     ></textarea>
                     <button id="send" type="submit" disabled>Envoyer</button>
                 </form>
+                <div class="microphone-controls">
+                    <button
+                        id="microphone"
+                        type="button"
+                        aria-pressed="false"
+                        disabled
+                    >
+                        Activer le micro
+                    </button>
+                    <p id="microphone-status" role="status">Micro coupé</p>
+                    <p id="transcript" aria-live="polite" hidden></p>
+                    <p id="input-error" role="alert" hidden></p>
+                </div>
                 <p id="error" role="alert" hidden></p>
-                <p id="notice">Écrivez pour lui parler. Aucun microphone.</p>
+                <p id="notice">
+                    Le micro s’active uniquement à votre demande. La
+                    transcription reste locale ; le texte est envoyé au même
+                    agent que vos messages écrits. Parlez par phrases de moins
+                    de 12 secondes et vérifiez le texte reconnu.
+                </p>
                 <details>
                     <summary>Lecture</summary>
                     <dl>
