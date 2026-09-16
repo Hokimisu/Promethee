@@ -116,6 +116,7 @@ docs/            Vision, architecture, contrats et jalons
 - [Audit de l'intégration Hermes](docs/research/12-hermes-lifecycle.md)
 - [Capacités natives Hermes et besoins d'Ariane](docs/research/16-hermes-avatar-audit.md)
 - [Essai du harness maison sans Hermes](docs/research/17-custom-harness.md)
+- [Contexte natif Hermes et latence](docs/research/18-hermes-world-context.md)
 - [Initiative, budget et pause](docs/initiative.md)
 - [Provenance de l'avatar VRM](docs/assets/pixiv-vrm-sample.md)
 - [Lecture animée de l'avatar](docs/avatar-rendering.md)

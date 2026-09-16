@@ -48,9 +48,13 @@ def exclusive_host(data_dir):
                 fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
 
 
-def prepare_profile(profile, data_dir, turn_id, *, vault=None, call_authority=False):
+def prepare_profile(
+    profile, data_dir, turn_id, *, vault=None, call_authority=False, world_context=False
+):
     if type(call_authority) is not bool:
         raise ValueError("Call authority must be explicitly enabled or disabled.")
+    if type(world_context) is not bool:
+        raise ValueError("World context must be explicitly enabled or disabled.")
     profile.mkdir(parents=True, exist_ok=False)
     (profile / "vault").mkdir()
     config = {
@@ -89,6 +93,24 @@ def prepare_profile(profile, data_dir, turn_id, *, vault=None, call_authority=Fa
         )
     if call_authority:
         config["mcp_servers"]["promethee"]["args"][-2:] = ["--call-authority"]
+    if world_context:
+        plugin = profile / "plugins" / "promethee-world-context"
+        plugin.mkdir(parents=True)
+        (plugin / "__init__.py").write_bytes(
+            Path(__file__).with_name("hermes_world_context.py").read_bytes()
+        )
+        (plugin / "plugin.yaml").write_text(
+            json.dumps(
+                {
+                    "name": "promethee-world-context",
+                    "version": "0.1.0",
+                    "description": "Read the active Promethee world before this agent turn.",
+                    "hooks": ["pre_llm_call"],
+                }
+            ),
+            encoding="utf-8",
+        )
+        config["plugins"] = {"enabled": ["promethee-world-context"]}
     (profile / "config.yaml").write_text(json.dumps(config), encoding="utf-8")
 
 
@@ -647,6 +669,9 @@ def configure(parser):
     parser.add_argument("--measure-timing", action="store_true")
     parser.add_argument("--prewarm", action="store_true", help="Prepare one disposable next turn.")
     parser.add_argument("--resident", action="store_true", help="Reuse one isolated native agent.")
+    parser.add_argument(
+        "--world-context", action="store_true", help="Prefetch a world snapshot via a native hook."
+    )
     parser.add_argument("--vault", type=Path, help="Optional sourced interactive memory vault.")
 
 
@@ -656,6 +681,9 @@ def open_text_host(args):
     measure_timing = getattr(args, "measure_timing", False)
     prewarm = getattr(args, "prewarm", False)
     resident = getattr(args, "resident", False)
+    world_context = getattr(args, "world_context", False)
+    if type(world_context) is not bool:
+        raise ValueError("World context must be explicitly enabled or disabled.")
     if type(resident) is not bool:
         raise ValueError("Resident mode must be explicitly enabled or disabled.")
     if type(prewarm) is not bool:
@@ -700,7 +728,14 @@ def open_text_host(args):
         profile = data_dir / "conversation-profiles" / request["turn_id"]
         if auth == "hermes-codex":
             profile = auth_root.resolve() / "profiles" / ("promethee-" + request["turn_id"])
-        prepare_profile(profile, data_dir, request["turn_id"], vault=vault, call_authority=resident)
+        prepare_profile(
+            profile,
+            data_dir,
+            request["turn_id"],
+            vault=vault,
+            call_authority=resident,
+            world_context=world_context,
+        )
         command = [
             str(args.hermes_python.resolve()),
             "-X",

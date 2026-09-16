@@ -126,3 +126,26 @@ def test_direct_harness_needs_no_hermes_installation(configured, tmp_path):
     assert config["auth_file"] == tmp_path / "auth.json"
     assert config["resident"] is True
     assert not any(name.startswith("hermes_") for name in config)
+
+
+@pytest.mark.parametrize("value", [1, "true", None, []])
+def test_world_context_requires_boolean(configured, value):
+    configured[1]["world_context"] = value
+    with pytest.raises(ValueError, match="world_context"):
+        save(configured)
+
+
+def test_world_context_is_opt_in_for_hermes(configured):
+    assert save(configured)["world_context"] is False
+    configured[1]["world_context"] = True
+    assert save(configured)["world_context"] is True
+
+
+def test_direct_harness_rejects_native_hermes_context(configured, tmp_path):
+    value = configured[1]
+    for name in ("hermes_python", "hermes_root", "hermes_auth_root"):
+        value.pop(name)
+    (tmp_path / "auth.json").write_text("{}", encoding="utf-8")
+    value.update(brain="direct", auth_file="auth.json", world_context=True)
+    with pytest.raises(ValueError, match="requires the Hermes backend"):
+        save(configured)

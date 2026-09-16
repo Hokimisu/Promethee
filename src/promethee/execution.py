@@ -174,11 +174,16 @@ class ExecutionService:
             conn.execute("BEGIN IMMEDIATE")
             yield conn, self.clock()
 
-    def get_world(self, *, include_executions=False):
+    def get_world(self, *, include_executions=False, include_supported_actions=False):
         """Read the latest persisted observation after expiring a missing controller."""
         with self._transaction() as (conn, _):
             world = read_world(conn)
             world["command_revision"] = command_revision(world)
+            if include_supported_actions:
+                control = self._control(conn)
+                world["supported_actions"] = (
+                    control.get("supported_actions", []) if control["session_id"] else []
+                )
             if include_executions:
                 rows = conn.execute(
                     "SELECT data FROM executions "

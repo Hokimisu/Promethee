@@ -540,6 +540,7 @@ class Session:
         self.metric["voice_profile"] = self.voice_profile
         self.metric["dialogue_model"] = self.model
         self.metric["brain_backend"] = self.config.get("brain", "hermes")
+        self.metric["world_context"] = self.config.get("world_context", False)
         try:
             if self.config.get("asr_command"):
                 self._asr_log = (self.output / "asr.log").open("a", encoding="utf-8")
@@ -553,6 +554,7 @@ class Session:
                     }
             args = SimpleNamespace(
                 data_dir=self.body.data_dir,
+                world_context=self.config.get("world_context", False),
                 hermes_python=self.config.get("hermes_python"),
                 hermes_root=self.config.get("hermes_root"),
                 hermes_auth_root=self.config.get("hermes_auth_root"),

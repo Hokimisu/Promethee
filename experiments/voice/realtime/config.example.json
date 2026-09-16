@@ -8,6 +8,7 @@
   "port": 2392,
   "model": "gpt-5.6-luna",
   "resident": false,
+  "world_context": false,
   "asr_command": null,
   "body": {
     "ardy_python": "/path/to/ardy-env/bin/python",

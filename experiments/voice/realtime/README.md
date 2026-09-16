@@ -19,6 +19,14 @@ permet aussi l'essai sans Hermes : `brain: "direct"`, fichier d'authentification
 explicite et monde neuf. Il conserve le même monde, la même voix et le même
 corps. Les mesures comparatives et ses limites sont décrites dans ce rapport.
 
+Hermes reste le moteur retenu. L'option `world_context: true` lui fournit une
+observation fraîche du monde et des capacités au début de chaque tour, via son
+hook natif `pre_llm_call`. Elle évite certaines lectures décidées par le modèle
+avant une action ; les contrôles d'admission et les reçus restent identiques.
+Elle est désactivée par défaut et réservée à Hermes. Un contexte invalide ou
+trop long est omis ; les outils habituels restent accessibles. Voir la
+[qualification de latence](../../../docs/research/18-hermes-world-context.md).
+
 ## Préparer les environnements
 
 Le socle CPU utilise Python 3.12+ et les extras `agent` et `avatar`. Depuis un

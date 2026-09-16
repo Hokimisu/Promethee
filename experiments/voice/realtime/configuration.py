@@ -17,11 +17,14 @@ def load_configuration(path):
     if (
         value.keys()
         - required
-        - {"brain", "port", "model", "resident", "asr_command", "resume_world"}
+        - {"brain", "port", "model", "resident", "asr_command", "resume_world", "world_context"}
     ):
         raise ValueError("Unknown configuration field.")
     result = dict(value)
     result["brain"] = "direct" if direct else "hermes"
+    result["world_context"] = value.get("world_context", False)
+    if type(result["world_context"]) is not bool or (direct and result["world_context"]):
+        raise ValueError("world_context must be a boolean and requires the Hermes backend.")
     for key in required - {"body", "voice_command"}:
         entry = value[key]
         if not isinstance(entry, str) or not entry.strip():

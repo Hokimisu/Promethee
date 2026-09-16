@@ -17,39 +17,18 @@ class WorldTools:
         self.turn_id = turn_id
         service.runtime.require_session()
 
-    def world(self, *, detail="full"):
+    def world(self, *, detail="full", include_capabilities=False):
         self.service.runtime.require_session()
-        return project_world(self.service.get_world(include_executions=True), detail=detail)
+        snapshot = self.service.get_world(
+            include_executions=True, include_supported_actions=include_capabilities
+        )
+        if include_capabilities:
+            snapshot["capabilities"] = describe_capabilities(snapshot.pop("supported_actions"))
+        return project_world(snapshot, detail=detail)
 
     def capabilities(self):
         self.service.runtime.require_session()
-        actions = [
-            {"kind": kind, "required_args": sorted(BODY_ACTION_FIELDS[kind])}
-            for kind in self.service.supported_actions()
-        ]
-        for action in actions:
-            if action["kind"] == "posture":
-                action["names"] = sorted(POSTURES)
-            if action["kind"] in {"spawn", "place"}:
-                action["position_format"] = "Spatial controller: [x, y, z] metres, Y up."
-            if action["kind"] == "spawn":
-                from promethee.object_models import OBJECT_MODELS
-
-                action["spatial_models"] = sorted(OBJECT_MODELS)
-            if action["kind"] == "take":
-                from promethee.object_models import CONTACT_POINTS
-
-                action["spatial_models"] = sorted(CONTACT_POINTS)
-                action["contact"] = "Kinematic point attachment; no finger closure or physics."
-            if action["kind"] in {"spawn", "place"}:
-                action["free_objects"] = "Fixed world transforms; no gravity."
-        return {
-            "actions": actions,
-            "coordinates": (
-                "Move: floor plane [x, z]. Spatial spawn/place: [x, y, z], Y up. Metres in [-5, 5]."
-            ),
-            "execution": "Asynchronous; availability does not guarantee a successful motion.",
-        }
+        return describe_capabilities(self.service.supported_actions())
 
     def submit(
         self, request_id, expected_revision=None, action=None, *, expected_command_revision=None
@@ -72,6 +51,34 @@ class WorldTools:
         return self.service.cancel(request_id, turn_id=self.turn_id)
 
 
+def describe_capabilities(kinds):
+    """Describe already-observed controller capabilities without another storage read."""
+    actions = [{"kind": kind, "required_args": sorted(BODY_ACTION_FIELDS[kind])} for kind in kinds]
+    for action in actions:
+        if action["kind"] == "posture":
+            action["names"] = sorted(POSTURES)
+        if action["kind"] in {"spawn", "place"}:
+            action["position_format"] = "Spatial controller: [x, y, z] metres, Y up."
+        if action["kind"] == "spawn":
+            from promethee.object_models import OBJECT_MODELS
+
+            action["spatial_models"] = sorted(OBJECT_MODELS)
+        if action["kind"] == "take":
+            from promethee.object_models import CONTACT_POINTS
+
+            action["spatial_models"] = sorted(CONTACT_POINTS)
+            action["contact"] = "Kinematic point attachment; no finger closure or physics."
+        if action["kind"] in {"spawn", "place"}:
+            action["free_objects"] = "Fixed world transforms; no gravity."
+    return {
+        "actions": actions,
+        "coordinates": (
+            "Move: floor plane [x, z]. Spatial spawn/place: [x, y, z], Y up. Metres in [-5, 5]."
+        ),
+        "execution": "Asynchronous; availability does not guarantee a successful motion.",
+    }
+
+
 def create_server(service, *, turn_id=None, vault=None, call_authority=False):
     if type(call_authority) is not bool:
         raise ValueError("Call authority must be explicitly enabled or disabled.")
@@ -81,7 +88,7 @@ def create_server(service, *, turn_id=None, vault=None, call_authority=False):
     from mcp.server import MCPServer
     from mcp.server.mcpserver import Context
     from mcp_types import ToolAnnotations
-    from pydantic import StrictInt, StrictStr, WithJsonSchema
+    from pydantic import StrictBool, StrictInt, StrictStr, WithJsonSchema
 
     # Describe the wire format without moving malformed-action refusals out of
     # the durable runtime registry or silently coercing/repairing their payload.
@@ -151,13 +158,18 @@ def create_server(service, *, turn_id=None, vault=None, call_authority=False):
 
     @server.tool(annotations=read)
     def read_world(
-        detail: Literal["summary", "full"] = "summary", *, ctx: Context
+        detail: Literal["summary", "full"] = "summary",
+        include_capabilities: StrictBool = False,
+        *,
+        ctx: Context,
     ) -> dict[str, Any]:
         """Read the observed world, revisions, body freshness and provenance.
 
         Default summary omits only articulated pose and appearance arrays, named
         in projection.omitted. Use detail="full" for these numerical render data.
         All other fields come from the same snapshot, including body freshness.
+        include_capabilities=True also reads the active controller's capabilities
+        atomically with this snapshot, avoiding a separate list_capabilities call.
 
         command_revision excludes idle pose changes so a command can start from the
         latest observed pose while the avatar moves naturally. Objects, attachments,
@@ -173,7 +185,7 @@ def create_server(service, *, turn_id=None, vault=None, call_authority=False):
         playback does not identify an exact spoken prefix. Consult these receipts
         before claiming a previous response was delivered aloud.
         """
-        return tools_for(ctx).world(detail=detail)
+        return tools_for(ctx).world(detail=detail, include_capabilities=include_capabilities)
 
     @server.tool(annotations=read)
     def list_capabilities(ctx: Context) -> dict[str, Any]:
