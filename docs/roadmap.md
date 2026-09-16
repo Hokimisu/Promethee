@@ -2,6 +2,19 @@
 
 Les jalons ouvrent des capacités techniques. Leurs critères vérifient la cohérence, la fiabilité et le contrôle utilisateur, sans imposer une activité ou une personnalité à l'avatar. Les situations d'essai doivent varier ; une démonstration réussie ne suffit pas à valider un jalon.
 
+## Priorité produit — 16 septembre 2026
+
+Construire la [boîte à Ariane](pet-mode.md) à partir du socle existant :
+continuité et initiative avec Hermes, objets réellement présents, interventions
+directes de l'utilisateur, puis lancers. La faible latence vocale, GPT-Live et
+la génération motrice immédiate ne bloquent plus cette première expérience.
+VoxCPM2 reste la voix retenue ; les animations continuent entre les décisions.
+
+Les jalons ci-dessous restent des contrats techniques, avec leurs limites
+documentées. La nouvelle priorité ne les déclare pas terminés et ne demande
+pas de recommencer les tickets déjà livrés. La qualification acoustique de M2
+peut avancer séparément du mode à observer, utilisable avec texte et voix sortante.
+
 Le [plan d'implémentation](implementation-plan.md) décline ces jalons en tickets ordonnés, avec les fichiers concernés et les vérifications attendues. Pour commencer à coder, suivre T00 puis T01 ; les jalons ci-dessous conservent la vue produit.
 
 ## M0 — Continuité locale
