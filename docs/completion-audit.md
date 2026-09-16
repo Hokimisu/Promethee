@@ -11,16 +11,27 @@ Le choix vocal utilisateur s'est porté sur VoxCPM2 optimisé, puis Luna pour
 le dialogue. La [qualification locale](research/11-short-dialogue.md) vérifie
 maintenant de vraies sorties vocales et leurs reçus de lecture dans le navigateur,
 avec ARDY actif. Elle ne ferme pas T11 : entrée microphone, interruption
-acoustique aux différentes étapes, coût réel et reproductibilité du serveur
-depuis le dépôt restent ouverts. Le prototype de scène est encore sous `.local/`.
+acoustique aux différentes étapes et coût réel restent ouverts. Les sources de
+la [scène expérimentale](../experiments/voice/realtime/README.md), leur configuration,
+leurs tests et les versions de l'environnement vocal sont désormais livrés ;
+les dépendances vocales ont été réinstallées dans un environnement neuf.
 
 Le préchauffage Hermes, le contrat système séparé et la mesure des phases sont
 implémentés dans le socle. Six tours réels montrent des réponses de 3,50 à
 26,35 s ; aucune fluidité continue n'est revendiquée. Le profil vocal approuvé
-est conservé. Les 577 tests réussis et les deux tests ignorés couvrent les
+est conservé. Les 577 tests réussis de cette étape et les deux tests ignorés couvrent les
 contrats du code, pas les critères audio matériels manquants. T12 conserve sa
 dépendance vocale ; aucun nouveau succès T07–T08 n'est déduit de la gestuelle
-de présence de cet essai.
+de présence de cet essai. Le mode résident ajouté ensuite réutilise effectivement
+Hermes et renouvelle MCP par tour ; ses trois appels natifs et leurs limites
+figurent dans le [rapport de recherche](research/12-hermes-lifecycle.md).
+
+Deux limites actuelles restent distinctes des réussites historiques : la
+présence corporelle peut périmer la révision entre `read_world` et
+`submit_action`, et la tolérance de marche v5 doit encore subir une nouvelle
+série indépendante après fixation de ses critères. Ni le mode résident ni la
+publication de la scène ne ferment ces qualifications. Marcher avec un objet
+tenu reste aussi distinct des essais de prise et dépôt.
 
 Le reste du document conserve les preuves de l'audit du 15 septembre.
 

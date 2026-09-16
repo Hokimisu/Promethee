@@ -56,12 +56,18 @@ autorité et une recherche ne reprend aucune activité. Les jeux de qualificatio
 et les anciennes sessions non classées sont exclus. Voir le [contrat mémoire](memory.md).
 
 Le choix vocal actuel de l'utilisateur est VoxCPM2 local, avec Luna testé pour
-les répliques du même contexte Hermes. La scène expérimentale qualifie la sortie
-vocale, ses directions et la présence corporelle, mais reste hors du paquet et
-sans microphone. Le [rapport de dialogue](research/11-short-dialogue.md) mesure
+les répliques du même contexte Hermes. La [scène expérimentale](../experiments/voice/realtime/README.md)
+est livrée dans le dépôt, séparée du paquet, avec chemins et commande vocale
+configurables. Elle qualifie la sortie vocale, ses directions et la présence
+corporelle, sans microphone. Le [rapport de dialogue](research/11-short-dialogue.md) mesure
 les délais et distingue ce qui est effectivement joué. Le préchauffage optionnel
 du socle construit un worker avant le message, sans appel modèle ; son activation
 reçoit l'historique frais. Le contrat vocal stable utilise `system_message`.
+Le mode optionnel `--resident` conserve un seul agent Hermes entre les tours
+réussis, mais reconnecte MCP à chaque nouveau tour autorisé. Les erreurs et
+interruptions actives détruisent cette instance. L'historique et les résultats
+restent détenus par le monde ; aucune seconde mémoire n'est ajoutée. Voir la
+[qualification native et ses limites](research/12-hermes-lifecycle.md).
 
 La piste GPT-Live reste un raccord distinct à qualifier avec un fournisseur
 réel. `voice.py` fournit une chaîne de diagnostic transcription → même hôte

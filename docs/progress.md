@@ -19,13 +19,38 @@ leurs limites décrivent la version de chaque essai, pas nécessairement la dern
 | T08 | Interactions cinématiques implémentées et vérifiées | Doudou et balle, plusieurs positions, géométries et orientations ; prise, dépôt, impossibilités, annulation avant/après contact et restauration. [Contrôleur](spatial-objects.md), [portée VRM](avatar-arm-reach.md) et [session en direct](live-avatar.md). Ni doigts physiques ni appuis validés |
 | T09 | Vérifié avec Astra et ARDY réels | Authentification ChatGPT native de Hermes, conversation sans action, lecture du monde, historique après redémarrage, posture exécutée et résultat observé. Après interruption pendant le mouvement, le nouveau tour retrouve l'annulation sans relancer l'action. Refus d'un objet absent. [Configuration, essais et limites](hermes-setup.md) |
 | T10 | Mémoire sourcée vérifiée sur CPU et avec Astra | Six appels réels dans deux mondes : recherche vide, proposition, correction retrouvée avec l'ancien terme, source relue et distinction du monde actuel. Deux notes dans le premier coffre, zéro dans le second, aucune action ; coffres ensuite exclus comme qualification. Retrait d'objet et contenus non fiables couverts par tests CPU ; pas de revue visuelle Obsidian. [Contrat et qualification](memory.md) |
-| T11 | Voix locale réelle qualifiée partiellement ; ticket ouvert | Essai Hermes/Luna → VoxCPM2 approuvé à l'écoute, phrases courtes et directions vocales, lecture navigateur et présence ARDY observées. Préchargement Hermes et contrat système intégrés au socle. Serveur vocal encore sous `.local/`, sans microphone ; interruption acoustique et coût réel non qualifiés. [Mesures et limites](research/11-short-dialogue.md). Le raccord Live antérieur reste un diagnostic distinct avec fournisseur simulé |
+| T11 | Voix locale réelle qualifiée partiellement ; ticket ouvert | Essai Hermes/Luna → VoxCPM2 approuvé à l'écoute, phrases courtes et directions vocales, lecture navigateur et présence ARDY observées. Préchargement, contrat système et agent résident optionnel intégrés au socle. [Sources et lancement de la scène](../experiments/voice/realtime/README.md) livrés, sans microphone ; interruption acoustique et coût réel non qualifiés. [Mesures et limites](research/11-short-dialogue.md). Le raccord Live antérieur reste un diagnostic distinct avec fournisseur simulé |
 | T12 | Initiative textuelle vérifiée avec Astra ; dépendance vocale ouverte | Deux séries réelles : mondes sans historique et après sollicitation, contrôleur ARDY actif puis retiré, pause après redémarrage et budgets épuisés. Aucun appel supplémentaire ni action corporelle. Référence active corrigée après fin de tour ; 363 tests passent. Aucune initiative personnelle activée ; T11 reste à qualifier. [Contrat et limites](initiative.md) |
 | T13 | Appuis corrigés et génération par blocs intégrée ; naturalité ouverte | [Recherche](research/humanlike-solutions-2026-09-15.md), [correction talon/pointe](avatar-foot-roll.md) et [mode continu expérimental](continuous-motion.md) : historique et futur séparés, génération pendant la lecture, annulation réelle conservant exactement la pose. Deux postures réussissent dans la série indépendante, deux déplacements échouent et cinq attentes persistent. Aucun entraînement ni connecteur supplémentaire revendiqué |
 
 Les journaux de test et données locales restent dans `.local/` et ne sont pas publiés.
 
-## Dialogue et Hermes — 16 septembre 2026
+## Recherche Hermes et livraison de la scène — 16 septembre 2026
+
+Les audits en parallèle ont vérifié le cycle de vie natif, le contexte et le
+cache, les outils, le streaming vocal et les critères encore ouverts du plan.
+Le mode `--resident` conserve maintenant un seul agent entre les tours réussis,
+avec reconnexion MCP et validation de son autorité à chaque tour. La mémoire
+personnelle et les revues automatiques restent désactivées pour ces essais.
+Trois tours natifs réussis, dont un vrai `read_world`, sont détaillés dans le
+[rapport de cycle de vie](research/12-hermes-lifecycle.md).
+
+La [scène expérimentale](../experiments/voice/realtime/README.md) est maintenant
+livrée : serveur, rendu, lèvres liées au PCM lu, worker Vox, présence ARDY,
+encodeur CPU et configuration des chemins. Les dépendances vocales ont été
+réinstallées dans un environnement neuf ; poids, référence et conversations
+restent exclus du dépôt. Elle reçoit du texte, pas le microphone. Les limites
+de 60 secondes et 12 appels ne remplacent pas le budget persistant de T12.
+
+Après correction du renouvellement des connexions HTTP, le
+[nouvel essai complet](research/11-short-dialogue.md#scène-livrée-avec-hermes-résident)
+confirme dix réponses de 3,55 à 5,77 s, 54,40 s de voix jouées, neuf lectures
+complètes et une coupure à l'échéance, sans sous-alimentation PCM. Le premier
+essai avait échoué côté navigateur et reste documenté. 605 tests du socle
+réussissent, 2 sont ignorés ; 124 tests de la scène et 7 sous-tests réussissent.
+Les critères acoustiques de T11 et la synchronisation des actions restent ouverts.
+
+## Dialogue et préchauffage — essai antérieur du 16 septembre 2026
 
 Le choix exprimé par l'utilisateur retient VoxCPM2 optimisé, avec Luna pour les
 répliques. Le socle expose maintenant l'effort `low`, des mesures de phases et

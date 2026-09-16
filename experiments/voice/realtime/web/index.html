@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="fr">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
+        <title>Ariane</title>
+        <link rel="stylesheet" href="/style.css" />
+    </head>
+    <body>
+        <main>
+            <section class="viewport" aria-label="Ariane dans son appartement">
+                <div id="stage"></div>
+                <header>
+                    <h1>Ariane</h1>
+                    <span id="status" role="status">Chargement…</span>
+                </header>
+                <nav aria-label="Caméra">
+                    <button id="wide" type="button">Vue d’ensemble</button
+                    ><button id="close" type="button">Se rapprocher</button>
+                </nav>
+                <div id="subtitle" hidden></div>
+            </section>
+            <aside>
+                <form id="start-form">
+                    <label for="scenario">Contexte de l’essai</label>
+                    <textarea
+                        id="scenario"
+                        rows="5"
+                        maxlength="1200"
+                        placeholder="Donnez-lui un contexte ou engagez la conversation…"
+                    ></textarea>
+                    <div class="actions">
+                        <button id="start" class="primary" disabled>
+                            Démarrer · 60 s</button
+                        ><button id="stop" type="button" disabled>
+                            Arrêter
+                        </button>
+                    </div>
+                </form>
+                <form id="say-form">
+                    <label for="message">Intervenir</label>
+                    <textarea
+                        id="message"
+                        rows="3"
+                        maxlength="1200"
+                        placeholder="Écrivez à Ariane…"
+                        disabled
+                    ></textarea>
+                    <button id="send" type="submit" disabled>Envoyer</button>
+                </form>
+                <p id="error" role="alert" hidden></p>
+                <p id="notice">Écrivez pour lui parler. Aucun microphone.</p>
+                <details>
+                    <summary>Lecture</summary>
+                    <dl>
+                        <div>
+                            <dt>Audio lu</dt>
+                            <dd id="played">0,0 s</dd>
+                        </div>
+                        <div>
+                            <dt>Coupures du flux</dt>
+                            <dd id="underflows">0</dd>
+                        </div>
+                        <div>
+                            <dt>Échantillons lus</dt>
+                            <dd id="frames">0</dd>
+                        </div>
+                        <div>
+                            <dt>Son en attente</dt>
+                            <dd id="buffered">0,0 s</dd>
+                        </div>
+                    </dl>
+                </details>
+            </aside>
+        </main>
+        <script type="module" src="/bundle.js"></script>
+    </body>
+</html>

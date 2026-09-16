@@ -1,0 +1,26 @@
+{
+  "data_dir": "../../../.local/realtime-runs",
+  "avatar": "../../../.local/assets/pixiv-vrm/VRM1_Constraint_Twist_Sample.vrm",
+  "hermes_python": "/path/to/hermes-venv/bin/python",
+  "hermes_root": "../../../.local/hermes-agent",
+  "hermes_auth_root": "/path/to/hermes-data",
+  "port": 2392,
+  "model": "gpt-5.6-luna",
+  "resident": false,
+  "body": {
+    "ardy_python": "/path/to/ardy-env/bin/python",
+    "checkpoint_root": "/path/to/ardy-checkpoints",
+    "wsl": null,
+    "encoder_url": "http://127.0.0.1:9551",
+    "seed": 138124,
+    "node": "node"
+  },
+  "voice_command": [
+    "/path/to/voice-env/bin/python", "-u",
+    "/path/to/Promethee/experiments/voice/realtime/vox_worker.py",
+    "--model-path", "/path/to/VoxCPM2/32279effe8c19989596f05d353d1447f51d9e915",
+    "--reference-path", "/path/to/private-reference.pt",
+    "--reference-sha256", "REPLACE_WITH_REFERENCE_FEATURE_SHA256",
+    "--cache-dir", "/path/to/local-compiler-cache"
+  ]
+}

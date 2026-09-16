@@ -14,8 +14,9 @@ l'autorité des outils reste liée au tour qui les appelle.
 Mise à jour après l'audit : le préchauffage jetable et le contrat vocal système
 sont intégrés et testés. Voir les [mesures de qualification](11-short-dialogue.md#préchauffage-hermes-qualifié),
 y compris les délais encore longs dans l'essai complet. Le mode résident est
-maintenant une option explicite, qualifiée sur trois tours natifs Luna ; son
-essai dans la scène vocale est en cours. Le préchauffage jetable reste le choix
+maintenant une option explicite, qualifiée sur trois tours natifs Luna puis sur
+[une session complète dans la scène vocale](11-short-dialogue.md#scène-livrée-avec-hermes-résident).
+Le préchauffage jetable reste le choix
 par défaut de l'essai vocal. Les interfaces vocales natives restent proposées.
 
 ## Cinq décisions pratiques
@@ -26,9 +27,9 @@ par défaut de l'essai vocal. Les interfaces vocales natives restent proposées.
 2. **Maintenant :** employer le callback natif pour mesurer le premier texte
    visible, séparément de la préparation, du résultat valide et du premier son.
    Ne pas envoyer directement les fragments JSON à la synthèse.
-3. **Qualification en cours :** comparer dans la scène le mode résident livré,
-   avec MCP fermé puis relancé par tour. Les trois tours natifs établissent la
-   réutilisation ; ils ne mesurent pas un gain isolé de performance.
+3. **Qualification livrée, portée bornée :** le résident avec MCP renouvelé
+   fonctionne sur une session complète de scène. Cet essai et les trois tours
+   natifs ne mesurent pas un gain isolé ni un débit garanti.
 4. **Pour le flux vocal par phrases :** reprendre les interfaces vocales
    natives via un adaptateur vers le worker Vox déjà qualifié ; garder son
    unique thread propriétaire, son profil et son annulation.
@@ -114,7 +115,7 @@ libère les agents évincés. Copier son dictionnaire de cache sans ces règles
 ne reproduirait pas son comportement. Pour une seule conversation Promethee,
 une unique instance possédée par un seul thread était l'option proposée par
 l'audit. Cette variante est désormais livrée et qualifiée sur trois tours
-natifs ; la qualification de la scène complète reste distincte.
+natifs ; une session de scène a ensuite été vérifiée séparément.
 
 ## La contrainte traitée : identité Hermes et autorité du monde
 
@@ -325,15 +326,24 @@ natifs et empreintes des sources. Le module chargé est celui du checkout G:
 `a6839f07a53e27a9d1315bf23fb4876627c06e65a5cd2f6458072ef1af4b6539`.
 Tous les processus suivis étaient absents après fermeture. Après ces appels,
 le refus des réponses natives `failed`, `partial` ou `completed=False` a été
-renforcé et testé sur CPU, sans nouvel appel modèle. L'essai voix/corps dans la
-scène reste en cours et n'est pas validé par ces trois tours.
+renforcé et testé sur CPU, sans nouvel appel modèle à cette étape.
+
+La [qualification ultérieure de scène](11-short-dialogue.md#scène-livrée-avec-hermes-résident)
+réussit une session de 60 secondes : dix tours résidents et 54,40 secondes
+effectivement jouées, sans sous-alimentation ni erreur de scène. Les neuf
+lectures complètes et la dernière coupée à l'échéance sont distinguées dans
+l'audit de lecture de `dialogue-trial-5d84d867`. Le premier essai
+`dialogue-trial-177d70e0` avait perdu la lecture navigateur malgré un serveur
+continuant ses tours. La session réussie utilise aussi le correctif HTTP/1.1 :
+ce n'est pas un A/B pur du mode résident, ni une garantie de débit sur d'autres
+sessions. Les mesures complètes restent dans le rapport de dialogue lié.
 
 ## Choix recommandé et limites
 
 | Option | Effet et état actuel | Coût et condition |
 | --- | --- | --- |
 | Un seul worker jetable préparé en avance | Livré et qualifié ; sort imports/construction/MCP du chemin critique lorsqu'il est prêt | Choix par défaut de l'essai vocal ; chaque tour consomme son worker, donc aucun partage du pool réseau entre tours |
-| Un `AIAgent` résident, serveur MCP recréé par tour | Livré sur activation explicite ; trois tours natifs sans reconstruction | Profil stable et transport renouvelé ; reconnexion mesurée à 1,6–1,9 s après le premier tour ; qualification de scène en cours |
+| Un `AIAgent` résident, serveur MCP recréé par tour | Livré sur activation explicite ; trois tours natifs sans reconstruction et une session de scène réussie | Profil stable et transport renouvelé ; reconnexion mesurée à 1,6–1,9 s dans l'essai natif ; résultats bornés, sans gain A/B ni débit garanti |
 | Agent et MCP résidents | Proposition non livrée ; pourrait éviter davantage de démarrages | Nécessite une identité de tour de confiance par appel ; modification du pont Promethee, pas simple option Hermes |
 | TUI gateway natif | Sessions, streaming et annulation déjà exposés | Surface officielle pertinente à long terme ; migration de l'autorité d'historique, des outils et des permissions à concevoir, pas raccourci immédiat |
 

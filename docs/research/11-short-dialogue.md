@@ -159,6 +159,68 @@ au préchauffage ; tests locaux de dialogue/serveur 27 réussis et 7 sous-tests 
 Ruff et construction du paquet réussis. Le service est relancé avec une session
 neuve après la qualification. Le contexte de test ne devient pas sa mémoire.
 
+## Scène livrée avec Hermes résident
+
+La [scène expérimentale](../../experiments/voice/realtime/README.md) est désormais
+livrée avec sa configuration et ses environnements séparés. Le mode explicite
+`resident: true` conserve Hermes entre les tours réussis ; le transport MCP
+est fermé puis reconnecté avec l'autorité du nouveau tour. Le premier essai
+natif de trois tours et les interfaces employées sont détaillés dans
+[l'audit Hermes](12-hermes-lifecycle.md#mode-résident-livré-et-qualification-native).
+
+L'essai `dialogue-trial-5d84d867`, réalisé le 16 septembre 2026, utilise les
+sources livrées, un environnement vocal neuf Python 3.10.12, les 160 versions
+épinglées, les poids VoxCPM2 et la référence approuvés inchangés. Hermes charge
+la source `2179a279…`, avec Luna, effort `low`, même contrat système et mêmes
+cinq outils. Le monde neuf est marqué `qualification`. Aucune suite CPU ne
+tournait pendant cet essai. Le sujet du diplôme est une fixture ponctuelle,
+absente de la mémoire personnelle et de la configuration initiale.
+
+| Mesure | Observation de cette session |
+|---|---:|
+| Réponses Hermes terminées | 10, sans appel d'outil |
+| Message → texte validé | 3,55 à 5,77 s |
+| Boucle native par tour | 2,06 à 3,65 s |
+| Reconnexion MCP après le premier tour | 1,86 à 1,96 s |
+| Premier PCM après demande de synthèse | 94 à 308 ms |
+| Audio généré | 55,20 s |
+| Audio effectivement joué | 54,40 s |
+| Reçus de lecture | 9 complets, dernier interrompu à la limite de 60 s |
+| Sous-alimentations du lecteur PCM | 0 |
+| Poses distinctes capturées | 503 |
+
+La préparation du résident n'apparaît qu'au premier tour ; aucun contrat
+système n'est répété dans les messages utilisateur conservés. La bouche est
+pilotée par le PCM réellement lu : une observation navigateur pendant la
+parole donne une amplitude de 0,298 et une ouverture de 0,879, puis fermeture
+à l'arrêt. Ce contrôle ne qualifie ni la synchronisation phonétique ni toute
+la naturalité corporelle. Les traces, WAV et reçus de lecture restent locaux
+sous `.local/realtime-voice-01/dialogue-trial-5d84d867/` ; la session source est
+`.local/realtime-publication-runs/session-6ebd5149b6b4/`.
+
+Un premier essai publié, `dialogue-trial-177d70e0`, avait produit huit réponses
+de 3,34 à 5,06 s, mais le navigateur avait arrêté la lecture après **12,88 s**
+sur `Failed to fetch`. Il ne compte pas comme lecture de 60 s réussie. Le
+serveur HTTP/1.0 ouvrait un nouveau socket à chaque requête ; il utilise
+maintenant HTTP/1.1 avec connexions persistantes et expiration bornée. Un test
+réseau réel sur CPU vérifie 200 lectures et une télémétrie sur une seule
+connexion. La cause exacte de la première coupure n'est pas établie ; la
+qualification suivante confirme l'absence de coupure de lecture sur son
+parcours, sans garantir qu'aucune requête de télémétrie puisse expirer.
+
+Le chevauchement entre prochaine décision, voix et corps masque maintenant
+une grande partie du délai dans cet essai. **Cela ne constitue pas un A/B
+isolé**, ni une réponse instantanée après intervention : la première phrase
+attend encore le modèle, puis le prébuffer du lecteur. La connexion MCP coûte
+toujours près de deux secondes par tour. Le coût monétaire et le cache
+fournisseur ne sont pas déduits de ces durées.
+
+Validation du code livré : 605 tests du socle réussis, 2 ignorés ; 124 tests
+de la scène et 7 sous-tests réussis ; 16 tests du navigateur avec les médias
+privés qualifiés (14 et 2 ignorés sans ces médias). Ruff, format et construction
+du paquet et du rendu réussis. Le service est ensuite relancé dans un monde
+neuf : la fixture n'est pas conservée comme conversation courante.
+
 ## Limites de parallélisation
 
 La génération du prochain texte, la lecture audio et la présence corporelle
