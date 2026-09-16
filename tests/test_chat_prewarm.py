@@ -371,8 +371,20 @@ def test_cancel_preserves_spare_close_discards_it_and_expiry_is_bounded(tmp_path
         assert spare.process.poll() is not None
         assert host.spare is None and host.warm_status()["state"] == "idle"
         host.prewarm_lifetime = 0.15
+        factory = host.prewarm_factory
+        created = []
+
+        def capture_worker(request):
+            worker = factory(request)
+            created.append(worker)
+            return worker
+
+        host.prewarm_factory = capture_worker
         host.warm()
-        expired = host.spare
+        # A slow process launch may expire before warm() returns and clears spare.
+        # Keep the created worker to verify its actual cleanup in either ordering.
+        assert len(created) == 1
+        expired = created[0]
         until(lambda: expired.closed)
         assert host.warm_status()["state"] == "expired"
         assert expired.process.poll() is not None

@@ -18,6 +18,8 @@ from promethee.runtime import Runtime
 from promethee.spatial import attachment_transform
 from promethee.world import ActionError, validate_observation
 
+pytest.importorskip("numpy")  # Optional avatar geometry, exercised in the CI extras job.
+
 
 @pytest.fixture
 def pet(tmp_path, articulated_pose):
