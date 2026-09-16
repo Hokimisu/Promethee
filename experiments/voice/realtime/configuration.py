@@ -7,29 +7,30 @@ from pathlib import Path
 def load_configuration(path):
     path = Path(path).resolve()
     value = json.loads(path.read_text(encoding="utf-8"))
-    required = {
-        "data_dir",
-        "avatar",
-        "hermes_python",
-        "hermes_root",
-        "hermes_auth_root",
-        "body",
-        "voice_command",
-    }
-    if not isinstance(value, dict) or not required <= value.keys():
-        raise ValueError("Configuration requires explicit body, voice and Hermes paths.")
-    if value.keys() - required - {"port", "model", "resident", "asr_command", "resume_world"}:
+    if not isinstance(value, dict) or value.get("brain", "hermes") not in {"hermes", "direct"}:
+        raise ValueError("brain must select hermes or direct explicitly.")
+    direct = value.get("brain") == "direct"
+    required = {"data_dir", "avatar", "body", "voice_command"}
+    required |= {"auth_file"} if direct else {"hermes_python", "hermes_root", "hermes_auth_root"}
+    if not required <= value.keys():
+        raise ValueError("Configuration requires explicit body, voice and selected brain paths.")
+    if (
+        value.keys()
+        - required
+        - {"brain", "port", "model", "resident", "asr_command", "resume_world"}
+    ):
         raise ValueError("Unknown configuration field.")
     result = dict(value)
+    result["brain"] = "direct" if direct else "hermes"
     for key in required - {"body", "voice_command"}:
         entry = value[key]
         if not isinstance(entry, str) or not entry.strip():
             raise ValueError(f"Expected a path for {key}.")
         result[key] = (path.parent / entry).resolve()
-    for key in ("avatar", "hermes_python"):
+    for key in ("avatar", "auth_file" if direct else "hermes_python"):
         if not result[key].is_file():
             raise ValueError(f"Missing file: {key}.")
-    for key in ("hermes_root", "hermes_auth_root"):
+    for key in () if direct else ("hermes_root", "hermes_auth_root"):
         if not result[key].is_dir():
             raise ValueError(f"Missing directory: {key}.")
     resume = value.get("resume_world")
@@ -82,4 +83,6 @@ def load_configuration(path):
     result["resident"] = value.get("resident", False)
     if type(result["resident"]) is not bool:
         raise ValueError("resident must be explicitly true or false.")
+    if direct:
+        result["resident"] = True
     return result

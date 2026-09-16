@@ -114,6 +114,8 @@ docs/            Vision, architecture, contrats et jalons
 - [Voix de diagnostic et interruptions](docs/voice.md)
 - [Dialogue court, VoxCPM2 et latence mesurée](docs/research/11-short-dialogue.md)
 - [Audit de l'intégration Hermes](docs/research/12-hermes-lifecycle.md)
+- [Capacités natives Hermes et besoins d'Ariane](docs/research/16-hermes-avatar-audit.md)
+- [Essai du harness maison sans Hermes](docs/research/17-custom-harness.md)
 - [Initiative, budget et pause](docs/initiative.md)
 - [Provenance de l'avatar VRM](docs/assets/pixiv-vrm-sample.md)
 - [Lecture animée de l'avatar](docs/avatar-rendering.md)

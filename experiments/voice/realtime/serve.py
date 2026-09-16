@@ -539,6 +539,7 @@ class Session:
         }
         self.metric["voice_profile"] = self.voice_profile
         self.metric["dialogue_model"] = self.model
+        self.metric["brain_backend"] = self.config.get("brain", "hermes")
         try:
             if self.config.get("asr_command"):
                 self._asr_log = (self.output / "asr.log").open("a", encoding="utf-8")
@@ -552,9 +553,9 @@ class Session:
                     }
             args = SimpleNamespace(
                 data_dir=self.body.data_dir,
-                hermes_python=self.config["hermes_python"],
-                hermes_root=self.config["hermes_root"],
-                hermes_auth_root=self.config["hermes_auth_root"],
+                hermes_python=self.config.get("hermes_python"),
+                hermes_root=self.config.get("hermes_root"),
+                hermes_auth_root=self.config.get("hermes_auth_root"),
                 model=self.model,
                 auth="hermes-codex",
                 api_mode="codex_responses",
@@ -580,7 +581,13 @@ class Session:
                     creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
                 )
                 threading.Thread(target=self.read_vox, daemon=True).start()
-                with open_text_host(args) as self.host:
+                if self.config.get("brain") == "direct":
+                    from direct_host import open_direct_host
+
+                    context = open_direct_host(args, auth_file=self.config["auth_file"])
+                else:
+                    context = open_text_host(args)
+                with context as self.host:
                     self.host.worker_wrapper = lambda worker, request: DirectedWorker(
                         worker,
                         request["turn_id"],

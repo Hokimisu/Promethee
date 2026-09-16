@@ -113,3 +113,16 @@ def test_invalid_configuration_fails_before_launch(configured, key, value):
     configured[1][key] = value
     with pytest.raises(ValueError):
         save(configured)
+
+
+def test_direct_harness_needs_no_hermes_installation(configured, tmp_path):
+    value = configured[1]
+    for name in ("hermes_python", "hermes_root", "hermes_auth_root"):
+        value.pop(name)
+    (tmp_path / "auth.json").write_text("{}", encoding="utf-8")
+    value.update(brain="direct", auth_file="auth.json")
+    config = save(configured)
+    assert config["brain"] == "direct"
+    assert config["auth_file"] == tmp_path / "auth.json"
+    assert config["resident"] is True
+    assert not any(name.startswith("hermes_") for name in config)

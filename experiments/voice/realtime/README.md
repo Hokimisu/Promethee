@@ -14,6 +14,11 @@ qualification, exclue de la mémoire personnelle. Une reprise explicite est
 possible avec `resume_world`. Aucun scénario n'est prérempli. Les décors
 sont visuels, pas des objets manipulables.
 
+Un [harness maison optionnel](../../../docs/research/17-custom-harness.md)
+permet aussi l'essai sans Hermes : `brain: "direct"`, fichier d'authentification
+explicite et monde neuf. Il conserve le même monde, la même voix et le même
+corps. Les mesures comparatives et ses limites sont décrites dans ce rapport.
+
 ## Préparer les environnements
 
 Le socle CPU utilise Python 3.12+ et les extras `agent` et `avatar`. Depuis un

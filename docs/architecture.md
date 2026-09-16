@@ -63,8 +63,8 @@ corporelle, avec un [microphone local facultatif](microphone.md). Le [rapport de
 les délais et distingue ce qui est effectivement joué. Le préchauffage optionnel
 du socle construit un worker avant le message, sans appel modèle ; son activation
 reçoit l'historique frais. Le contrat vocal stable utilise `system_message`.
-Le mode optionnel `--resident` conserve un seul agent Hermes entre les tours
-réussis, mais reconnecte MCP à chaque nouveau tour autorisé. Les erreurs et
+Le mode optionnel `--resident` conserve un seul agent Hermes et sa connexion MCP
+entre les tours réussis ; l'autorité des outils est renouvelée à chaque tour. Les erreurs et
 interruptions actives détruisent cette instance. L'historique et les résultats
 restent détenus par le monde ; aucune seconde mémoire n'est ajoutée. Voir la
 [qualification native et ses limites](research/12-hermes-lifecycle.md).
