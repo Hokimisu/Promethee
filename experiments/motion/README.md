@@ -144,3 +144,27 @@ Le post-traitement de ces cas prend respectivement 1,08 s, 0,025 s et 0,017 s. I
 L'installation neuve `reproduction-03` a reconstruit les deux environnements et l'extension C++ ; leurs dépendances passent `uv pip check`. Les essais précédents restent intacts. Deux premières tentatives ont révélé une faute de transcription du SHA ARDY dans la documentation : le SHA de 40 caractères ci-dessus est celui vérifié avec Git et utilisé par le script corrigé.
 
 Les tests et captures ne constituent pas des souvenirs ni des consignes de vie. Les contacts du maillage, les annulations et les objets restent à qualifier lors de T07–T08. Une pose à la bonne cible ne prouve pas leur réussite.
+
+## Comparer le contrôle et les corrections
+
+Le [rapport de référence](../../docs/research/07-official-reference.md) décrit les
+essais du 16 septembre et leurs limites. Les outils suivants utilisent l'environnement
+ARDY isolé ; leurs sorties restent sous `.local/`, hors mémoire et hors Git.
+
+- `continuous_trial.py` prolonge des poses corrigées et conserve les refus Core.
+  `--history-limit`, `--arrival-stance` et `--root-path` sont des variantes de
+  recherche, sans activation dans le contrôleur. Le contexte respecte 200 poses.
+- `reference_trial.py` conserve les caractéristiques explicites du modèle, comme
+  la démo brute ; `--feedback raw-poses` isole leur reconstruction. Les paramètres
+  `--arrival-seconds 4 --settle-text "A person is standing."` testent une trajectoire
+  de racine clairsemée puis un repos généré, sans imposer de pose terminale des jambes.
+  La sortie ne certifie pas les appuis. `total_seconds` inclut les mesures et l'écriture.
+- `compare_postprocessing.py --trial DOSSIER --output NOUVEAU_DOSSIER` compare les
+  mêmes propositions avec le filtre officiel et avec notre correction archivée.
+  Ce n'est pas une comparaison de boucles génératives indépendantes. Les durées
+  partielles sont signalées ; les profils de contrainte non pris en charge sont refusés.
+
+Pour les deux outils génératifs, fournir également `--source ARCHIVE.npz`,
+`--checkpoint-root DOSSIER`, `--output NOUVEAU_DOSSIER`, `--seed ENTIER`,
+`--text TEXTE` et `--target X Z`. Une archive source Core à 20 Hz est nécessaire.
+Tous ces prompts restent des consignes d'essai, jamais une routine de l'avatar.

@@ -6,7 +6,14 @@ Un avatar IA doté d'un corps, d'une mémoire et de capacités d'action dans un 
 
 Le projet fournit un espace que l'avatar peut percevoir et modifier, des objets utilisables et une mémoire consultable dans Obsidian. Un agent peut former et réviser ses intentions ; le monde lui renvoie ce qui s'est effectivement passé. Aucun scénario de vie, routine ou préférence d'objet n'est prescrit.
 
-**État actuel : socle local et premier pilote cinématique ARDY.** La démonstration reste une fixture déterministe dans un monde logique. Le rendu optionnel permet un pilotage manuel du squelette avec progression et arrêt confirmés. La [qualification T07](docs/motion-validation.md) reste en cours : plusieurs déplacements échouent aux contrôles de contact. Via le [pont MCP](docs/hermes-setup.md), Astra a conversé, retrouvé l'historique après redémarrage, demandé une posture exécutée par ARDY et rapporté une annulation confirmée. La voix reste à qualifier. Aucun appel réseau, aucune clé API et aucun GPU ne sont nécessaires pour lancer le socle logique.
+La [boîte à Ariane](docs/pet-environment.md) est disponible dans la scène locale :
+observer ses initiatives, parler, ajouter une balle ou un doudou, déplacer Ariane
+et les objets à la souris, puis lancer les balles. Hermes garde son contexte
+dans un monde personnel et un coffre distincts des qualifications. VoxCPM2 reste
+sa voix. La [feuille de route](docs/pet-mode.md) distingue cette première version
+jouable des essais prolongés et des capacités motrices encore à qualifier.
+
+**État actuel : monde persistant, corps cinématique ARDY et scène vocale expérimentale.** Via le [pont Hermes](docs/hermes-setup.md), Astra a conversé, retrouvé l'historique après redémarrage, demandé une posture exécutée par ARDY et rapporté une annulation confirmée. La [scène locale](experiments/voice/realtime/README.md) relie Hermes/Luna, VoxCPM2 et le VRM ; elle reçoit du texte ou un microphone facultatif, et propose une initiative à budget explicite. La latence, la naturalité des mouvements et la conversation acoustique restent à qualifier. La commande `demo` ci-dessous est une fixture logique distincte : elle n'exige aucun réseau, aucune clé API ni GPU.
 
 ## Essayer
 
@@ -55,10 +62,11 @@ Cette commande réalise une transition instantanée, sans activité préécrite 
 | Mémoire Markdown lisible dans Obsidian | Sources, recherche et corrections ; six appels Astra réels dans deux mondes de qualification |
 | Contrôles automatiques et tests de comportement | Fournis |
 | Pont d'outils Hermes | Astra réel : conversation, historique, posture exécutée et annulation retrouvée après interruption |
-| Voix de diagnostic | Chaîne transcription/Hermes/synthèse testée avec fournisseurs simulés ; microphone et voix réels non qualifiés |
+| Voix | [Scène expérimentale livrée](experiments/voice/realtime/README.md), Hermes/Luna → VoxCPM2 réel avec rendu et reçus de lecture ; microphone local facultatif et interruption numérique vérifiés. Acoustique du matériel et latence ouvertes |
 | ARDY Core et rendu Viser | Pilotage cinématique manuel ; qualification des déplacements incomplète |
 | Apparence anime en VRM | Lecture et [session en direct](docs/live-avatar.md) ; prise/dépôt cinématiques, arrêt et restauration ; contacts géométriques des poses préparées mesurés, équilibre physique non validé |
-| Initiative à budget explicite | Essais Astra réels : pause persistante, budgets, historiques variés et capacités retirées ; dépendance vocale encore ouverte |
+| Initiative à budget explicite | Essais Astra textuels ; raccord vocal avec silence facultatif, pause et reprise du même monde. Dépendance acoustique T11 encore ouverte |
+| Boîte à Ariane | Monde et mémoire personnels, palette balle/doudou, glisser-déposer, lancers et collisions simplifiées ; vie suspendue sans spectateur, transport animé non qualifié |
 | Services externes | Extensions ultérieures selon besoin observé |
 
 ## Architecture cible
@@ -108,9 +116,17 @@ docs/            Vision, architecture, contrats et jalons
 - [Feuille de route et critères d'acceptation](docs/roadmap.md)
 - [Plan d'implémentation pour le développeur](docs/implementation-plan.md)
 - [Avancement vérifié des tickets](docs/progress.md)
+- [Recherche de solutions pour les mouvements, le visage, la voix et la caméra](docs/research/humanlike-solutions-2026-09-15.md)
+- [Génération corporelle par blocs : activation, essais et limites](docs/continuous-motion.md)
 - [Pont Hermes et accès au modèle](docs/hermes-setup.md)
 - [Voix de diagnostic et interruptions](docs/voice.md)
+- [Dialogue court, VoxCPM2 et latence mesurée](docs/research/11-short-dialogue.md)
+- [Audit de l'intégration Hermes](docs/research/12-hermes-lifecycle.md)
+- [Capacités natives Hermes et besoins d'Ariane](docs/research/16-hermes-avatar-audit.md)
+- [Essai du harness maison sans Hermes](docs/research/17-custom-harness.md)
+- [Contexte natif Hermes et latence](docs/research/18-hermes-world-context.md)
 - [Initiative, budget et pause](docs/initiative.md)
+- [Ouvrir la boîte à Ariane](docs/pet-environment.md)
 - [Provenance de l'avatar VRM](docs/assets/pixiv-vrm-sample.md)
 - [Lecture animée de l'avatar](docs/avatar-rendering.md)
 - [Contribuer](CONTRIBUTING.md)

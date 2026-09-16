@@ -81,12 +81,18 @@ du mélange des mains. Ils ne remplacent pas l'inspection du maillage réel.
 ## Apparence préparée (expérimental)
 
 Ajouter `--prepare-avatar` pour calculer les poses VRM avant leur lecture.
+Le préparateur gère désormais les [appuis séparés du talon et de la pointe](avatar-foot-roll.md)
+pour permettre au pied de pivoter pendant le pas. La fiabilité globale de la
+marche reste ouverte ; le guide conserve aussi les essais refusés.
 Node.js et les dépendances de `web/avatar` doivent rester installés : construire
 le seul fichier du navigateur ne suffit pas. Une base existante doit être au
 schéma 10, avec sauvegarde vérifiée lors de sa migration.
 
 Le contrôleur prépare la géométrie puis la fait vérifier dans deux processus
-annulables. Le corps conserve sa dernière observation pendant cette préparation.
+annulables. En mode par séquence, le corps conserve sa dernière observation
+pendant cette préparation. L'option expérimentale
+[`--continuous-motion`](continuous-motion.md) permet de préparer le bloc suivant
+pendant la lecture d'un bloc validé ; les attentes et les refus restent visibles.
 Chaque pose jouée persiste ensemble le corps Core, les objets, les rotations VRM
 et la correction verticale. Le navigateur applique cet instantané sans refaire
 l'alignement des mains. Après un arrêt ou un redémarrage, la même apparence est
@@ -239,3 +245,28 @@ exécution : le script ne peut pas attester lui-même une inspection humaine.
 Les critères cinématiques de T07 sont couverts avec cet essai et les séries
 précédentes ; la fiabilité générale d'ARDY, les collisions entre les jambes et
 la physique restent hors des garanties mesurées.
+
+## Ordre des os après reprise
+
+Un essai de la scène vocale a révélé une déformation du VRM après restauration :
+les rotations du checkpoint étaient envoyées dans l'ordre alphabétique des os,
+puis celles d'un nouveau mouvement dans leur ordre hiérarchique. L'identifiant
+du contrôleur restait identique. Le lecteur conservait ses premiers indices et
+appliquait donc certaines rotations à d'autres articulations, malgré des poses
+Core et une apparence préparée cohérentes.
+
+La correction du lecteur reconstruit les associations par nom et vide son
+tampon lorsque cet ordre change, avant toute interpolation. L'émetteur utilise
+également un ordre canonique. Les anciens messages restent lisibles ; aucune
+pose enregistrée ni tolérance géométrique n'est modifiée.
+
+Le rejeu CPU des deux messages archivés sur le véritable VRM, avec les fonctions
+du lecteur, mesurait **48,544 cm** d'écart maximal entre les articulations
+affichées et le checkpoint préparé. Après correction, cet écart est de
+**1,23 × 10⁻¹⁶ m**, à l'erreur numérique près. Le genou auparavant remonté de
+35,4 cm retrouve sa position préparée. Ce résultat compare les mêmes données,
+sans nouvelle génération ARDY ni nouveau rendu dans le navigateur.
+
+Ce défaut de lecture est distinct de l'arrêt des gestes de parole : désactiver
+la présence conserve volontairement la dernière pose exécutée. Le correctif
+n'ajoute pas de retour au repos et ne garantit pas une fin de geste naturelle.

@@ -1,4 +1,4 @@
-# Contrats exécutables — monde version 8
+# Contrats exécutables — monde version 12
 
 Ces exemples décrivent l'API Python locale. Le rendu utilise HTTP/WebSocket sur l'interface de boucle locale. `run` propose des boutons de pilotage qui passent par le service d'exécution. Le [pont MCP stdio](hermes-setup.md) expose cinq opérations de ce même service et, avec un coffre configuré, quatre outils de mémoire ; aucune API REST d'action n'est livrée.
 
@@ -80,11 +80,11 @@ serveur MCP utilise cette option et exige ensuite `require_session()`.
 
 ## Migration explicite
 
-Ouvrir une ancienne base v1 à v7 ne la modifie pas. Pour la migrer, arrêter tous
+Ouvrir une ancienne base v1 à v11 ne la modifie pas. Pour la migrer, arrêter tous
 les processus qui utilisent la base et choisir une sauvegarde qui n'existe pas :
 
 ```sh
-uv run promethee --data-dir .local/ancien-monde migrate --backup .local/sauvegardes/avant-v8.sqlite3
+uv run promethee --data-dir .local/ancien-monde migrate --backup .local/sauvegardes/avant-v12.sqlite3
 ```
 
 La sauvegarde SQLite est copiée et vérifiée pendant que les écritures sont exclues, avant la migration transactionnelle. Les données sans origine deviennent `legacy`, leur révision commence à zéro ; leur ID de monde, historique et plans sont préservés. Une nouvelle migration d'une base déjà à jour ne fait rien. Une sauvegarde existante n'est jamais écrasée et une version inconnue reste refusée.
@@ -98,6 +98,32 @@ Les noms d'objets identifient des instances ; les noms d'assets identifient des 
 `ExecutionService(runtime)` propose `get_world()`, `supported_actions()`, `submit(request_id, expected_revision, action)`, `get(request_id)`, `cancel(request_id)` et `events(after=0, limit=100)`. Cette API reste testable sur CPU. Le pilote ARDY optionnel expose actuellement `move` et `posture`, cette dernière avec l'argument exact `name` (`standing` ou `arms_raised`). L'action logique `act` n'accepte pas `posture`. Les tests injectent leur propre contrôleur `logical-test` dans une fixture ; les essais ARDY et la commande `run` sont décrits dans [la qualification T07](motion-validation.md).
 
 `submit` persiste une enveloppe comportant l'ID, la révision attendue et l'action. Il ne déplace rien. Une retransmission strictement identique retourne l'état courant avec `replayed: true`, avant tout contrôle de révision. Un ID avec une autre enveloppe est refusé, même si la précédente exécution est terminée. Un nouvel essai utilise un nouvel ID.
+
+`get_world()` expose aussi `command_revision`, calculée à partir de `revision`
+moins le compteur persistant `idle_pose_updates`. Le schéma 12 initialise ce
+compteur à zéro : il ne requalifie aucune observation historique. Le snapshot
+brut conserve les deux compteurs, sans stocker la valeur dérivée.
+
+Pour commander pendant les gestes de présence, utiliser
+`submit(request_id, action=action, expected_command_revision=world["command_revision"])`.
+Il faut fournir exactement une garde : `expected_revision` conserve le contrôle
+strict de chaque image observée ; `expected_command_revision` tolère uniquement
+les changements de pose et de cadrage corporel issus de `observe_idle`. L'action
+est vérifiée contre **la pose actuelle**, dans la transaction de soumission.
+Il n'y a ni réutilisation de l'ancienne pose ni nouvelle tentative automatique.
+Les reçus enregistrent `validated_revision` et `validated_command_revision` pour
+identifier le monde examiné, y compris lorsqu'une demande est rejetée.
+
+Seuls la pose du même squelette, la position de l'avatar, la date d'observation
+et les corrections animées du même asset préparé sont exclus de cette garde.
+Un changement d'objet, de prise, d'assise, d'identité d'apparence, de provenance,
+de confirmation du corps ou de tour la périme. Un objet modifié puis remis
+comme avant la périme aussi. Les observations d'une action explicite et les
+réconciliations restent strictes. Le contrôle de portée, les capacités, le bail
+du contrôleur, la priorité de l'action active et la clôture des tours restent
+vérifiés. Le mouvement avec objet tenu n'est pas qualifié par ce contrat.
+L'[essai réel Hermes et ARDY](command-revision.md) distingue admission pendant
+la présence, erreur de format corrigée et résultat terminal du contrôleur.
 
 Une seule exécution peut être active. Une nouvelle mutation concurrente reçoit `rejected` avec le code `busy`. Le monde doit être confirmé par un contrôleur actif ; sinon le code est `controller_unavailable`. Les autres rejets comprennent `revision_conflict`, `invalid_action` et `legacy_world`. Le chemin logique, y compris `act` et les plans, refuse les sessions et les fixtures possédées par un contrôleur.
 
@@ -151,9 +177,10 @@ Arrêter les processus utilisant une base avant de la migrer :
 uv run promethee --data-dir .local/ma-session migrate --backup .local/ma-session-avant-v10.sqlite3
 ```
 
-Le pilote en direct ne produit pas encore ces checkpoints. Le stockage et sa
-[qualification sur une copie de session](avatar-foot-contact.md#sauvegarde-de-la-pose-visible)
-préparent son raccord.
+Le pilote avec préparation d'apparence conserve ces checkpoints dans les
+observations. La [qualification initiale sur une copie de session](avatar-foot-contact.md#sauvegarde-de-la-pose-visible)
+reste distincte des essais ultérieurs en direct décrits dans le
+[guide moteur](motion-validation.md).
 
 Depuis le schéma 9, les objets peuvent aussi porter une
 [pose 3D et un attachement à la main](spatial-objects.md). Ces champs sont
@@ -164,6 +191,7 @@ Seul le pilote appelle `acquire_controller(source=..., supported_actions=[...], 
 
 - `heartbeat()` renouvelle la propriété exclusive. Un second propriétaire est refusé ; une ancienne session ne peut pas renouveler la nouvelle.
 - `reconcile(observation, stopped=True)` atteste l'arrêt et fournit un état complet, sans exécution active.
+- `observe_idle(observation)` publie une pose de présence validée hors exécution, sans attester l'arrêt ni renouveler le bail. Une action active est prioritaire. Seules les différences corporelles admissibles conservent `command_revision`.
 - `claim_next()` persiste l'envoi avant de remettre une demande au pilote ; aucun appel moteur n'a lieu dans une transaction SQLite.
 - `claim_cancellation()` remet une demande d'arrêt une seule fois.
 - `feedback(request_id, sequence, status, observation=..., error=...)` fournit le retour ; la session est attachée au handle. Les séquences répétées ou anciennes, sessions périmées et retours après un état terminal sont ignorés.

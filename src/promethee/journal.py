@@ -54,6 +54,36 @@ def export_journal(runtime, vault):
         for seq, data in rows:
             after = seq
             event = json.loads(data)
+            if event["kind"] in {
+                "external_intervention",
+                "object_contact",
+                "object_rest",
+                "grab_released",
+            }:
+                path = folder / f"environment-{seq:06d}.md"
+                # These are user interventions or simulated observations, never
+                # actions attributed to Ariane and never private thoughts.
+                detail = {
+                    key: value for key, value in event.items() if key not in {"envelope", "result"}
+                }
+                record = json.dumps(detail, ensure_ascii=False, indent=2)
+                text = (
+                    "---\nsource: promethee-sandbox\n"
+                    f"data_origin: {world['data_origin']}\nsession_kind: {world['session_kind']}\n"
+                    f"world_id: {world_id}\nevent_id: environment-{seq}\n"
+                    f"recorded_at: {event['recorded_at']}\nkind: environment-observation\n---\n\n"
+                    f"# {event['kind']}\n\n"
+                    "Intervention extérieure ou résultat de simulation ; "
+                    "aucune décision d’Ariane attestée.\n\n"
+                    f"    {record.replace(chr(10), chr(10) + '    ')}\n"
+                )
+                try:
+                    with path.open("x", encoding="utf-8", newline="\n") as output:
+                        output.write(text)
+                except FileExistsError:
+                    continue
+                count += 1
+                continue
             if event["kind"] not in {"completed", "failed", "cancelled", "interrupted", "rejected"}:
                 continue
             execution = event["execution"]

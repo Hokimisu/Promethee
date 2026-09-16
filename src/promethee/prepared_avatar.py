@@ -129,6 +129,34 @@ def load_prepared_poses(path, motion_bytes):
             },
         )
         expected_hands.update(hand for hand, weight in initial_weights.items() if weight > 0)
+    if "observed_origin" in document and (
+        document["observed_origin"] is not True
+        or len(document["frames"]) != 41
+        or not document.get("initial_appearance")
+        or document["frames"][0] != document.get("initial_pose")
+        or artifact["frames"][0] != document["initial_appearance"]["frame"]
+    ):
+        raise ValueError("Continuous preparation changed the exact observed origin.")
+    support_bones = (set(EXTRA_BONES) - {"neck", "head"}) | {"hips"}
+    stationary_support = document.get("stationary_support") is True
+    if "stationary_support" in document:
+        if (
+            not stationary_support
+            or "observed_origin" in document
+            or artifact["mode"] != "--settle"
+            or not document.get("initial_appearance")
+            or document["frames"][0] != document.get("initial_pose")
+            or artifact["frames"][0] != document["initial_appearance"]["frame"]
+        ):
+            raise ValueError("Stationary support requires an exact prepared origin.")
+        for source in document["frames"]:
+            for name in support_bones:
+                joint = names.index(bones[name])
+                for field in ("positions", "rotations"):
+                    difference = np.asarray(source[field][joint]) - initial[field][joint]
+                    # arm_reach re-normalizes rotations; this permits only its rounding.
+                    if not np.isfinite(difference).all() or np.max(np.abs(difference)) > 1e-5:
+                        raise ValueError("Stationary support cannot change the Core lower body.")
     if artifact["version"] == 2:
         if not isinstance(artifact["frame_alignment_weights"], list) or len(
             artifact["frame_alignment_weights"]
@@ -143,6 +171,8 @@ def load_prepared_poses(path, motion_bytes):
     ):
         raise ValueError("Prepared avatar attachment hands differ.")
     mutable = set()
+    if stationary_support:
+        mutable.update(support_bones)
     if artifact["mode"] == "--plant":
         contacts = document.get("foot_contacts")
         if (
@@ -176,6 +206,14 @@ def load_prepared_poses(path, motion_bytes):
         ):
             raise ValueError("Invalid prepared avatar pose.")
         offset = prepared["root_y_offset"]
+        if stationary_support and (
+            offset != checkpoint["frame"]["root_y_offset"]
+            or any(
+                prepared["rotations"][name] != checkpoint["frame"]["rotations"][name]
+                for name in support_bones
+            )
+        ):
+            raise ValueError("Stationary support changed the prepared pelvis or feet.")
         if previous_offset is not None and abs(offset - previous_offset) > 0.015 + 1e-8:
             raise ValueError("Prepared avatar root step exceeds 15 mm.")
         previous_offset = offset

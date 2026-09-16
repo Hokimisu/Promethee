@@ -54,9 +54,13 @@ class Device:
 
 
 def setup(tmp_path):
+    clock = [10.0]
     store = ConversationStore(
         ExecutionService(
-            Runtime(tmp_path / "world.sqlite3", data_origin="session", session_kind="qualification")
+            Runtime(
+                tmp_path / "world.sqlite3", data_origin="session", session_kind="qualification"
+            ),
+            clock=lambda: clock[0],
         )
     )
     reasoning, audio = [], []
@@ -72,7 +76,6 @@ def setup(tmp_path):
     text = TextHost(
         store, factory(reasoning), model="fixture", base_url="unused", api_mode="chat_completions"
     )
-    clock = [10.0]
     device = Device()
     voice = VoiceHost(
         text,

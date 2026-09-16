@@ -121,11 +121,17 @@ def test_preparation_waits_and_late_cancelled_poses_are_never_played(prepared_dr
     assert controller.observation == before and controller.trajectory is None
 
 
-def test_prepared_playback_cancel_and_restore_keep_the_same_appearance(prepared_driver):
+@pytest.mark.parametrize("continuous", [False, True])
+def test_prepared_playback_cancel_and_restore_keep_the_same_appearance(prepared_driver, continuous):
+    if continuous:
+        pytest.importorskip("numpy")
     controller, service, worker, preparation, now, poses = prepared_driver
+    controller.continuous_motion = continuous
+    if continuous:
+        poses.append(copy.deepcopy(poses[-1]))
     for index, pose in enumerate(poses):
         for point in pose["positions"]:
-            point[0] = index / 78
+            point[0] += index / 80
     submit(service)
     controller.tick()
     worker.finish()
@@ -143,12 +149,18 @@ def test_prepared_playback_cancel_and_restore_keep_the_same_appearance(prepared_
         KinematicController(service, Worker(worker.output))
     fresh = Preparation()
     restored = KinematicController(
-        service, Worker(worker.output), clock=lambda: now[0], appearance_preparation=fresh
+        service,
+        Worker(worker.output),
+        clock=lambda: now[0],
+        appearance_preparation=fresh,
+        continuous_motion=continuous,
     )
     try:
         restored.tick()
         assert restored.ready and restored.observation == last
         assert fresh.jobs == []
+        assert restored.future_segment is None
+        assert restored.history.context() == ([], 0)
         assert service.get("move-one")["status"] == "cancelled"
     finally:
         restored.close()
@@ -181,3 +193,29 @@ def test_spawn_preserves_appearance_without_repreparing_the_body(prepared_driver
     assert service.get("spawn")["status"] == "completed"
     assert controller.observation["appearance"] == appearance
     assert len(preparation.jobs) == 1
+
+
+def test_take_prepares_arms_without_discarding_observed_support(prepared_driver, monkeypatch):
+    pytest.importorskip("numpy")
+    controller, service, _, preparation, _, _ = prepared_driver
+    service.submit(
+        "spawn",
+        service.get_world()["revision"],
+        {"kind": "spawn", "args": {"object_id": "toy", "asset": "ball", "position": [0.8, 1, 0.5]}},
+    )
+    controller.tick()
+    controller.tick()
+    before = copy.deepcopy(controller.observation)
+    # This test isolates orchestration; the preparer independently rejects moving legs.
+    monkeypatch.setattr(
+        "promethee.object_actions.prepare_object_action",
+        lambda *args, **kwargs: [copy.deepcopy(before)] * 2,
+    )
+    service.submit(
+        "take", service.get_world()["revision"], {"kind": "take", "args": {"object_id": "toy"}}
+    )
+    controller.tick()
+    assert preparation.jobs[-1].get("stationary_support") is True, service.get("take")
+    assert preparation.jobs[-1]["initial_appearance"] == before["appearance"]
+    assert preparation.jobs[-1]["frames"][0] == before["pose"]
+    assert "stationary_support" not in preparation.jobs[0]

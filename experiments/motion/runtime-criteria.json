@@ -1,6 +1,6 @@
 {
-  "version": 4,
-  "frozen_before_holdout": true,
+  "version": 5,
+  "frozen_before_holdout": false,
   "calibration": [
     "motion-transition-03",
     "posture-constraint-calibration-02",
@@ -12,6 +12,8 @@
   ],
   "source": "kinematic Core with explicit mesh-floor projection",
   "target_error_max_m": 0.05,
+  "free_walk_target_error_max_m": 1.0,
+  "target_error_policy": "Free move actions use a 1.0 m arrival tolerance requested by the user; posture and other actions retain the default 0.05 m tolerance. Persist the actually observed position, never the requested target. This policy change is not a new stability qualification.",
   "initial_joint_error_max_m": 0.02,
   "root_frame_step_max_m": 0.12,
   "joint_frame_step_max_m": 0.3,
@@ -26,7 +28,7 @@
   "geometric_contact_pairs_min": 1,
   "mesh_floor_penetration_max_m": 0.001,
   "posture_wrist_above_head_min_m": 0.15,
-  "notes": "Version 4 requires measured surface support on every walking frame after predicted-support projection and swing clearance. Speed, target, joint continuity and penetration limits are unchanged; combined root correction stays within 5 cm and 15 mm/frame. Surface contact retains the symmetric 0.1 mm tolerance. No force or balance claim. Qualification data stay outside agent context.",
+  "notes": "Version 5 separates arrival accuracy for free walking from stability gates. Only the free-walk target tolerance changes; all joint continuity, foot speed, floor correction, penetration and surface support limits remain unchanged from version 4. Combined root correction stays within 5 cm and 15 mm/frame; surface contact retains the symmetric 0.1 mm tolerance. No force or balance claim. This user-requested policy has not yet passed a new held-out qualification. Historical results keep their archived criteria. Qualification data stay outside agent context.",
   "walking_surface_contact_frame_fraction_min": 1.0,
   "walking_ankle_correction_max_m": 0.05,
   "walking_free_foot_clearance_m": 0.01

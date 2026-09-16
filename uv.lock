@@ -1118,6 +1118,7 @@ source = { editable = "." }
 
 [package.optional-dependencies]
 agent = [
+    { name = "httpx" },
     { name = "mcp" },
     { name = "pyyaml" },
 ]
@@ -1144,6 +1145,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "httpx", marker = "extra == 'agent'", specifier = "==0.28.1" },
     { name = "mcp", marker = "extra == 'agent'", specifier = "==2.0.0" },
     { name = "numpy", marker = "extra == 'avatar'", specifier = "==2.4.6" },
     { name = "numpy", marker = "extra == 'viewer'", specifier = "==2.4.6" },

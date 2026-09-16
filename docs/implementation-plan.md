@@ -6,9 +6,26 @@ Ce document s'adresse à la personne qui va coder la suite de Promethee. Il tran
 
 ## Commencer ici
 
-Lire [AGENTS.md](../AGENTS.md), la [vision](vision.md), l'[architecture](architecture.md), puis les [contrats actuels](contracts.md). Exécuter T00, puis coder uniquement T01 sur une branche `codex/manual-world-control`. Livrer ce premier changement avec ses tests avant de passer à la suite.
+**Reprise du développement au 16 septembre 2026 :** suivre d'abord le
+[plan du mode à observer](pet-mode.md#ordre-de-réalisation). Le socle décrit
+comme « état de départ » ci-dessous est historique ; T00–T10 ont depuis des
+résultats dans le registre d'avancement. Ne pas repartir de T01. Pour cette
+nouvelle expérience, finir la qualification acoustique T11 n'est plus un
+prérequis à l'initiative avec texte et voix sortante. Ses critères restent
+ouverts, sans être supprimés ni présentés comme réussis.
 
-Le premier résultat attendu est simple : un développeur peut consulter les capacités du monde et lui envoyer une action de son choix, sans lancer `demo.py`. Aucun modèle IA ni moteur graphique n'est nécessaire à ce ticket.
+**17 septembre :** une première implémentation B01–B04 est disponible dans le
+[guide jouable](pet-environment.md). La [qualification locale](research/19-pet-environment.md)
+distingue les capacités observées du ramassage au sol, du transport animé et
+des sessions autonomes prolongées encore ouverts.
+
+Le parcours initial était : lire [AGENTS.md](../AGENTS.md), la [vision](vision.md),
+l'[architecture](architecture.md), puis les [contrats actuels](contracts.md) ;
+exécuter T00 et livrer T01 avant de passer à la suite. Ces consignes expliquent
+l'ordre des tickets historiques ; elles ne demandent pas de les réimplémenter.
+
+Le premier résultat attendu à l'époque était un pilotage libre du monde logique,
+sans lancer `demo.py`, sans modèle IA ni moteur graphique. Il est déjà livré.
 
 Pour chaque ticket :
 

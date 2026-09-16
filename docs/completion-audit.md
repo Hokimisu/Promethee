@@ -5,6 +5,97 @@ Audit du 15 septembre 2026, sur le code `f15c577`. Il complète le
 Les archives ci-dessous sont des qualifications locales, pas des souvenirs
 de session. Une réussite ancienne n'atteste pas automatiquement le raccord actuel.
 
+## Mise à jour du 16 septembre 2026
+
+Le choix vocal utilisateur s'est porté sur VoxCPM2 optimisé, puis Luna pour
+le dialogue. La [qualification locale](research/11-short-dialogue.md) vérifie
+maintenant de vraies sorties vocales et leurs reçus de lecture dans le navigateur,
+avec ARDY actif. Elle ne ferme pas T11 : entrée microphone, interruption
+acoustique aux différentes étapes et coût réel restent ouverts. Les sources de
+la [scène expérimentale](../experiments/voice/realtime/README.md), leur configuration,
+leurs tests et les versions de l'environnement vocal sont désormais livrés ;
+les dépendances vocales ont été réinstallées dans un environnement neuf.
+
+Le préchauffage Hermes, le contrat système séparé et la mesure des phases sont
+implémentés dans le socle. Six tours réels montrent des réponses de 3,50 à
+26,35 s ; aucune fluidité continue n'est revendiquée. Le profil vocal approuvé
+est conservé. Les 577 tests réussis de cette étape et les deux tests ignorés couvrent les
+contrats du code, pas les critères audio matériels manquants. T12 conserve sa
+dépendance vocale ; aucun nouveau succès T07–T08 n'est déduit de la gestuelle
+de présence de cet essai. Le mode résident ajouté ensuite réutilise effectivement
+Hermes et renouvelle MCP par tour ; ses trois appels natifs et leurs limites
+figurent dans le [rapport de recherche](research/12-hermes-lifecycle.md).
+
+La [révision de commande](command-revision.md) corrige désormais le conflit
+causé par les observations de présence entre `read_world` et `submit_action`.
+La révision stricte reste disponible ; une seule garde est admise par demande,
+sans remplacement silencieux de celle choisie. Les tests du vrai transport MCP
+couvrent les types stricts, les gardes absentes ou concurrentes, le rejeu et le
+refus d'un ancien tour.
+
+L'essai `command-revision-real-01` confirme ce raccord sur une vraie présence
+ARDY et une posture demandée par Luna résident, dans Hermes 0.21.3 G `2179a279`.
+Entre la dernière lecture `203/3` et l'admission `247/3`, 44 poses distinctes
+sont archivées ; la posture termine 7,928 s après admission. Une première
+demande mal formée est refusée, puis corrigée par la boucle native avec un
+nouvel ID : une seule action acceptée, aucun rejeu automatique de l'hôte. Le
+second tour consulte réellement `read_world` et `read_execution`. Les durées
+natives de 18,82 et 8,02 s ne sont pas une garantie de fluidité. L'essai ne
+comporte ni voix ni navigateur. Vérification actuelle : 647 tests du socle
+réussis, 2 ignorés ; 124 tests de scène et 7 sous-tests réussis.
+
+La tolérance de marche v5 doit encore subir une nouvelle série indépendante
+après fixation de ses critères. Ni cette posture, ni le mode résident, ni la
+publication de la scène ne ferment cette qualification. Marcher avec un objet
+tenu reste distinct des essais de prise et dépôt ; microphone, coût réel et
+budget persistant raccordé à la scène vocale restent également ouverts.
+
+Le reste du document conserve les preuves de l'audit du 15 septembre.
+
+## Entrée vocale locale — 16 septembre 2026
+
+Le [raccord microphone](microphone.md) ajoute la capture facultative, le
+détecteur local, la transcription CPU et l'interruption anticipée du même
+contexte Hermes. Un premier essai numérique traverse réellement le navigateur,
+Silero, Faster Whisper small, Hermes résident et Vox : première lecture
+interrompue, seconde terminée, aucun ancien identifiant rejoué. Il a aussi
+révélé une perte du début de phrase, corrigée par un tampon plus long.
+
+Ce n'est pas un test du microphone physique ni de l'annulation d'écho.
+Les premières réponses à 7,21 et 10,01 secondes après fin des WAV ne valident
+pas une conversation fluide. Un refus de préparation VRM pendant cette session
+reste documenté séparément ; le succès de la voix ne prouve pas celui du corps.
+Le coût monétaire par tour Codex n'est pas disponible. T11 et la dépendance
+vocale de T12 restent ouverts.
+
+## Composition vocale de l'initiative — 16 septembre 2026
+
+Le raccord livré utilise l'initiative du socle dans le même hôte Hermes ;
+budget, pause, provenance et historique sont partagés. La scène ne crée plus
+de faux messages utilisateur pour prolonger l'essai. Elle peut accepter une
+décision silencieuse et reprendre explicitement une base de qualification
+existante. Les 38 tests de composition vérifient les fenêtres de course de la
+décision, de la synthèse, du microphone et de la pause, avec transports factices.
+
+L'[essai réel](initiative.md#composition-réelle-avec-luna-vox-et-le-navigateur)
+observe deux décisions silencieuses, une décision interrompue, une réponse
+utilisateur lue complètement et la reprise du même monde avec pause et budget
+conservés. Le rechargement d'un appel intermédiaire est explicite. Aucun tour
+supplémentaire ne démarre après épuisement. T12 garde sa dépendance au microphone
+matériel et aux limites T11 ; aucun comportement autonome général n'est déduit
+de ces quelques décisions.
+
+Le refus de préparation VRM de l'essai microphone a une cause identifiée et
+un [correctif géométrique vérifié](avatar-foot-roll.md) sur les mêmes poses,
+puis sur trois autres séquences. Cela ne ferme ni la qualification de marche
+indépendante ni la naturalité générale des changements d'appui.
+
+La reprise vocale a révélé un second défaut, cette fois dans le lecteur :
+les os conservaient l'index d'un ancien ordre. Le [rejeu sur le vrai VRM](live-avatar.md#ordre-des-os-après-reprise)
+isole une erreur de 48,54 cm, supprimée par reconstruction des correspondances.
+L'émetteur utilise maintenant un ordre stable. Cette correction de lecture ne
+prouve pas un retour naturel au repos à la fin de chaque geste.
+
 ## T07 — Corps et résultat observé
 
 | Exigence | Preuve inspectée | Conclusion |

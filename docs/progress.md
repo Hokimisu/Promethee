@@ -17,13 +17,154 @@ leurs limites décrivent la version de chaque essai, pas nécessairement la dern
 | T06 | Implémenté et vérifié avec le vrai squelette | Viser en lecture seule, deux dispositions, mise à jour d'un objet, lecture/scrutation d'un NPZ ARDY, contrôle d'échelle et de rotation ; 69 tests CPU passent. [Guide de rendu](rendering.md) |
 | T07 | Vérifié dans le périmètre cinématique qualifié | Dernier essai indépendant : deux postures et un déplacement terminés, un déplacement refusé ; contact géométrique sur les 120 poses de chaque séquence acceptée. Données terminales, observations et événements concordent. Panne du contrôleur préparé à l'image 10 : checkpoint et rendu restaurés, action interrompue sans rejeu. [Audit et limites](completion-audit.md#t07--corps-et-résultat-observé) |
 | T08 | Interactions cinématiques implémentées et vérifiées | Doudou et balle, plusieurs positions, géométries et orientations ; prise, dépôt, impossibilités, annulation avant/après contact et restauration. [Contrôleur](spatial-objects.md), [portée VRM](avatar-arm-reach.md) et [session en direct](live-avatar.md). Ni doigts physiques ni appuis validés |
-| T09 | Vérifié avec Astra et ARDY réels | Authentification ChatGPT native de Hermes, conversation sans action, lecture du monde, historique après redémarrage, posture exécutée et résultat observé. Après interruption pendant le mouvement, le nouveau tour retrouve l'annulation sans relancer l'action. Refus d'un objet absent. [Configuration, essais et limites](hermes-setup.md) |
+| T09 | Vérifié avec Astra et ARDY réels | Authentification ChatGPT native de Hermes, conversation sans action, lecture du monde, historique après redémarrage, posture exécutée et résultat observé. Après interruption pendant le mouvement, le nouveau tour retrouve l'annulation sans relancer l'action. Refus d'un objet absent. [Configuration, essais et limites](hermes-setup.md). Luna a ensuite commandé une posture pendant la présence via la [révision de commande](command-revision.md) |
 | T10 | Mémoire sourcée vérifiée sur CPU et avec Astra | Six appels réels dans deux mondes : recherche vide, proposition, correction retrouvée avec l'ancien terme, source relue et distinction du monde actuel. Deux notes dans le premier coffre, zéro dans le second, aucune action ; coffres ensuite exclus comme qualification. Retrait d'objet et contenus non fiables couverts par tests CPU ; pas de revue visuelle Obsidian. [Contrat et qualification](memory.md) |
-| T11 | Raccord Live/Hermes implémenté ; audio réel à qualifier | SDK Live isolé et vrai Astra testés avec serveur vocal simulé, historique partagé au démarrage, usage final contrôlé. Mode fichier et périphériques explicites avec buffers bornés ; erreurs et coupure locale testées sans matériel audio. Migration v11 pour les comptes rendus du diagnostic. Accès vocal réel, interruption acoustique sans parole tardive, latence et coût restent à qualifier. [Raccord et limites](live-integration.md), [configuration](live-file-session.md) |
+| T11 | Voix locale réelle qualifiée partiellement ; ticket ouvert | Essai Hermes/Luna → VoxCPM2 approuvé à l'écoute, phrases courtes et directions vocales. [Entrée locale](microphone.md) ajoutée : détecteur navigateur, ASR CPU et coupure testés avec des WAV injectés dans un MediaStream. Microphone physique, écho et coût réel non qualifiés. [Sources et lancement](../experiments/voice/realtime/README.md), [mesures vocales](research/11-short-dialogue.md). Le raccord Live antérieur reste un diagnostic distinct avec fournisseur simulé |
 | T12 | Initiative textuelle vérifiée avec Astra ; dépendance vocale ouverte | Deux séries réelles : mondes sans historique et après sollicitation, contrôleur ARDY actif puis retiré, pause après redémarrage et budgets épuisés. Aucun appel supplémentaire ni action corporelle. Référence active corrigée après fin de tour ; 363 tests passent. Aucune initiative personnelle activée ; T11 reste à qualifier. [Contrat et limites](initiative.md) |
-| T13 | À réaliser selon limite mesurée | Aucun entraînement ni connecteur supplémentaire revendiqué |
+| T13 | Appuis corrigés et génération par blocs intégrée ; naturalité ouverte | [Recherche](research/humanlike-solutions-2026-09-15.md), [correction talon/pointe](avatar-foot-roll.md) et [mode continu expérimental](continuous-motion.md) : historique et futur séparés, génération pendant la lecture, annulation réelle conservant exactement la pose. Deux postures réussissent dans la série indépendante, deux déplacements échouent et cinq attentes persistent. Aucun entraînement ni connecteur supplémentaire revendiqué |
 
 Les journaux de test et données locales restent dans `.local/` et ne sont pas publiés.
+
+## Connexion Hermes conservée — 16 septembre 2026
+
+Le résident conserve désormais MCP entre deux réponses réussies. Chaque appel
+porte l'identité native immuable de son tour ; les commandes tardives restent
+refusées par SQLite, y compris après remplacement du tour pendant une attente.
+Les schémas publics sont inchangés. La mémoire, l'idempotence, les interruptions
+et les reconnexions sont couvertes ; le raccord privé est limité à Hermes
+`2179a279` et impose un redémarrage avant mise à jour des outils.
+
+722 tests du socle passent, 2 sont ignorés ; 331 tests et 7 sous-tests de la
+scène passent. Ruff, format et construction réussissent. Une comparaison native
+de quatre tours mesure au second tour **1,695 → 0,012 s** d'actualisation MCP,
+et **9,820 → 7,909 s** jusqu'au résultat complet. Même processus réellement
+conservé, une seule action acceptée dans chaque monde CPU, aucune exécution
+inventée. Le [rapport](research/15-hermes-persistent-tools.md) conserve aussi
+l'essai initial arrêté par une erreur de contrôle des PID Windows. Pas de
+voix dans cette comparaison, ni garantie de latence générale ; T11 reste ouvert.
+
+## Outils Hermes et latence — 16 septembre 2026
+
+Les lectures MCP disposent d'une vue synthétique par défaut, sans modifier les
+reçus persistés. Le schéma des actions explicite l'imbrication `kind` / `args`,
+avec contrôle de la coercition native Hermes. Les tests de projection et de
+transport conservent refus, idempotence, révisions, statuts et provenance.
+Validation locale : 686 tests du socle, 2 ignorés ; 331 tests et 7 sous-tests de
+la scène. Les 11 tests stdio ciblés passent après le dernier ajustement de
+schéma ; lint, format et construction réussissent.
+
+Une paire native isolée mesure 23,885 → 12,535 s pour demander une posture,
+avec un refus de format en moins, mais 9,713 → 16,525 s pour sa relecture.
+Le second tour demande la vue complète. Ce résultat exploratoire ne prouve
+pas un gain général de latence et ne clôt pas T11. Le
+[rapport](research/14-hermes-tool-latency.md) conserve les quatre échantillons,
+les huit essais antérieurs invalides comme A/B, et leurs limites. Hermes et
+Luna sont réels ; le contrôleur de cette comparaison est simulé, sans audio.
+
+## Microphone local — 16 septembre 2026
+
+La livraison suivante raccorde aussi l'initiative à la scène : activation
+distincte, budget atomique, pause persistante, silence facultatif et reprise
+explicite du même monde de qualification. Les anciennes relances « poursuis »
+sont supprimées. Les 38 tests de composition utilisent le vrai `TextHost`,
+`Initiative` et `ConversationStore`, avec transports synthétiques. Ils couvrent
+notamment la pause entre fin du raisonnement et publication, les PCM tardifs,
+les réponses utilisateur prioritaires et la limite de 60 secondes sans dépense
+d'un nouveau tour. La qualification acoustique T11 reste distincte.
+
+L'[essai réel de composition](initiative.md#composition-réelle-avec-luna-vox-et-le-navigateur)
+conserve budget, pause et historique après redémarrage. Deux réveils choisissent
+le silence, un autre est interrompu, et une réponse utilisateur est lue en entier
+sans consommer le budget autonome. L'épuisement interdit les départs suivants.
+
+Un [défaut de pivot](avatar-foot-roll.md) du retargeting a également été isolé :
+le point d'appui demandé sur la pointe pouvait provenir du talon. Le correctif
+permet d'exporter les 41 poses auparavant refusées ; trois séquences voisines
+ou indépendantes restent validées. Les limites de naturalité sont conservées.
+
+La qualification de reprise a aussi révélé un [ordre des os incohérent](live-avatar.md#ordre-des-os-après-reprise)
+entre checkpoint et nouvelles poses. Le lecteur reconstruisait ses associations
+seulement quand le contrôleur changeait. Le correctif reconstruit aussi sur
+changement d'ordre et évite de mélanger les tableaux ; l'émetteur stabilise ses
+noms. Le rejeu réel sur le VRM réduit l'erreur de 48,54 cm à l'arrondi numérique.
+
+La [capture facultative](microphone.md) rejoint le même Hermes que le texte,
+avec clôture durable du tour interrompu avant acquittement et garde contre
+les sorties périmées. Le début de parole coupe la voix sans arrêter une action
+corporelle acceptée. Le bouton d'arrêt conserve sa portée sur le corps.
+
+Les tests Python et navigateur couvrent les absences, pannes, saturations,
+doubles envois, permissions tardives et huit courses de publication. Le vrai
+détecteur navigateur a révélé un défaut de minuteur, corrigé puis retesté.
+Un essai numérique complet donne deux réponses, une lecture interrompue et
+une complète ; il ne qualifie ni le microphone matériel ni la fluidité globale.
+Les environnements ASR et navigateur sont séparés et épinglés ; aucun poids
+ni audio capturé n'est ajouté au dépôt.
+
+## Recherche Hermes et livraison de la scène — 16 septembre 2026
+
+Les audits en parallèle ont vérifié le cycle de vie natif, le contexte et le
+cache, les outils, le streaming vocal et les critères encore ouverts du plan.
+Le mode `--resident` conserve maintenant un seul agent entre les tours réussis,
+avec reconnexion MCP et validation de son autorité à chaque tour. La mémoire
+personnelle et les revues automatiques restent désactivées pour ces essais.
+Trois tours natifs réussis, dont un vrai `read_world`, sont détaillés dans le
+[rapport de cycle de vie](research/12-hermes-lifecycle.md).
+
+La [scène expérimentale](../experiments/voice/realtime/README.md) est maintenant
+livrée : serveur, rendu, lèvres liées au PCM lu, worker Vox, présence ARDY,
+encodeur CPU et configuration des chemins. Les dépendances vocales ont été
+réinstallées dans un environnement neuf ; poids, référence et conversations
+restent exclus du dépôt. Cet essai précède l'entrée microphone et le raccord
+de l'initiative désormais décrits plus haut ; ses limites de 60 secondes et
+12 appels ne constituaient pas le budget persistant de T12.
+
+Après correction du renouvellement des connexions HTTP, le
+[nouvel essai complet](research/11-short-dialogue.md#scène-livrée-avec-hermes-résident)
+confirme dix réponses de 3,55 à 5,77 s, 54,40 s de voix jouées, neuf lectures
+complètes et une coupure à l'échéance, sans sous-alimentation PCM. Le premier
+essai avait échoué côté navigateur et reste documenté. Après ajout du contrat
+de révision de commande, 647 tests du socle réussissent, transport MCP inclus,
+et 2 sont ignorés ; 124 tests de la scène et 7 sous-tests réussissent.
+Les critères acoustiques de T11 restent ouverts ; ces essais ne garantissent
+pas une fluidité générale ni une synchronisation sémantique des gestes et paroles.
+
+## Commandes pendant la présence — 16 septembre 2026
+
+Le [contrat de révision de commande](command-revision.md) corrige le conflit
+causé par les seules observations de présence entre lecture et soumission.
+L'essai réel `command-revision-real-01` utilise Hermes 0.21.3, source G `2179a279`,
+Luna résident et ARDY : lecture `revision=203, command_revision=3`, admission
+`247/3`, avec 44 poses distinctes archivées entre les deux. Une seule action
+est acceptée ; la posture termine 7,928 s après son admission.
+
+La première demande était mal formée et a été refusée. Hermes l'a corrigée
+dans le même tour avec un nouvel identifiant, sans rejeu automatique de l'hôte.
+Les deux tours natifs prennent 18,82 et 8,02 s ; le second relit réellement le
+monde et l'exécution. Cette qualification porte sur une posture, sans voix ni
+navigateur. Elle ne ferme ni le microphone, ni le budget vocal persistant,
+ni le coût de session, ni la qualification de marche avec objet tenu.
+
+## Dialogue et préchauffage — essai antérieur du 16 septembre 2026
+
+Le choix exprimé par l'utilisateur retient VoxCPM2 optimisé, avec Luna pour les
+répliques. Le socle expose maintenant l'effort `low`, des mesures de phases et
+un préchauffage optionnel sans appel modèle avant activation. Les instructions
+stables passent par `system_message`, hors de l'historique utilisateur répété.
+Le contrôleur peut aussi enregistrer une pose de présence observée sans la
+présenter comme une action terminée, et refuse cette observation pendant une
+exécution. Les [recherches Hermes](research/12-hermes-lifecycle.md) et
+[contexte/outils](research/13-hermes-context-tools.md) fondent ces changements.
+
+Vérification : 577 tests CPU réussis, 2 ignorés ; Ruff et construction réussis.
+L'essai complet de 60 s confirme cinq lectures vocales et des poses de présence,
+mais les délais de texte varient de 3,50 à 26,35 s. Le préchauffage ne garantit
+pas encore la fluidité. Les réglages et instructions vocales approuvés sont
+inchangés. Les scripts de scène, leur serveur et leur rendu restent des
+prototypes locaux : leur validation ne constitue pas encore une commande
+vocale reproductible depuis un clone du dépôt.
+
+Les sections suivantes décrivent les qualifications historiques.
 
 Le [processus GPT-Live](live-integration.md#processus-de-transport) utilise un
 environnement SDK séparé. Cinq essais locaux du vrai processus vérifient

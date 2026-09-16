@@ -10,12 +10,13 @@ CATALOG = {
 }
 
 INITIAL_WORLD = {
-    "schema_version": 11,
+    "schema_version": 12,
     "initiative": None,
     "session_kind": None,
     "conversation": None,
     "data_origin": "fixture",
     "revision": 0,
+    "idle_pose_updates": 0,
     "body": {"status": "unconfirmed", "observed_at": None, "source": None},
     "pose": None,
     "appearance": None,

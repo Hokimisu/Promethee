@@ -5,6 +5,7 @@ import sqlite3
 import pytest
 
 from promethee.catalog import INITIAL_WORLD
+from promethee.execution import ExecutionService
 from promethee.migrations import migrate, read_world
 from promethee.runtime import Runtime
 
@@ -14,6 +15,7 @@ def old_database(tmp_path):
     path = tmp_path / "old.sqlite3"
     world = copy.deepcopy(INITIAL_WORLD)
     world.pop("revision")
+    world.pop("idle_pose_updates")
     world.pop("data_origin")
     world.pop("body")
     world.pop("pose")
@@ -142,6 +144,7 @@ def test_v2_upgrade_preserves_origin_revision_and_adds_execution_storage(tmp_pat
     with runtime.connection() as conn:
         world = read_world(conn)
         world.update(schema_version=2, revision=7)
+        world.pop("idle_pose_updates")
         world.pop("body")
         world.pop("pose")
         conn.execute("UPDATE world SET data=?", (json.dumps(world),))
@@ -155,7 +158,7 @@ def test_v2_upgrade_preserves_origin_revision_and_adds_execution_storage(tmp_pat
             conn.execute(f"DROP TABLE {table}")
     before = contents(path)
     backup = tmp_path / "before-v3.sqlite3"
-    assert migrate(path, backup)["schema_version"] == 11
+    assert migrate(path, backup)["schema_version"] == 12
     assert contents(backup) == before
     world = Runtime(path).require_session()
     assert world["revision"] == 7
@@ -169,6 +172,7 @@ def test_v9_migration_does_not_invent_an_appearance(tmp_path, articulated_pose, 
     with runtime.connection() as conn:
         old = read_world(conn)
         old.update(schema_version=9, pose=articulated_pose)
+        old.pop("idle_pose_updates")
         old.pop("appearance")
         conn.execute("UPDATE world SET data=?", (json.dumps(old),))
         if fail:
@@ -184,8 +188,46 @@ def test_v9_migration_does_not_invent_an_appearance(tmp_path, articulated_pose, 
             migrate(path, backup)
         assert contents(path) == before
     else:
-        assert migrate(path, backup)["schema_version"] == 11
-        assert Runtime(path).snapshot() == {**old, "schema_version": 11, "appearance": None}
+        assert migrate(path, backup)["schema_version"] == 12
+        assert Runtime(path).snapshot() == {
+            **old,
+            "schema_version": 12,
+            "appearance": None,
+            "idle_pose_updates": 0,
+        }
+    assert contents(backup) == before
+
+
+@pytest.mark.parametrize("fail", [False, True])
+def test_v11_command_revision_migration_preserves_state_and_verified_backup(tmp_path, fail):
+    path, backup = tmp_path / "v11.sqlite3", tmp_path / "before-v12.sqlite3"
+    runtime = Runtime(path, data_origin="session", session_kind="qualification")
+    with runtime.connection() as conn:
+        old = read_world(conn)
+        old.update(schema_version=11, revision=23)
+        old.pop("idle_pose_updates")
+        conn.execute("UPDATE world SET data=? WHERE id=1", (json.dumps(old),))
+        if fail:
+            conn.execute(
+                "CREATE TRIGGER fail_v12 BEFORE UPDATE ON world "
+                "BEGIN SELECT RAISE(ABORT, 'v12 rollback'); END"
+            )
+    before = contents(path)
+    with pytest.raises(ValueError, match="migrate"):
+        Runtime(path)
+    if fail:
+        with pytest.raises(sqlite3.IntegrityError, match="v12 rollback"):
+            migrate(path, backup)
+        assert contents(path) == before
+    else:
+        assert migrate(path, backup)["schema_version"] == 12
+        reopened = Runtime(path)
+        assert reopened.snapshot() == {**old, "schema_version": 12, "idle_pose_updates": 0}
+        assert ExecutionService(reopened).get_world()["command_revision"] == 23
+        after = contents(path)
+        assert not migrate(path, tmp_path / "unused.sqlite3")["migrated"]
+        assert not (tmp_path / "unused.sqlite3").exists()
+        assert contents(path) == after
     assert contents(backup) == before
 
 
@@ -203,6 +245,7 @@ def test_v3_upgrade_fences_driver_and_preserves_or_rolls_back_active_execution(
     with service.runtime.connection() as conn:
         world = read_world(conn)
         world.update(schema_version=3)
+        world.pop("idle_pose_updates")
         world.pop("pose")
         conn.execute("UPDATE world SET data=?", (json.dumps(world),))
         conn.execute("DROP TABLE conversation_turns")

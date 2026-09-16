@@ -78,6 +78,116 @@ def test_prepared_record_matches_source_and_returns_independent_data(tmp_path):
         load_prepared_poses(path, payload + b" ")
 
 
+@pytest.mark.parametrize("change", [None, "flag", "pose", "offset", "rotation", "count"])
+def test_continuous_preparation_requires_exact_origin(tmp_path, change):
+    from promethee.appearance_checkpoint import appearance_checkpoint
+
+    payload, artifact = record()
+    document = json.loads(payload)
+    artifact.update(
+        version=2,
+        frame_alignment_weights=[{"RightHand": 1.0, "LeftHand": 0.0}] * 41,
+    )
+    document.update(
+        observed_origin=True,
+        initial_pose=copy.deepcopy(document["frames"][0]),
+        initial_appearance=appearance_checkpoint(artifact, 0, document["frames"][0]),
+        frames=[copy.deepcopy(document["frames"][0]) for _ in range(41)],
+        objects=[copy.deepcopy(document["objects"][0]) for _ in range(41)],
+    )
+    artifact["frames"] = [copy.deepcopy(artifact["frames"][0]) for _ in range(41)]
+    if change == "flag":
+        document["observed_origin"] = 1
+    if change == "pose":
+        document["frames"][0]["positions"][0][0] += 1e-10
+    if change == "offset":
+        artifact["frames"][0]["root_y_offset"] += 1e-10
+    if change == "rotation":
+        artifact["frames"][0]["rotations"]["leftFoot"][0] += 1e-10
+    if change == "count":
+        document["frames"].pop()
+        document["objects"].pop()
+        artifact["frames"].pop()
+        artifact["frame_alignment_weights"].pop()
+    payload = json.dumps(document).encode()
+    artifact["motion_sha256"] = hashlib.sha256(payload).hexdigest()
+    path = tmp_path / "poses.json"
+    path.write_text(json.dumps(artifact))
+    if change is None:
+        assert load_prepared_poses(path, payload) == artifact
+    else:
+        with pytest.raises(ValueError, match="exact observed origin"):
+            load_prepared_poses(path, payload)
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        None,
+        "flag",
+        "missing_origin",
+        "source_leg",
+        "source_root",
+        "source_rotation",
+        "foot",
+        "offset",
+        "first_arm",
+    ],
+)
+def test_stationary_interaction_preserves_prepared_support_and_exact_origin(tmp_path, change):
+    from promethee.appearance_checkpoint import appearance_checkpoint
+
+    payload, artifact = record()
+    document = json.loads(payload)
+    artifact = copy.deepcopy(artifact)
+    artifact["frames"] = [copy.deepcopy(frame) for frame in artifact["frames"]]
+    # Represent prior planting: the prepared leg differs from its raw Core rotation.
+    for frame in artifact["frames"]:
+        frame["rotations"]["leftLowerLeg"] = [math.sin(0.05), 0, 0, math.cos(0.05)]
+    artifact.update(
+        version=2,
+        frame_alignment_weights=[{"RightHand": 1.0, "LeftHand": 0.0}] * 2,
+    )
+    document.update(
+        stationary_support=True,
+        initial_pose=copy.deepcopy(document["frames"][0]),
+        initial_appearance=appearance_checkpoint(artifact, 0, document["frames"][0]),
+    )
+    if change == "flag":
+        document["stationary_support"] = 1
+    if change == "missing_origin":
+        del document["initial_appearance"]
+    if change in {"source_leg", "source_root"}:
+        joint = document["skeleton"]["joint_names"].index(
+            "LeftFoot" if change == "source_leg" else "Hips"
+        )
+        document["frames"][1]["positions"][joint][0] += 0.001
+    if change == "source_rotation":
+        joint = document["skeleton"]["joint_names"].index("LeftUpLeg")
+        document["frames"][1]["rotations"][joint] = [[1, 0, 0], [0, 0, -1], [0, 1, 0]]
+    if change == "foot":
+        artifact["frames"][1]["rotations"]["leftLowerLeg"] = [0, 0, 0, 1]
+    if change == "offset":
+        artifact["frames"][1]["root_y_offset"] += 1e-8
+    if change == "first_arm":
+        artifact["frames"][0]["rotations"]["rightLowerArm"] = [0, 0, 0, 1]
+    payload = json.dumps(document).encode()
+    artifact["motion_sha256"] = hashlib.sha256(payload).hexdigest()
+    path = tmp_path / "poses.json"
+    path.write_text(json.dumps(artifact))
+    if change is None:
+        assert load_prepared_poses(path, payload) == artifact
+        del document["stationary_support"]
+        payload = json.dumps(document).encode()
+        artifact["motion_sha256"] = hashlib.sha256(payload).hexdigest()
+        path.write_text(json.dumps(artifact))
+        with pytest.raises(ValueError, match="unadapted Core rotation"):
+            load_prepared_poses(path, payload)
+    else:
+        with pytest.raises(ValueError, match="Stationary support"):
+            load_prepared_poses(path, payload)
+
+
 @pytest.mark.parametrize(
     "field,value",
     [

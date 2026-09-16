@@ -7,6 +7,7 @@ still comes from the runtime. No method here is exposed as an agent tool.
 
 import hashlib
 import json
+from dataclasses import dataclass
 from uuid import uuid4
 
 from promethee.execution import positive_seconds, timestamp
@@ -15,6 +16,19 @@ from promethee.runtime import encode
 from promethee.world import ActionError
 
 HISTORY_BYTES = 524_288
+
+
+class ReservationExpired(ValueError):
+    """A future turn expired before its activation transaction."""
+
+
+@dataclass(frozen=True)
+class ReservedTurn:
+    """Private, single-use host reservation; never an active world turn."""
+
+    turn_id: str
+    session_id: str
+    expires_at: float
 
 
 def bounded_history(messages):
@@ -32,9 +46,28 @@ class ConversationStore:
     def __init__(self, service):
         service.runtime.require_session()
         self.service = service
+        self._reserved = None
+
+    def reserve_turn(self, *, lifetime=120):
+        """Read the session without changing its revision, history or authority."""
+        lifetime = positive_seconds(lifetime)
+        if lifetime > 300:
+            raise ValueError("A prepared turn may live for at most 300 seconds.")
+        if self._reserved is not None:
+            raise ValueError("Only one future turn may be reserved.")
+        with self.service.runtime.connection() as conn:
+            world = read_world(conn)
+        self._reserved = ReservedTurn(
+            "turn-" + uuid4().hex, world["world_id"], self.service.clock() + lifetime
+        )
+        return self._reserved
+
+    def discard_reservation(self):
+        self._reserved = None
 
     def recover(self):
         """A replacement exclusive host discards pending calls without resubmission."""
+        self.discard_reservation()
         with self.service._transaction() as (conn, _):
             for turn_id, data in conn.execute(
                 "SELECT turn_id,data FROM conversation_turns"
@@ -89,11 +122,18 @@ class ConversationStore:
             history.append({"role": "user", "content": json.loads(data)["message"]})
         return bounded_history(history)
 
-    def begin(self, message, *, timeout=60, trigger="user"):
+    def begin(self, message, *, timeout=60, trigger="user", reservation=None):
         if trigger not in {"user", "live"}:
             raise ValueError("Unknown conversation source.")
+        if reservation is not None and reservation is not self._reserved:
+            raise ValueError("The future turn does not belong to this host.")
         with self.service._transaction() as (conn, now):
-            return self._begin(conn, now, message, timeout=timeout, trigger=trigger)
+            opened = self._begin(
+                conn, now, message, timeout=timeout, trigger=trigger, reservation=reservation
+            )
+        if reservation is not None:
+            self._reserved = None  # Consume only after the complete transaction commits.
+        return opened
 
     def context(self):
         """Read-only native context for a trusted frontend; never an agent tool."""
@@ -165,13 +205,24 @@ class ConversationStore:
                 (key, "context", encode(record)),
             )
 
-    def _begin(self, conn, now, message, *, timeout=60, trigger="user"):
+    def _begin(self, conn, now, message, *, timeout=60, trigger="user", reservation=None):
         """Open within a trusted host transaction, including any initiative reservation."""
         if not isinstance(message, str) or not message.strip() or len(message) > 16000:
             raise ValueError("Expected a nonempty message of at most 16000 characters.")
         timeout = positive_seconds(timeout)
-        turn_id = "turn-" + uuid4().hex
         world = read_world(conn)
+        if reservation is not None:
+            if reservation is not self._reserved or reservation.session_id != world["world_id"]:
+                raise ValueError("The future turn belongs to another session or host.")
+            if now >= reservation.expires_at:
+                raise ReservationExpired("The future turn expired before activation.")
+            turn_id = reservation.turn_id
+            if conn.execute(
+                "SELECT 1 FROM conversation_turns WHERE turn_id=?", (turn_id,)
+            ).fetchone():
+                raise ValueError("The future turn was already used.")
+        else:
+            turn_id = "turn-" + uuid4().hex
         history = self._history(conn)
         bounded_history([*history, {"role": "user", "content": message}])
         record = {

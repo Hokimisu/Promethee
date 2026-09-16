@@ -21,6 +21,7 @@ def test_v10_voice_migration_preserves_history_and_has_verified_backup(tmp_path,
     with runtime.connection() as conn:
         world = read_world(conn)
         world["schema_version"] = 10
+        world.pop("idle_pose_updates")
         conn.execute("UPDATE world SET data=? WHERE id=1", (encode(world),))
         record = json.loads(conn.execute("SELECT data FROM conversation_turns").fetchone()[0])
         record.pop("speech_delivery")
@@ -38,8 +39,12 @@ def test_v10_voice_migration_preserves_history_and_has_verified_backup(tmp_path,
         with runtime.connection() as conn:
             assert list(conn.iterdump()) == before
     else:
-        assert migrate(runtime.path, backup)["schema_version"] == 11
-        assert Runtime(runtime.path).snapshot() == {**world, "schema_version": 11}
+        assert migrate(runtime.path, backup)["schema_version"] == 12
+        assert Runtime(runtime.path).snapshot() == {
+            **world,
+            "schema_version": 12,
+            "idle_pose_updates": 0,
+        }
         with runtime.connection() as conn:
             status, data = conn.execute("SELECT status,data FROM conversation_turns").fetchone()
             assert status == "running"

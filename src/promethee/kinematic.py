@@ -10,6 +10,7 @@ import math
 import time
 from uuid import uuid4
 
+from promethee.motion_history import ExecutedHistory, write_history
 from promethee.pose import validate_pose
 from promethee.world import ActionError
 
@@ -23,11 +24,19 @@ RETRYABLE_MOTION_ERRORS = {
     "ValueError: Foot mesh slides beyond the geometric contact limits (": "un glissement des pieds",
 }
 MAX_MOTION_ATTEMPTS = 3
+DEFAULT_TARGET_TOLERANCE_M = 0.05
+FREE_WALK_TARGET_TOLERANCE_M = 1.0
 
 
-def read_trajectory(path, *, start_pose, target):
+def read_trajectory(path, *, start_pose, target, target_tolerance_m=DEFAULT_TARGET_TOLERANCE_M):
     import numpy as np
 
+    if (
+        type(target_tolerance_m) not in (int, float)
+        or not math.isfinite(target_tolerance_m)
+        or target_tolerance_m <= 0
+    ):
+        raise ValueError("Target tolerance must be finite and positive.")
     with np.load(path, allow_pickle=False) as data:
         positions = data["posed_joints"].copy()
         rotations = data["global_rot_mats"].copy()
@@ -62,8 +71,13 @@ def read_trajectory(path, *, start_pose, target):
         distance = np.linalg.norm(positions[0] - np.asarray(start_pose["positions"]), axis=-1)
         if float(distance.max()) > 0.02:
             raise ValueError("Generated trajectory does not continue the current pose.")
-    if np.linalg.norm(positions[-1, 0, [0, 2]] - target) > 0.05:
-        raise ValueError("Generated motion misses the target by more than 5 cm.")
+    if (
+        target is not None
+        and np.linalg.norm(positions[-1, 0, [0, 2]] - target) > target_tolerance_m
+    ):
+        raise ValueError(
+            f"Generated motion misses the target by more than {target_tolerance_m:g} m."
+        )
     if np.linalg.norm(np.diff(positions[:, 0], axis=0), axis=-1).max() > 0.12:
         raise ValueError("Generated root contains a discontinuity.")
     if np.linalg.norm(np.diff(positions, axis=0), axis=-1).max() > 0.3:
@@ -106,6 +120,7 @@ class KinematicController:
         object_interactions=False,
         arm_reach_check=None,
         appearance_preparation=None,
+        continuous_motion=False,
     ):
         world = service.runtime.require_session()
         if world.get("appearance") is not None and appearance_preparation is None:
@@ -132,12 +147,20 @@ class KinematicController:
         self.appearance_job = None
         self.preparation = None
         self.appearance_frames = None
+        self.continuous_motion = continuous_motion
+        self.history = ExecutedHistory()
+        self.motion_remaining = None
+        self.stream_id = None
+        self.segment_remaining = 0
+        self.future_segment = None
+        self.stream_expected = None
         self.active = None
         self.sequence = 0
         self.job_id = None
         self.motion_attempt = 0
         self.motion_origin = None
         self.motion_spec = None
+        self.motion_context = None
         self.trajectory = None
         self.object_frames = None
         self.object_expected = None
@@ -180,6 +203,7 @@ class KinematicController:
         ):
             raise RuntimeError("Controller feedback lost ownership or its execution.")
         if status != "running":
+            self._stream_event(status, error=error)
             if self.appearance_preparation is not None:
                 self.appearance_preparation.cancel()
             self.appearance_job = self.preparation = self.appearance_frames = None
@@ -193,13 +217,43 @@ class KinematicController:
             self.job_id = None
             self.motion_attempt = 0
             self.motion_origin = self.motion_spec = None
+            self.motion_context = None
             self.object_frames = None
             self.object_expected = None
+            self.future_segment = None
+            self.motion_remaining = None
+            self.stream_id = None
+            self.segment_remaining = 0
+            self.stream_expected = None
 
-    def _prepare_appearance(self, poses, object_frames=None, contacts=None):
+    def _stream_event(self, event, **details):
+        if not self.continuous_motion:
+            return
+        record = {
+            "event": event,
+            "seconds": self.clock() - self.started_at,
+            "world_id": self.world_id,
+            "controller_session": self.handle.session_id,
+            "request_id": self.active["request_id"] if self.active else None,
+            **details,
+        }
+        with (self.worker.output / "stream-events.jsonl").open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps(record, allow_nan=False) + "\n")
+
+    def _prepare_appearance(
+        self,
+        poses,
+        object_frames=None,
+        contacts=None,
+        *,
+        origin=None,
+        remaining=None,
+        stationary_support=False,
+    ):
         from promethee.avatar_reach import load_profile
         from promethee.spatial import follow_attachment
 
+        origin = self.observation if origin is None else origin
         document = {
             "fps": 20,
             "frames": poses,
@@ -211,26 +265,31 @@ class KinematicController:
         else:
             document["objects"] = []
             for pose in poses:
-                objects = copy.deepcopy(self.observation["objects"])
-                held = self.observation["avatar"]["holding"]
+                objects = copy.deepcopy(origin["objects"])
+                held = origin["avatar"]["holding"]
                 if held:
                     objects[held] = follow_attachment(objects[held], pose)
                 document["objects"].append(objects)
         if contacts is not None:
             document["foot_contacts"] = contacts
-        if self.observation.get("appearance") is not None:
-            document.update(
-                initial_pose=self.pose, initial_appearance=self.observation["appearance"]
-            )
+        if origin.get("appearance") is not None:
+            document.update(initial_pose=origin["pose"], initial_appearance=origin["appearance"])
+        if remaining is not None:
+            document["observed_origin"] = True
+        if stationary_support:
+            document["stationary_support"] = True
         self.appearance_job = self.appearance_preparation.submit(
             document, mode="--plant" if contacts is not None else "--settle"
         )
         self.preparation = {
             "poses": poses,
             "objects": object_frames,
-            "expected": copy.deepcopy(self.observation),
+            "expected": copy.deepcopy(origin),
+            "remaining": remaining,
+            "started": self.clock(),
         }
-        self.message = "Préparation de la pose visible."
+        if self.trajectory is None:
+            self.message = "Préparation de la pose visible."
 
     def _appearance_result(self, item):
         if item["job_id"] != self.appearance_job:
@@ -241,13 +300,43 @@ class KinematicController:
             if item["type"] != "prepared":
                 raise ValueError(item.get("error", "Appearance preparation was cancelled."))
             pending = self.preparation
-            if self.observation != pending["expected"]:
+            if pending["remaining"] is None and self.observation != pending["expected"]:
                 raise ValueError("The observed body changed during appearance preparation.")
             poses = pending["poses"]
             artifact = item["appearance"]
             if len(artifact["frames"]) != len(poses):
                 raise ValueError("Prepared appearance frame count differs from the body.")
             appearances = [appearance_checkpoint(artifact, i, pose) for i, pose in enumerate(poses)]
+            if pending["remaining"] is not None:
+                initial = pending["expected"]["appearance"]
+
+                def weights(value):
+                    return value.get(
+                        "alignment_weights",
+                        {
+                            hand: float(hand in value["aligned_hands"])
+                            for hand in ("RightHand", "LeftHand")
+                        },
+                    )
+
+                if appearances[0]["frame"] != initial["frame"] or weights(
+                    appearances[0]
+                ) != weights(initial):
+                    raise ValueError(
+                        "Prepared continuous origin differs from the observed appearance."
+                    )
+                # Its visual contents were checked above. Preserve the original checkpoint
+                # provenance rather than claiming that the origin was generated again.
+                appearances[0] = copy.deepcopy(initial)
+                self._stream_event(
+                    "appearance_ready",
+                    job_id=item["job_id"],
+                    elapsed_seconds=self.clock() - pending["started"],
+                )
+                self.appearance_job = self.preparation = None
+                self.job_id = None
+                self._accept_segment(poses, appearances, pending["expected"], pending["remaining"])
+                return
             if not self.ready:
                 self._observe_pose(poses[0])
                 self.observation["appearance"] = appearances[0]
@@ -270,24 +359,95 @@ class KinematicController:
                 raise RuntimeError(f"Cannot initialize the visible body: {exc}") from exc
             self._feedback("failed", str(exc))
 
-    def _submit_motion(self, target, text, frames):
+    def _accept_segment(self, poses, appearances, origin, remaining):
+        segment = {
+            "poses": poses,
+            "appearances": appearances,
+            "origin": origin,
+            "remaining": remaining,
+        }
+        if self.trajectory is None:
+            self._start_segment(segment)
+        else:
+            if self.future_segment is not None:
+                raise ValueError("A future motion segment is already committed.")
+            self.future_segment = segment
+
+    def _start_segment(self, segment):
+        if self.observation != segment["origin"]:
+            raise ValueError("The body or its objects differ from the committed segment boundary.")
+        self.trajectory = segment["poses"]
+        self.appearance_frames = segment["appearances"]
+        self.segment_remaining = segment["remaining"]
+        self.frame = 0
+        self.play_started = self.clock()
+        self.stream_expected = copy.deepcopy(self.observation)
+        self.message = "Mouvement en cours."
+        self._stream_event(
+            "segment_started", poses=len(self.trajectory), remaining=self.segment_remaining
+        )
+        if self.segment_remaining:
+            target, text, _ = self.motion_spec
+            self.motion_attempt = 0
+            self._submit_motion(
+                target,
+                text,
+                self.segment_remaining,
+                origin=self._segment_boundary(),
+                context=self.history.context(self.trajectory[1:]),
+            )
+
+    def _segment_boundary(self):
+        from promethee.spatial import follow_attachment
+
+        # This is an immutable future boundary, not an observed state.
+        origin = copy.deepcopy(self.observation)
+        origin["pose"] = copy.deepcopy(self.trajectory[-1])
+        root = origin["pose"]["positions"][0]
+        origin["avatar"]["position"] = [root[0], root[2]]
+        held = origin["avatar"]["holding"]
+        if held:
+            origin["objects"][held] = follow_attachment(origin["objects"][held], origin["pose"])
+        if self.appearance_frames is not None:
+            origin["appearance"] = copy.deepcopy(self.appearance_frames[-1])
+        return origin
+
+    def _submit_motion(self, target, text, frames, *, origin=None, context=None):
         self.motion_attempt += 1
         if self.motion_attempt == 1:
-            self.motion_origin = copy.deepcopy(self.observation)
+            self.motion_origin = copy.deepcopy(self.observation if origin is None else origin)
             self.motion_started_at = self.clock()
         self.motion_spec = (copy.deepcopy(target), text, frames)
         self.job_id = uuid4().hex
+        streaming = self.continuous_motion and self.ready and self.active is not None
+        self.motion_remaining = frames if streaming else None
         job = {
             "job_id": self.job_id,
             "target": target,
             "text": text,
             "seed": self.seed,
-            "frames": frames,
-            "start_pose": self.pose,
+            "frames": 40 if streaming else frames,
+            "start_pose": self.motion_origin["pose"],
             "posture": (
                 self.active["envelope"]["action"]["args"].get("name") if self.active else None
             ),
         }
+        if streaming:
+            if self.stream_id is None:
+                self.stream_id = self.job_id
+            if context is None:
+                if self.motion_attempt > 1:
+                    context = self.motion_context
+                else:
+                    self.history.record(self.pose, self.clock())
+                    context = self.history.context()
+            self.motion_context = copy.deepcopy(context)
+            poses, committed = context
+            job.update(
+                future_frames=frames,
+                stream_id=self.stream_id,
+                history=write_history(self.worker.output, self.job_id, poses, committed),
+            )
         with (self.worker.output / f"{self.job_id}-request.json").open(
             "x", encoding="utf-8"
         ) as stream:
@@ -305,6 +465,10 @@ class KinematicController:
                 allow_nan=False,
             )
         self.worker.submit(job)
+        if streaming:
+            self._stream_event(
+                "generation_requested", job_id=self.job_id, remaining=frames, history=job["history"]
+            )
         self.seed = (self.seed + 1) % (2**31)
         self.job_started = self.clock()
 
@@ -319,9 +483,16 @@ class KinematicController:
         )
         if reason is None or not self.active or self.active["envelope"]["action"]["kind"] != "move":
             return False
+        committed = (
+            self.motion_remaining is not None
+            and self.trajectory is not None
+            and self.segment_remaining == self.motion_remaining
+            and self.stream_expected == self.observation
+            and self._segment_boundary() == self.motion_origin
+        )
         retry = (
             self.motion_attempt < MAX_MOTION_ATTEMPTS
-            and self.observation == self.motion_origin
+            and (self.observation == self.motion_origin or committed)
             and self.clock() - self.motion_started_at < 60
         )
         with (self.worker.output / f"{self.job_id}-rejection.json").open(
@@ -346,6 +517,11 @@ class KinematicController:
             )
         return retry
 
+    def _target_tolerance(self):
+        if self.active and self.active["envelope"]["action"]["kind"] == "move":
+            return FREE_WALK_TARGET_TOLERANCE_M
+        return DEFAULT_TARGET_TOLERANCE_M
+
     def _result(self, item):
         if item["job_id"] != self.job_id:
             return  # Cancelled generation: retained locally, never played later.
@@ -354,6 +530,15 @@ class KinematicController:
                 raise TimeoutError("Motion initialization generation exceeded 60 seconds.")
             self._feedback("failed", "Motion generation exceeded its 60-second budget.")
             return
+        if self.motion_remaining is not None:
+            self._stream_event(
+                "generation_returned",
+                job_id=item["job_id"],
+                elapsed_seconds=self.clock() - self.job_started,
+                worker_seconds=item.get("elapsed_seconds"),
+                result=item["type"],
+                continuation=item.get("continuation"),
+            )
         if item["type"] == "error" and self._retry_motion_quality(item):
             return
         try:
@@ -363,17 +548,37 @@ class KinematicController:
             if item.get("file") != expected_file:
                 raise ValueError("Unexpected trajectory filename.")
             target = self.observation["avatar"]["position"]
+            if self.motion_remaining is not None:
+                target = self.motion_spec[0]
             if self.active and self.active["envelope"]["action"]["kind"] == "move":
                 target = self.active["envelope"]["action"]["args"]["position"]
             poses = read_trajectory(
-                self.worker.output / expected_file, start_pose=self.pose, target=target
+                self.worker.output / expected_file,
+                start_pose=self.motion_origin["pose"]
+                if self.motion_remaining is not None
+                else self.pose,
+                target=None
+                if self.motion_remaining is not None and self.motion_remaining > 40
+                else target,
+                target_tolerance_m=self._target_tolerance(),
             )
+            if self.motion_remaining is not None:
+                if len(poses) != 41:
+                    raise ValueError(
+                        "Continuous playback requires an origin and exactly 40 future poses."
+                    )
+                if poses[0] != self.motion_origin["pose"]:
+                    raise ValueError("Continuous origin differs from the observed Core pose.")
             if self.observation["objects"]:
                 from promethee.object_actions import check_clearance
                 from promethee.spatial import follow_attachment
 
                 for pose in poses:
-                    candidate = copy.deepcopy(self.observation)
+                    candidate = copy.deepcopy(
+                        self.motion_origin
+                        if self.motion_remaining is not None
+                        else self.observation
+                    )
                     candidate["pose"] = pose
                     held = candidate["avatar"]["holding"]
                     if held:
@@ -399,6 +604,10 @@ class KinematicController:
                     contacts=read_contact_flags(self.worker.output / expected_file)
                     if self.ready
                     else None,
+                    origin=self.motion_origin if self.motion_remaining is not None else None,
+                    remaining=self.motion_remaining - 40
+                    if self.motion_remaining is not None
+                    else None,
                 )
             except (ValueError, OSError, KeyError) as exc:
                 if not self.active:
@@ -414,6 +623,15 @@ class KinematicController:
             self.job_id = None
             self.message = "Corps cinématique prêt."
         else:
+            if self.motion_remaining is not None:
+                self.job_id = None
+                try:
+                    self._accept_segment(
+                        poses, None, self.motion_origin, self.motion_remaining - 40
+                    )
+                except ValueError as exc:
+                    self._feedback("failed", str(exc))
+                return
             self.trajectory = poses
             self.frame = 0
             self.play_started = self.clock()
@@ -478,6 +696,9 @@ class KinematicController:
         if self.worker.pending is not None and now - self.motion_started_at > 60:
             raise TimeoutError("Motion generation exceeded 60 seconds.")
         if self.trajectory is not None:
+            if self.stream_expected is not None and self.observation != self.stream_expected:
+                self._feedback("failed", "The body changed outside the committed motion stream.")
+                return
             if self.object_frames is not None and self.observation != self.object_expected:
                 self._feedback(
                     "failed", "The object or body changed during its planned interaction."
@@ -492,7 +713,24 @@ class KinematicController:
                 self.observation["appearance"] = copy.deepcopy(self.appearance_frames[self.frame])
             if self.object_frames is not None:
                 self.object_expected = copy.deepcopy(self.observation)
+            if self.continuous_motion:
+                self.history.record(self.pose, now)
+            if self.stream_expected is not None:
+                self.stream_expected = copy.deepcopy(self.observation)
             if self.frame == len(self.trajectory) - 1:
+                if self.segment_remaining:
+                    self.trajectory = self.appearance_frames = None
+                    if self.future_segment is not None:
+                        segment, self.future_segment = self.future_segment, None
+                        try:
+                            self._start_segment(segment)
+                        except ValueError as exc:
+                            self._feedback("failed", str(exc))
+                    else:
+                        self.message = "Attente de la suite du mouvement validée."
+                        self._stream_event("buffer_empty")
+                        self._feedback("running")
+                    return
                 action = self.active["envelope"]["action"]
                 if action["kind"] == "posture" and not posture_reached(
                     self.pose, action["args"]["name"]
@@ -505,6 +743,8 @@ class KinematicController:
             elif now >= self.next_checkpoint:
                 self._feedback("running")
                 self.next_checkpoint = now + 0.25
+        if self.ready and self.continuous_motion:
+            self.history.record(self.pose, now)
         if (
             self.ready
             and self.active is None
@@ -534,7 +774,11 @@ class KinematicController:
                         return
                     if self.appearance_preparation is not None:
                         if action["kind"] != "spawn":
-                            self._prepare_appearance([frame["pose"] for frame in frames], frames)
+                            self._prepare_appearance(
+                                [frame["pose"] for frame in frames],
+                                frames,
+                                stationary_support=True,
+                            )
                             return
                         # Spawning changes only objects: retain the exact observed body.
                         for frame in frames:

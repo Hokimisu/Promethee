@@ -53,6 +53,7 @@ def run_session(args):
             object_interactions=args.object_interactions,
             arm_reach_check=PixivArmReach().check if args.object_interactions else None,
             appearance_preparation=appearance,
+            continuous_motion=args.continuous_motion,
         )
     except Exception:
         worker.close()
@@ -225,6 +226,11 @@ def run_session(args):
 
 
 def configure(parser):
+    parser.add_argument(
+        "--continuous-motion",
+        action="store_true",
+        help="Experimental ARDY horizon streaming with observed and committed context.",
+    )
     parser.add_argument("--ardy-python", required=True)
     parser.add_argument("--checkpoint-root", required=True)
     parser.add_argument("--wsl")

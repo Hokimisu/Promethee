@@ -14,6 +14,7 @@ dependencies = []
 [project.optional-dependencies]
 viewer = ["numpy==2.4.6", "viser @ git+https://github.com/nv-tlabs/kimodo-viser.git@7c82ad8f8640bad9dff8ded5c5eee908eeb08f11"]
 agent = [
+    "httpx==0.28.1",
     "mcp==2.0.0",
     "PyYAML==6.0.3",
 ]

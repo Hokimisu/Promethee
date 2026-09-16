@@ -2,6 +2,19 @@
 
 Promethee explore un personnage virtuel persistant, capable de percevoir son environnement, de converser, de se mouvoir, d'agir sur son espace et de conserver une mémoire au fil des sessions. L'usage de ces capacités reste ouvert.
 
+La priorité précisée par l'utilisateur le 16 septembre 2026 est un personnage
+à observer dans une boîte, avec lequel intervenir ponctuellement comme dans
+un god sim. Ariane choisit ses occupations, invente des projets et développe
+ses goûts dans le temps. L'utilisateur peut lui parler, faire apparaître des
+objets, les lancer ou la déplacer par glisser-déposer. Ces possibilités sont
+des objectifs produit ; elles ne sont pas toutes présentes dans la scène vocale.
+
+La réponse immédiate et la génération motrice en temps réel ne sont plus des
+conditions de cette première expérience. Les décisions peuvent prendre du temps
+pendant qu'une activité ou une animation continue. La priorité est la continuité
+du personnage, de ses intentions et de ses réactions aux interventions, sans
+journée préécrite. Voir le [périmètre de la prochaine version](pet-mode.md).
+
 Le nom du projet, le modèle de raisonnement et l'identité du personnage sont distincts. La personnalité de l'avatar sera configurable ; elle ne doit pas dépendre du nom d'un fournisseur de modèles.
 
 ## Cadre ouvert

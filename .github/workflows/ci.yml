@@ -24,6 +24,10 @@ jobs:
       - run: npm run format:check
       - run: npm test
       - run: npm run build
+      - run: npm --prefix ../../experiments/voice/realtime/web ci --ignore-scripts
+      - run: node ../../experiments/voice/realtime/web/build.mjs
+      - run: node --test ../../experiments/voice/realtime/web/*.test.mjs
+      - run: npx --no-install prettier --check "../../experiments/voice/realtime/web/*.{js,mjs,html,css,json}" "!../../experiments/voice/realtime/web/bundle.js"
   check:
     name: ${{ matrix.os }} / Python ${{ matrix.python }}
     runs-on: ${{ matrix.os }}
@@ -45,7 +49,8 @@ jobs:
       - run: uv run ruff format --check .
       - run: uv run pytest -q
       - run: uv sync --locked --extra agent --extra avatar --extra voice
-      - run: uv run --extra agent --extra avatar --extra voice pytest -q tests/test_mcp_transport.py tests/test_ardy_contacts.py tests/test_arm_reach.py tests/test_object_actions.py tests/test_avatar_reach.py tests/test_avatar_live.py tests/test_avatar_viewer.py tests/test_prepared_avatar.py tests/test_prepared_kinematic.py tests/test_appearance_checkpoint.py tests/test_memory.py tests/test_voice.py tests/test_initiative.py
+      - run: uv run --extra agent --extra avatar --extra voice pytest -q experiments/voice/realtime
+      - run: uv run --extra agent --extra avatar --extra voice pytest -q tests/test_mcp_transport.py tests/test_mcp_views.py tests/test_mcp_command_revision.py tests/test_mcp_call_authority.py tests/test_hermes_call_authority.py tests/test_chat_resident.py tests/test_ardy_contacts.py tests/test_ardy_origin.py tests/test_walk_tolerance.py tests/test_arm_reach.py tests/test_object_actions.py tests/test_avatar_reach.py tests/test_avatar_live.py tests/test_avatar_viewer.py tests/test_prepared_avatar.py tests/test_prepared_kinematic.py tests/test_continuous_motion.py tests/test_motion_history.py tests/test_appearance_checkpoint.py tests/test_memory.py tests/test_voice.py tests/test_initiative.py tests/test_pet_world.py tests/test_pet_physics.py
       - run: uv build
       - run: uv run promethee demo --pause-after 4
       - run: uv run promethee demo --resume
