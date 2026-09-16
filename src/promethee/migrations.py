@@ -5,7 +5,7 @@ import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 
 
 def create_memory_tables(conn):
@@ -98,6 +98,10 @@ def _upgrade(conn, world):
                 (json.dumps(record), turn_id),
             )
         world["schema_version"] = 11
+    if world["schema_version"] == 11:
+        # Old observations cannot establish which revisions were idle pose updates.
+        # Preserve every historical revision and start counting only new updates.
+        world.update(schema_version=12, idle_pose_updates=0)
 
 
 def read_world(conn):
@@ -127,7 +131,7 @@ def migrate(path, backup):
             version = world.get("schema_version")
             if version == SCHEMA_VERSION:
                 return {"schema_version": version, "migrated": False, "backup": None}
-            if type(version) is not int or version not in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10):
+            if type(version) is not int or version not in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11):
                 raise ValueError(f"No migration available from schema {version!r}.")
             if path == backup:
                 raise ValueError("Backup must be a different, new file.")

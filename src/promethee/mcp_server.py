@@ -49,9 +49,17 @@ class WorldTools:
             "execution": "Asynchronous; availability does not guarantee a successful motion.",
         }
 
-    def submit(self, request_id, expected_revision, action):
+    def submit(
+        self, request_id, expected_revision=None, action=None, *, expected_command_revision=None
+    ):
         self.service.runtime.require_session()
-        return self.service.submit(request_id, expected_revision, action, turn_id=self.turn_id)
+        return self.service.submit(
+            request_id,
+            expected_revision,
+            action,
+            turn_id=self.turn_id,
+            expected_command_revision=expected_command_revision,
+        )
 
     def execution(self, request_id):
         self.service.runtime.require_session()
@@ -92,7 +100,12 @@ def create_server(service, *, turn_id=None, vault=None):
 
     @server.tool(annotations=read)
     def read_world() -> dict[str, Any]:
-        """Read the observed world, revision, body freshness and provenance.
+        """Read the observed world, revisions, body freshness and provenance.
+
+        command_revision excludes idle pose changes so a command can start from the
+        latest observed pose while the avatar moves naturally. Objects, attachments,
+        controller availability and conversation changes still invalidate it.
+        revision includes every observed pose change; use it for exact-snapshot commands.
 
         recent_executions contains up to eight most recently updated receipts,
         including actions from interrupted conversation turns. Use their request_id
@@ -112,15 +125,30 @@ def create_server(service, *, turn_id=None, vault=None):
 
     @server.tool(annotations=mutate)
     def submit_action(
-        request_id: StrictStr, expected_revision: StrictInt, action: dict
+        request_id: StrictStr,
+        action: dict,
+        expected_revision: StrictInt | None = None,
+        expected_command_revision: StrictInt | None = None,
     ) -> dict[str, Any]:
-        """Request {kind,args} using a freshly read revision. Does not await completion.
+        """Request {kind,args} using exactly one freshly read revision guard.
+
+        Normally pass read_world.command_revision as expected_command_revision. This
+        accepts idle pose changes and validates the action against the current pose,
+        including reach and support. It does not reuse the old pose or retry conflicts.
+        To require the exact snapshot instead, pass expected_revision from revision.
+        Both guards still require a current turn and an available controller.
+        Does not await completion.
 
         Keep the same request_id AND envelope on retransmission. A changed intention
         requires a new ID (1-64 lowercase letters, digits, hyphen or underscore,
         starting with a letter). Poll read_execution for the observed outcome.
         """
-        return tools.submit(request_id, expected_revision, action)
+        return tools.submit(
+            request_id,
+            expected_revision,
+            action,
+            expected_command_revision=expected_command_revision,
+        )
 
     @server.tool(annotations=read)
     def read_execution(request_id: StrictStr) -> dict[str, Any]:

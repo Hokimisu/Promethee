@@ -36,6 +36,40 @@ def positive_seconds(value):
     return float(value)
 
 
+def command_revision(world):
+    """Changes requiring a fresh command, excluding explicitly observed idle poses."""
+    revision, idle_updates = world["revision"], world["idle_pose_updates"]
+    if (
+        type(revision) is not int
+        or type(idle_updates) is not int
+        or not 0 <= idle_updates <= revision
+    ):
+        raise ActionError("Invalid persisted world revision counters.")
+    return revision - idle_updates
+
+
+def _idle_pose_only(before, after):
+    """Allow animation fields only; a full idle observation may also change objects."""
+    if before["body"]["status"] != "confirmed":
+        return False
+    if (before["pose"] or {}).get("skeleton") != (after["pose"] or {}).get("skeleton"):
+        return False
+    comparable = copy.deepcopy(after)
+    comparable["pose"] = before["pose"]
+    comparable["avatar"]["position"] = before["avatar"]["position"]
+    comparable["body"]["observed_at"] = before["body"]["observed_at"]
+    previous, current = before.get("appearance"), comparable.get("appearance")
+    if (previous is None) != (current is None):
+        return False
+    if current is not None:
+        for field in ("core_pose_sha256", "frame", "aligned_hands", "alignment_weights"):
+            if field in previous:
+                current[field] = previous[field]
+            else:
+                current.pop(field, None)
+    return comparable == before
+
+
 class ExecutionService:
     def __init__(self, runtime, *, clock=time.time, cancel_timeout=2.0):
         self.runtime = runtime
@@ -91,7 +125,7 @@ class ExecutionService:
             conn.execute("UPDATE world SET data=? WHERE id=1", (encode(world),))
 
     @staticmethod
-    def _observe(conn, observation, source, now):
+    def _observe(conn, observation, source, now, *, idle=False):
         observed = validate_observation(observation)
         if source != "logical-test" and observed["pose"] is None:
             raise ActionError("A real body observation requires an articulated pose.")
@@ -102,6 +136,9 @@ class ExecutionService:
         world.update(observed)
         world["body"] = {"status": "confirmed", "observed_at": timestamp(now), "source": source}
         if world != before:
+            command_revision(before)
+            if idle and _idle_pose_only(before, world):
+                world["idle_pose_updates"] += 1
             world["revision"] += 1
             conn.execute("UPDATE world SET data=? WHERE id=1", (encode(world),))
 
@@ -141,6 +178,7 @@ class ExecutionService:
         """Read the latest persisted observation after expiring a missing controller."""
         with self._transaction() as (conn, _):
             world = read_world(conn)
+            world["command_revision"] = command_revision(world)
             if include_executions:
                 rows = conn.execute(
                     "SELECT data FROM executions "
@@ -236,15 +274,29 @@ class ExecutionService:
             world["revision"] += 1
             conn.execute("UPDATE world SET data=? WHERE id=1", (encode(world),))
 
-    def submit(self, request_id, expected_revision, action, *, turn_id=None):
+    def submit(
+        self,
+        request_id,
+        expected_revision=None,
+        action=None,
+        *,
+        turn_id=None,
+        expected_command_revision=None,
+    ):
         identifier(request_id)
         if request_id.startswith("activity-"):
             raise ActionError("The activity- request namespace is reserved.")
-        if type(expected_revision) is not int or expected_revision < 0:
-            raise ActionError("expected_revision must be a non-negative integer.")
+        if (expected_revision is None) == (expected_command_revision is None):
+            raise ActionError("Supply exactly one expected_revision or expected_command_revision.")
+        guard = (
+            "expected_revision" if expected_revision is not None else "expected_command_revision"
+        )
+        expected = expected_revision if expected_revision is not None else expected_command_revision
+        if type(expected) is not int or expected < 0:
+            raise ActionError(f"{guard} must be a non-negative integer.")
         envelope = {
             "request_id": request_id,
-            "expected_revision": expected_revision,
+            guard: expected,
             "action": action,
         }
         if turn_id is not None:
@@ -265,10 +317,14 @@ class ExecutionService:
             if conn.execute("SELECT 1 FROM commands WHERE request_id=?", (request_id,)).fetchone():
                 raise ActionError("Request ID already belongs to a logical command.")
             world, control = read_world(conn), self._control(conn)
+            current_command_revision = command_revision(world)
+            current = (
+                world["revision"] if expected_revision is not None else current_command_revision
+            )
             code, message = None, None
             if world["data_origin"] == "legacy":
                 code, message = "legacy_world", "Create a new world for body execution."
-            elif expected_revision != world["revision"]:
+            elif expected != current:
                 code, message = "revision_conflict", "Read the world again before planning."
             elif not control["session_id"] or world["body"]["status"] != "confirmed":
                 code, message = (
@@ -295,6 +351,8 @@ class ExecutionService:
                 "cancel_requested": False,
                 "cancel_sent": False,
                 "created_at": timestamp(now),
+                "validated_revision": world["revision"],
+                "validated_command_revision": current_command_revision,
             }
             if code:
                 item["error"] = {"code": code, "message": message}
@@ -386,7 +444,7 @@ class ExecutionService:
                 return False
             if self._active(conn):
                 raise ActionError("Cannot observe idle motion while an execution is active.")
-            self._observe(conn, observation, control["source"], now)
+            self._observe(conn, observation, control["source"], now, idle=True)
             return True
 
     def _claim(self, session_id, *, cancellation=False):

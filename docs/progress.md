@@ -17,7 +17,7 @@ leurs limites décrivent la version de chaque essai, pas nécessairement la dern
 | T06 | Implémenté et vérifié avec le vrai squelette | Viser en lecture seule, deux dispositions, mise à jour d'un objet, lecture/scrutation d'un NPZ ARDY, contrôle d'échelle et de rotation ; 69 tests CPU passent. [Guide de rendu](rendering.md) |
 | T07 | Vérifié dans le périmètre cinématique qualifié | Dernier essai indépendant : deux postures et un déplacement terminés, un déplacement refusé ; contact géométrique sur les 120 poses de chaque séquence acceptée. Données terminales, observations et événements concordent. Panne du contrôleur préparé à l'image 10 : checkpoint et rendu restaurés, action interrompue sans rejeu. [Audit et limites](completion-audit.md#t07--corps-et-résultat-observé) |
 | T08 | Interactions cinématiques implémentées et vérifiées | Doudou et balle, plusieurs positions, géométries et orientations ; prise, dépôt, impossibilités, annulation avant/après contact et restauration. [Contrôleur](spatial-objects.md), [portée VRM](avatar-arm-reach.md) et [session en direct](live-avatar.md). Ni doigts physiques ni appuis validés |
-| T09 | Vérifié avec Astra et ARDY réels | Authentification ChatGPT native de Hermes, conversation sans action, lecture du monde, historique après redémarrage, posture exécutée et résultat observé. Après interruption pendant le mouvement, le nouveau tour retrouve l'annulation sans relancer l'action. Refus d'un objet absent. [Configuration, essais et limites](hermes-setup.md) |
+| T09 | Vérifié avec Astra et ARDY réels | Authentification ChatGPT native de Hermes, conversation sans action, lecture du monde, historique après redémarrage, posture exécutée et résultat observé. Après interruption pendant le mouvement, le nouveau tour retrouve l'annulation sans relancer l'action. Refus d'un objet absent. [Configuration, essais et limites](hermes-setup.md). Luna a ensuite commandé une posture pendant la présence via la [révision de commande](command-revision.md) |
 | T10 | Mémoire sourcée vérifiée sur CPU et avec Astra | Six appels réels dans deux mondes : recherche vide, proposition, correction retrouvée avec l'ancien terme, source relue et distinction du monde actuel. Deux notes dans le premier coffre, zéro dans le second, aucune action ; coffres ensuite exclus comme qualification. Retrait d'objet et contenus non fiables couverts par tests CPU ; pas de revue visuelle Obsidian. [Contrat et qualification](memory.md) |
 | T11 | Voix locale réelle qualifiée partiellement ; ticket ouvert | Essai Hermes/Luna → VoxCPM2 approuvé à l'écoute, phrases courtes et directions vocales, lecture navigateur et présence ARDY observées. Préchargement, contrat système et agent résident optionnel intégrés au socle. [Sources et lancement de la scène](../experiments/voice/realtime/README.md) livrés, sans microphone ; interruption acoustique et coût réel non qualifiés. [Mesures et limites](research/11-short-dialogue.md). Le raccord Live antérieur reste un diagnostic distinct avec fournisseur simulé |
 | T12 | Initiative textuelle vérifiée avec Astra ; dépendance vocale ouverte | Deux séries réelles : mondes sans historique et après sollicitation, contrôleur ARDY actif puis retiré, pause après redémarrage et budgets épuisés. Aucun appel supplémentaire ni action corporelle. Référence active corrigée après fin de tour ; 363 tests passent. Aucune initiative personnelle activée ; T11 reste à qualifier. [Contrat et limites](initiative.md) |
@@ -46,9 +46,27 @@ Après correction du renouvellement des connexions HTTP, le
 [nouvel essai complet](research/11-short-dialogue.md#scène-livrée-avec-hermes-résident)
 confirme dix réponses de 3,55 à 5,77 s, 54,40 s de voix jouées, neuf lectures
 complètes et une coupure à l'échéance, sans sous-alimentation PCM. Le premier
-essai avait échoué côté navigateur et reste documenté. 605 tests du socle
-réussissent, 2 sont ignorés ; 124 tests de la scène et 7 sous-tests réussissent.
-Les critères acoustiques de T11 et la synchronisation des actions restent ouverts.
+essai avait échoué côté navigateur et reste documenté. Après ajout du contrat
+de révision de commande, 647 tests du socle réussissent, transport MCP inclus,
+et 2 sont ignorés ; 124 tests de la scène et 7 sous-tests réussissent.
+Les critères acoustiques de T11 restent ouverts ; ces essais ne garantissent
+pas une fluidité générale ni une synchronisation sémantique des gestes et paroles.
+
+## Commandes pendant la présence — 16 septembre 2026
+
+Le [contrat de révision de commande](command-revision.md) corrige le conflit
+causé par les seules observations de présence entre lecture et soumission.
+L'essai réel `command-revision-real-01` utilise Hermes 0.21.3, source G `2179a279`,
+Luna résident et ARDY : lecture `revision=203, command_revision=3`, admission
+`247/3`, avec 44 poses distinctes archivées entre les deux. Une seule action
+est acceptée ; la posture termine 7,928 s après son admission.
+
+La première demande était mal formée et a été refusée. Hermes l'a corrigée
+dans le même tour avec un nouvel identifiant, sans rejeu automatique de l'hôte.
+Les deux tours natifs prennent 18,82 et 8,02 s ; le second relit réellement le
+monde et l'exécution. Cette qualification porte sur une posture, sans voix ni
+navigateur. Elle ne ferme ni le microphone, ni le budget vocal persistant,
+ni le coût de session, ni la qualification de marche avec objet tenu.
 
 ## Dialogue et préchauffage — essai antérieur du 16 septembre 2026
 

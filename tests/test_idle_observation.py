@@ -35,6 +35,8 @@ def test_idle_observation_persists_body_and_appearance_without_an_execution(idle
     world = service.get_world()
     assert {key: world[key] for key in candidate} == candidate
     assert world["revision"] == before["revision"] + 1
+    assert world["idle_pose_updates"] == before["idle_pose_updates"] + 1
+    assert world["command_revision"] == before["command_revision"]
     assert world["body"] == {
         "status": "confirmed",
         "source": "kinematic",
@@ -45,7 +47,8 @@ def test_idle_observation_persists_body_and_appearance_without_an_execution(idle
         for table in ("executions", "commands", "activities"):
             assert conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] == 0
     reopened = Runtime(service.runtime.path, create=False).snapshot()
-    assert reopened == world
+    assert reopened == {key: value for key, value in world.items() if key != "command_revision"}
+    assert world["command_revision"] == reopened["revision"] - reopened["idle_pose_updates"]
     candidate["pose"]["positions"][0][0] = 999
     assert service.get_world() == world
 
@@ -136,10 +139,12 @@ def test_idle_observation_is_invisible_until_commit_and_rolls_back(idle_body, mo
     before = service.get_world()
     original = service._observe
 
-    def write_then_fail(conn, observation, source, now):
-        original(conn, observation, source, now)
+    def write_then_fail(conn, observation, source, now, *, idle=False):
+        original(conn, observation, source, now, idle=idle)
         # A separate connection still sees the previous coherent checkpoint.
-        assert service.runtime.snapshot() == before
+        assert service.runtime.snapshot() == {
+            key: value for key, value in before.items() if key != "command_revision"
+        }
         raise RuntimeError("injected failure after observation write")
 
     monkeypatch.setattr(service, "_observe", write_then_fail)

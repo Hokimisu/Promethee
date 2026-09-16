@@ -17,7 +17,7 @@ ou créer un monde vide sans corps avec `promethee --data-dir CHEMIN_SESSION ini
 Pour ajouter la mémoire, initialiser un coffre neuf selon le [guide mémoire](memory.md),
 puis ajouter `--vault CHEMIN_COFFRE` à `chat`. Les anciennes sessions non classées
 peuvent converser mais ne sont pas admissibles à cette mémoire.
-Une base existante doit être au schéma 11 ; arrêter ses processus avant d'appliquer
+Une base existante doit être au schéma 12 ; arrêter ses processus avant d'appliquer
 la [migration explicite](contracts.md). Installer l'extra `agent` dans le Python
 de Promethee. Les premiers essais utilisent Hermes 0.20.5 ; le préchauffage
 et le [mode résident](#agent-résident) sont qualifiés sur Hermes 0.21.3,
@@ -103,6 +103,14 @@ choisie en mode ChatGPT, lié au tour et limité aux cinq outils du monde, ou ne
 avec la mémoire. Ces profils
 contiennent des données privées ; ils ne sont pas des coffres à importer.
 Le contexte natif conservé dans la base fait autorité pour la reprise.
+
+`read_world` expose deux gardes : transmettre `command_revision` dans
+`expected_command_revision` pour agir depuis la pose courante malgré les gestes
+de présence, ou `revision` dans `expected_revision` pour exiger exactement le
+snapshot lu. Un seul des deux arguments est accepté par `submit_action`.
+La [validation transactionnelle](contracts.md#exécutions-du-corps) vérifie toujours
+les objets, la portée, le contrôleur et le tour actuels. Après une mise à jour
+du schéma des outils, fermer l'agent résident puis en ouvrir un nouveau.
 
 `read_world` ajoute `recent_executions`, contenant les huit résultats les plus
 récemment mis à jour et un indicateur `has_more` si d'autres sont omis. Chaque

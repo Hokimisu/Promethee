@@ -26,12 +26,29 @@ de présence de cet essai. Le mode résident ajouté ensuite réutilise effectiv
 Hermes et renouvelle MCP par tour ; ses trois appels natifs et leurs limites
 figurent dans le [rapport de recherche](research/12-hermes-lifecycle.md).
 
-Deux limites actuelles restent distinctes des réussites historiques : la
-présence corporelle peut périmer la révision entre `read_world` et
-`submit_action`, et la tolérance de marche v5 doit encore subir une nouvelle
-série indépendante après fixation de ses critères. Ni le mode résident ni la
-publication de la scène ne ferment ces qualifications. Marcher avec un objet
-tenu reste aussi distinct des essais de prise et dépôt.
+La [révision de commande](command-revision.md) corrige désormais le conflit
+causé par les observations de présence entre `read_world` et `submit_action`.
+La révision stricte reste disponible ; une seule garde est admise par demande,
+sans remplacement silencieux de celle choisie. Les tests du vrai transport MCP
+couvrent les types stricts, les gardes absentes ou concurrentes, le rejeu et le
+refus d'un ancien tour.
+
+L'essai `command-revision-real-01` confirme ce raccord sur une vraie présence
+ARDY et une posture demandée par Luna résident, dans Hermes 0.21.3 G `2179a279`.
+Entre la dernière lecture `203/3` et l'admission `247/3`, 44 poses distinctes
+sont archivées ; la posture termine 7,928 s après admission. Une première
+demande mal formée est refusée, puis corrigée par la boucle native avec un
+nouvel ID : une seule action acceptée, aucun rejeu automatique de l'hôte. Le
+second tour consulte réellement `read_world` et `read_execution`. Les durées
+natives de 18,82 et 8,02 s ne sont pas une garantie de fluidité. L'essai ne
+comporte ni voix ni navigateur. Vérification actuelle : 647 tests du socle
+réussis, 2 ignorés ; 124 tests de scène et 7 sous-tests réussis.
+
+La tolérance de marche v5 doit encore subir une nouvelle série indépendante
+après fixation de ses critères. Ni cette posture, ni le mode résident, ni la
+publication de la scène ne ferment cette qualification. Marcher avec un objet
+tenu reste distinct des essais de prise et dépôt ; microphone, coût réel et
+budget persistant raccordé à la scène vocale restent également ouverts.
 
 Le reste du document conserve les preuves de l'audit du 15 septembre.
 
