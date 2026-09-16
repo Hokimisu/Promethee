@@ -2,7 +2,7 @@
 
 Recherche et essais du **16 septembre 2026**. La voix Qwen a été approuvée par l’utilisateur et sert de référence synthétique. Après écoute des nouvelles versions, **l’utilisateur classe VoxCPM2 optimisé premier, Confucius4 deuxième et OmniVoice troisième**. Il garde OmniVoice comme alternative si Vox n’est pas assez rapide en situation réelle. Dots et Sopro lui paraissent robotiques, avec un rejet particulièrement marqué de Sopro. Ce jugement porte sur les extraits testés, pas sur toutes les configurations possibles. AuK-Flash est également demandé pour compléter la comparaison.
 
-**VoxCPM2 optimisé est le candidat principal pour la suite ; Confucius4 reste l’alternative de qualité et OmniVoice celle de rapidité.** La vitesse CPU de Sopro ne compense pas le défaut perçu à l’écoute. Son audit de format et d’export n’a pas démontré de bug d’intégration ; les variantes de contrôle restent distinctes de l’échantillon rejeté. Les mesures de débit ne remplacent pas le jugement de qualité et ne fixent pas la limite des modèles avec d’autres moteurs d’inférence.
+**VoxCPM2 optimisé est le candidat principal pour la suite ; Confucius4 reste l’alternative de qualité et OmniVoice celle de rapidité.** L’utilisateur juge AuK-Flash très bon à l’écoute, mais le retire de la sélection actuelle à cause de sa consommation de ressources. La vitesse CPU de Sopro ne compense pas le défaut perçu à l’écoute. Son audit de format et d’export n’a pas démontré de bug d’intégration ; les variantes de contrôle restent distinctes de l’échantillon rejeté. Les mesures de débit ne remplacent pas le jugement de qualité et ne fixent pas la limite des modèles avec d’autres moteurs d’inférence.
 
 Les versions majeures Qwen, Fish et Vox présélectionnées datent de janvier, mars et avril 2026. Les nouvelles propositions Confucius4 et Sopro sont plus récentes. Les révisions exactes testées figurent ci-dessous.
 
@@ -306,7 +306,11 @@ empreinte du fichier source corrigé dans `benchmark.json`.
 
 La fiche des poids annonce chinois et anglais, **pas le français** : cette
 synthèse française reste exploratoire, et sa réussite technique ne prouve pas
-sa qualité linguistique. Le verdict d’écoute reste ouvert. Le correctif a
+sa qualité linguistique générale. L’utilisateur a depuis jugé la qualité de
+cet extrait très bonne, mais **ne retient pas AuK actuellement**, car il est
+trop gourmand. Flash est déjà une variante distillée : une version encore
+plus légère ou une meilleure implémentation d’inférence pourra justifier un
+nouvel essai, sans présumer de sa disponibilité future. Le correctif a
 permis une exécution réelle sous 16 Go ; le pré-audit documentaire seul ne
 justifiait donc pas de conclure à l’impossibilité sur cette machine.
 
