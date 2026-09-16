@@ -107,6 +107,8 @@ manuelles.
 - La présence et les déplacements conservent les limites actuelles d'ARDY et
   de l'adaptation VRM. Un prototype manipulable ne démontre pas encore une
   animation humaine naturelle ni une vie autonome intéressante sur plusieurs jours.
+  Si les gestes au repos sont interrompus après leurs tentatives bornées,
+  **Pause de vie**, puis **Reprendre** permet de les retenter depuis la pose conservée.
 
 Les essais CPU couvrent l'idempotence, les courses d'annulation, les deux
 pointeurs, les reprises, la physique bornée et l'atomicité. Les essais interactifs

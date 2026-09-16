@@ -873,7 +873,11 @@ async function pollState() {
             );
         if (next.error || next.body_error || next.body_presence?.error)
             showError(
-                next.error || next.body_error || next.body_presence.error,
+                next.error ||
+                    next.body_error ||
+                    (next.mode === "pet"
+                        ? "Les gestes au repos sont interrompus. Cliquez sur Pause de vie, puis Reprendre pour réessayer."
+                        : next.body_presence.error),
             );
     } catch (error) {
         if (epoch !== fence) return;
