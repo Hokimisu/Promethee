@@ -19,7 +19,9 @@ puis ajouter `--vault CHEMIN_COFFRE` à `chat`. Les anciennes sessions non class
 peuvent converser mais ne sont pas admissibles à cette mémoire.
 Une base existante doit être au schéma 11 ; arrêter ses processus avant d'appliquer
 la [migration explicite](contracts.md). Installer l'extra `agent` dans le Python
-de Promethee et utiliser l'installation Hermes 0.20.5 qualifiée ci-dessous.
+de Promethee. Les premiers essais utilisent Hermes 0.20.5 ; le préchauffage
+et le [mode résident](#agent-résident) sont qualifiés sur Hermes 0.21.3,
+révision `2179a279ae04bfadf8efbc49a01ca0abfb738000`.
 Pour l'API, configurer `PROMETHEE_OPENAI_API_KEY` localement, sans la mettre dans
 Git ni dans la commande. Le modèle et le mode d'API sont explicites.
 
@@ -95,7 +97,7 @@ hors des messages utilisateur persistés ; il n'active ni SOUL ni mémoire.
 
 Un verrou détenu par le système autorise un seul hôte de conversation par monde.
 Le redémarrage ferme les anciens tours, conserve les messages restés sans réponse
-et ne réémet aucune action. Chaque appel reçoit un profil neuf dans
+et ne réémet aucune action. Sans `--resident`, chaque appel reçoit un profil neuf dans
 `conversation-profiles/` en mode API, ou sous la racine Hermes explicitement
 choisie en mode ChatGPT, lié au tour et limité aux cinq outils du monde, ou neuf
 avec la mémoire. Ces profils
@@ -118,6 +120,115 @@ sont celles des [Job Objects](https://learn.microsoft.com/en-us/windows/win32/ap
 et de [CREATE_SUSPENDED](https://learn.microsoft.com/en-us/windows/win32/procthread/process-creation-flags).
 Sous Linux, l'appel possède son propre groupe de processus. Le pilote corporel
 indépendant n'appartient pas à ce groupe.
+
+## Agent résident
+
+`--resident` conserve un unique processus Hermes et son `AIAgent` entre les
+réponses réussies. L'option est **désactivée par défaut** et implique la
+préparation initiale : il n'est pas nécessaire d'ajouter `--prewarm`. Si les
+deux options sont présentes, le mode résident est utilisé, sans second worker.
+Le mode résident requiert `--auth hermes-codex`, `--api-mode codex_responses`
+et une racine d'authentification Hermes existante ; le mode `api-key` est
+refusé avant le lancement du processus.
+
+```sh
+python -m promethee.cli --data-dir CHEMIN_SESSION chat --hermes-python CHEMIN_PYTHON_HERMES --hermes-root CHEMIN_HERMES_2179 --hermes-auth-root RACINE_DONNEES_HERMES --auth hermes-codex --api-mode codex_responses --model gpt-5.6-luna --reasoning-effort low --resident --measure-timing
+```
+
+Le chemin `--hermes-root` choisit les sources importées ; il peut différer
+du répertoire contenant `--hermes-python`. L'essai utilise les sources
+Hermes 0.21.3 du checkout `2179a279…` avec l'interpréteur d'une installation
+séparée. Ce contrôle de provenance évite de comparer deux versions de Hermes.
+Le choix de Luna ne modifie pas le modèle par défaut du reste du projet :
+`--model` demeure obligatoire et aucun repli automatique n'est ajouté.
+
+La préparation n'appelle pas le modèle et n'ouvre pas de tour actif. À
+l'arrivée du message, l'hôte ouvre le tour et charge l'historique courant.
+Après une réponse validée, le worker ferme le transport MCP. Pour le tour
+suivant, il remplace uniquement l'argument `--turn-id` du même profil dédié,
+puis redécouvre les outils et reconstruit leur snapshot natif. Il vérifie les
+schémas complets, le modèle, le fournisseur, la session et l'authentification
+avant de rappeler `AIAgent.run_conversation`. Aucun identifiant de tour n'est
+choisi par le modèle ; conserver l'agent ne conserve pas l'autorité de l'ancien
+serveur MCP. Les audits [cycle de vie](research/12-hermes-lifecycle.md) et
+[contexte et outils](research/13-hermes-context-tools.md) expliquent ces
+contraintes et les interfaces natives retenues.
+
+Les limites temporelles sont distinctes :
+
+- `--timeout` borne chaque tour à **60 secondes par défaut**, à compter de
+  l'arrivée du message. Une préparation encore en cours compte donc dans ce
+  délai. L'option ne borne pas la durée totale de la conversation.
+- La préparation initiale expire après **120 secondes**, démarrage compris.
+  Après chaque réponse réussie, le résident dispose de **120 secondes
+  d'inactivité** avant fermeture. La CLI n'expose pas de réglage de cette durée.
+- `/cancel` au repos conserve le résident. Pendant une réponse, `/cancel`,
+  un nouveau message prioritaire ou l'échéance invalident le tour avant de
+  détruire le processus et ses descendants. `/quit` ferme aussi le résident
+  au repos. Les actions corporelles déjà acceptées conservent leur propre
+  cycle d'annulation.
+
+Une réponse échouée, partielle ou interrompue, un historique invalide, un
+identifiant réutilisé ou un changement du profil/de l'authentification interdit
+la réutilisation. Le prochain tour nécessite une instance neuve ; la requête
+échouée n'est pas rejouée automatiquement. Les profils dédiés restent sur
+disque et contiennent des données privées. L'historique natif dans SQLite
+reste la référence après fermeture ou redémarrage.
+
+Pour un intégrateur Python, `args.resident=True` active le même chemin.
+`host.warm_status()` et `host.warm()` peuvent rendre `active` pendant un tour,
+puis `ready` après succès ; ils ne créent pas un deuxième agent pendant ce
+tour. `host.cancel()` conserve uniquement l'instance au repos, tandis que
+`host.close()` ferme toutes les ressources. `worker_wrapper` reste appliqué
+à chaque activation ; son `close()` n'est pas appelé après un succès résident,
+puisqu'il fermerait le processus conservé. Le paramètre `system_message`
+reste fixe pendant sa durée de vie et l'historique est relu à chaque activation.
+
+Avec `--measure-timing`, `mcp_rebind_seconds` mesure la reconnexion et la
+validation des outils. `host_total_seconds` mesure le tour courant ;
+`worker_total_seconds` est cumulatif pendant la vie du résident. Les phases
+`prewarm_seconds`, `import_seconds` et `agent_construct_seconds` ne sont
+présentes qu'au premier tour. Ne pas additionner ces phases aux totaux.
+
+### Qualification résident du 16 septembre 2026
+
+Trois tours réels avec Luna, effort `low`, ont utilisé le même `AIAgent` et
+le même processus natif, mais trois transports MCP et trois identifiants de
+tour distincts. Le monde était neuf, marqué `qualification`, avec cinq outils,
+sans mémoire personnelle, GPU, synthèse vocale ni serveur de démonstration.
+Le contrat vocal approuvé était transmis via `system_message` ; les trois
+réponses JSON ont passé la validation de texte et de direction vocale.
+
+| Mesure | Dialogue 1 | Dialogue 2 | Lecture du monde |
+|---|---:|---:|---:|
+| Message → résultat hôte | 6,30 s | 6,63 s | 10,41 s |
+| Boucle native Hermes | 6,15 s | 4,83 s | 8,39 s |
+| Reconnexion et validation MCP | 0,02 s | 1,64 s | 1,86 s |
+| Appels modèle rapportés par Hermes | 1 | 1 | 2 |
+
+La préparation initiale a pris **7,78 s**, dont **4,58 s** de construction de
+l'agent. Les deux tours suivants n'ont pas reconstruit l'agent. Le troisième
+a réellement appelé `read_world` et retrouvé son nouvel identifiant de tour.
+Cet essai ne soumet aucune action corporelle ; les tests CPU vérifient
+séparément deux soumissions avec un agent déterministe et de vrais processus MCP.
+
+Les preuves locales sont conservées sous
+`.local/realtime-voice-01/luna-qualification/run-resident-g-01/` : rapport,
+requêtes, résultats et identités natives. Le module effectivement importé
+était `G:/Projects/Promethee/.local/hermes-agent/run_agent.py`, SHA-256
+`a6839f07a53e27a9d1315bf23fb4876627c06e65a5cd2f6458072ef1af4b6539` ;
+les empreintes du raccord testé sont dans `report.json`.
+
+Une batterie CPU tournait pendant cette qualification : ces trois mesures
+ne sont pas un comparatif isolé de performances. Elles établissent le réemploi
+de l'agent, pas une latence garantie. La reconnexion MCP et les appels modèle
+restent dans le délai ; ni streaming du texte ni première parole audible ne
+sont mesurés ici. Aucun coût monétaire n'est déduit des compteurs natifs.
+Les contrôles de refus des drapeaux natifs `failed`, `partial` et
+`completed=False` ont ensuite été renforcés et vérifiés sur CPU, sans nouvel
+appel modèle. Les 16 tests dédiés couvrent notamment activation invalide,
+réutilisation d'ID, changement de configuration, historique frais, échéance
+et destruction des descendants.
 
 ## Installation et lancement
 
@@ -169,10 +280,12 @@ ne valide pas encore leur utilisation par Astra.
 
 ## Configuration Hermes vérifiée
 
-Installation locale conservée sans modification : Hermes **0.20.5**, Python
+Les premiers essais ci-dessous utilisent l'installation Hermes **0.20.5**, Python
 3.11.15, révision `cd297653fa4fac85f45f7d3ad8e361db0f14e9be` incluant un commit
-local. Le dépôt officiel plus récent a aussi été consulté à la révision
-`2179a279ae04bfadf8efbc49a01ca0abfb738000` ; il n'a pas remplacé cette installation.
+local. Les essais de préchauffage et de résidence utilisent ensuite les sources
+Hermes **0.21.3**, révision `2179a279ae04bfadf8efbc49a01ca0abfb738000`, dans un
+checkout séparé, sans remplacer l'installation précédente. Les versions ne
+doivent pas être confondues lors d'une comparaison de latence.
 
 Les interfaces sont documentées par [Hermes MCP](https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp),
 les [filtres d'outils](https://hermes-agent.nousresearch.com/docs/reference/mcp-config-reference)
@@ -252,12 +365,13 @@ ce mode d'API. Une connexion réelle exige encore ces vérifications.
 
 ## Résultats et limites
 
-`hermes_worker.py` exécute maintenant un appel de la boucle native
+`hermes_worker.py` exécute les appels de la boucle native
 `AIAgent.run_conversation` dans le Python séparé de Hermes. Il reçoit un message,
 l'historique natif et les identifiants de session/tour par stdin, puis retourne
 les messages, le texte et les indicateurs d'échec/interruption par stdout. Il
-vérifie que le profil MCP est lié au même tour. La clé vient uniquement de
-`PROMETHEE_OPENAI_API_KEY`, jamais du message JSON ; les erreurs d'entrée et les
+vérifie que le profil MCP est lié au même tour. L'authentification vient de
+`PROMETHEE_OPENAI_API_KEY` ou de la résolution native Hermes explicitement choisie,
+jamais du message JSON ; les erreurs d'entrée et les
 exceptions retournent une catégorie sans reproduire leur texte brut.
 
 `ConversationStore` conserve maintenant les messages utilisateur et l'historique

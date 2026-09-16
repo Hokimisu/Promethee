@@ -1,30 +1,34 @@
 # Hermes : cycle de vie, attente et intégration persistante
 
-Audit du 16 septembre 2026, limité aux sources et aux contrats. Aucun appel
-modèle, chargement GPU, redémarrage ni modification du harnais dans cet audit.
+Audit initial du 16 septembre 2026, limité aux sources et aux contrats, sans
+appel modèle ni modification du harnais. Les mises à jour ci-dessous distinguent
+les propositions de cet audit des raccords livrés ensuite et de leurs essais
+réels archivés. Cette mise à jour documentaire n'exécute aucun modèle.
 
 **Hermes sait conserver un agent, ses clients réseau et ses connexions MCP.
-Notre adaptation les recréait à chaque tour.** Ce choix garantit actuellement
-qu'un outil du monde reste lié au tour qui l'a produit. Un processus déjà
-préparé peut réduire l'attente sans changer ce contrat ; une instance réutilisée
-exige de traiter explicitement cette liaison avant d'être une amélioration sûre.
+Notre adaptation les recréait à chaque tour.** Le mode jetable garde ce
+fonctionnement, avec préparation anticipée possible. Le mode résident désormais
+livré conserve l'agent, mais recrée le transport MCP à chaque tour afin que
+l'autorité des outils reste liée au tour qui les appelle.
 
 Mise à jour après l'audit : le préchauffage jetable et le contrat vocal système
 sont intégrés et testés. Voir les [mesures de qualification](11-short-dialogue.md#préchauffage-hermes-qualifié),
-y compris les délais encore longs dans l'essai complet. L'agent résident et
-les interfaces vocales natives restent des suites proposées.
+y compris les délais encore longs dans l'essai complet. Le mode résident est
+maintenant une option explicite, qualifiée sur trois tours natifs Luna ; son
+essai dans la scène vocale est en cours. Le préchauffage jetable reste le choix
+par défaut de l'essai vocal. Les interfaces vocales natives restent proposées.
 
 ## Cinq décisions pratiques
 
-1. **Maintenant :** qualifier le préchargement d'un unique worker jetable,
-   avec identifiant réservé inactif, histoire fraîche à l'activation et
-   même checkout G: que le harnais. Il conserve la boucle Hermes existante.
+1. **Par défaut :** conserver le préchargement qualifié d'un unique worker
+   jetable, avec identifiant réservé inactif et histoire fraîche à l'activation.
+   La CLI générale garde ses modes froid et préchauffé explicites.
 2. **Maintenant :** employer le callback natif pour mesurer le premier texte
    visible, séparément de la préparation, du résultat valide et du premier son.
    Ne pas envoyer directement les fragments JSON à la synthèse.
-3. **Prochaine optimisation :** comparer l'agent résident avec MCP relancé
-   proprement par tour. Ne jamais simuler une nouvelle liaison en changeant
-   seulement `task_id` ou le fichier de configuration.
+3. **Qualification en cours :** comparer dans la scène le mode résident livré,
+   avec MCP fermé puis relancé par tour. Les trois tours natifs établissent la
+   réutilisation ; ils ne mesurent pas un gain isolé de performance.
 4. **Pour le flux vocal par phrases :** reprendre les interfaces vocales
    natives via un adaptateur vers le worker Vox déjà qualifié ; garder son
    unique thread propriétaire, son profil et son annulation.
@@ -94,7 +98,7 @@ aucune nouvelle mesure de latence.
 | Schémas MCP sans connexion immédiate | `lazy: true` et cache de schémas sur disque | Déplace la connexion au premier usage ; ne supprime pas son coût et ne donne pas automatiquement un cache partagé entre nos profils |
 | Construction anticipée | Le TUI programme déjà la construction asynchrone d'un agent à la création/reprise de session | Le principe du préchargement est natif ; notre identifiant de tour reste un contrat supplémentaire |
 | Texte progressif | Argument `stream_callback` de `run_conversation`, ou `stream_delta_callback` au constructeur | Notre worker pourrait relayer des fragments sans remplacer la boucle Hermes |
-| Interruption | `interrupt(...)`, `hard_interrupt(...)`, `clear_interrupt(...)` | Préférer ces signaux natifs dans un worker résident, puis attendre le retour avant de relancer un tour |
+| Interruption | `interrupt(...)`, `hard_interrupt(...)`, `clear_interrupt(...)` | Ces signaux existent ; le raccord livré invalide le tour puis détruit le worker actif. Il ne réutilise pas une instance interrompue |
 | Fermeture | `release_clients()` pour une éviction partielle ; `close()` pour la fin complète | Fermer systématiquement l'agent seulement lorsqu'on termine sa durée de vie, pas après chaque tour résident |
 
 Preuves : [cache d'agents du gateway, lignes 1012–1133](https://github.com/NousResearch/hermes-agent/blob/2179a279ae04bfadf8efbc49a01ca0abfb738000/gateway/run_turn_runner.py#L1012),
@@ -108,10 +112,11 @@ contrôle la signature de configuration, les changements de session et les
 écritures externes, actualise certains états par tour, borne son cache et
 libère les agents évincés. Copier son dictionnaire de cache sans ces règles
 ne reproduirait pas son comportement. Pour une seule conversation Promethee,
-une unique instance possédée par un seul thread est une proposition plus
-simple qu'une reproduction de ce gateway ; elle reste à qualifier.
+une unique instance possédée par un seul thread était l'option proposée par
+l'audit. Cette variante est désormais livrée et qualifiée sur trois tours
+natifs ; la qualification de la scène complète reste distincte.
 
-## Le point bloquant précis : identité Hermes et autorité du monde
+## La contrainte traitée : identité Hermes et autorité du monde
 
 `task_id` est lié au tour interne par `agent/turn_context.py:458–483`. Il ne
 réécrit pas la ligne de commande du serveur MCP déjà lancé. Le handler MCP
@@ -252,31 +257,101 @@ copié indéfiniment entre profils.
 [scopes de profil](https://github.com/NousResearch/hermes-agent/blob/2179a279ae04bfadf8efbc49a01ca0abfb738000/hermes_constants.py#L25),
 [rafraîchissement Codex](https://github.com/NousResearch/hermes-agent/blob/2179a279ae04bfadf8efbc49a01ca0abfb738000/agent/client_lifecycle.py#L554).
 
+## Mode résident livré et qualification native
+
+`args.resident=True`, ou `--resident` pour la CLI, active ce mode uniquement
+avec l'authentification native Hermes Codex dans cette première version. Une
+seule instance exécute les tours successifs par `AIAgent.run_conversation`.
+Le magasin Promethee active le nouveau tour avant sa transmission et fournit
+l'historique frais. Le profil reste stable ; son argument MCP `--turn-id` est
+remplacé atomiquement après vérification de l'activation.
+
+À chaque fin de tour, `shutdown_mcp_servers(names={"promethee"})` ferme le
+transport et sa fermeture est vérifiée. À l'activation suivante, la découverte
+et `refresh_agent_mcp_tools(...)` reconstruisent le snapshot des outils. Le
+raccord vérifie les schémas complets, le périmètre autorisé, la session, le
+modèle, le fournisseur et l'authentification. Il refuse une identité réutilisée,
+une activation périmée ou un profil changé. Une erreur ou une interruption
+active détruit le processus et ses descendants ; aucun tour concurrent n'est
+autorisé sur l'instance.
+
+`host.cancel()` conserve l'agent au repos et détruit celui d'un tour actif,
+après invalidation du tour. `host.close()` détruit aussi l'agent au repos.
+L'inactivité est bornée à 120 secondes par défaut. `warm()` ne crée pas de
+second agent lorsque le résident est actif. Sources livrées :
+[`ResidentProcess` et `TextHost`](../../src/promethee/chat.py),
+[`resident_loop`](../../src/promethee/hermes_worker.py),
+[`refresh_resident_agent`](../../src/promethee/hermes_adapter.py).
+
+La qualification native du 16 septembre utilise `gpt-5.6-luna`, effort `low`,
+le contrat système approuvé et les cinq outils du monde, dans un monde neuf
+de type `qualification`. Elle comprend exactement trois tours, sans relance,
+sans GPU, voix ni serveur de scène :
+
+| Mesure | Tour 1 | Tour 2 | Tour 3 avec outil |
+| --- | ---: | ---: | ---: |
+| Message → résultat hôte | 6,298 s | 6,630 s | 10,410 s |
+| Boucle native Hermes | 6,147 s | 4,831 s | 8,392 s |
+| Reconnexion/validation MCP | 0,017 s | 1,642 s | 1,863 s |
+| Fermeture MCP | 0,075 s | 0,092 s | 0,081 s |
+| Requêtes modèle rapportées | 1 | 1 | 2 |
+| Messages d'historique avant activation | 0 | 2 | 4 |
+
+La préparation initiale dure **7,781 s**, dont **4,584 s** de construction de
+l'agent ; elle est mesurée séparément des délais message → résultat. Les tours
+2 et 3 ne réimportent ni ne reconstruisent l'agent. Les identités archivées
+confirment un processus et un `AIAgent` communs, avec trois transports MCP
+successifs. Le vrai appel `mcp__promethee__read_world` du troisième tour retrouve
+le troisième identifiant actif. Cela ne prouve pas une mutation corporelle :
+les actions sous des identifiants différents sont couvertes séparément par
+les [tests CPU du résident](../../tests/test_chat_resident.py). Les trois JSON
+vocaux sont valides, mais aucun n'a été synthétisé dans cette qualification.
+
+**Limites de mesure :** une batterie de tests CPU a démarré pendant l'essai.
+Les délais de 6,30 / 6,63 / 10,41 s ne constituent donc ni un A/B isolé, ni un
+gain démontré, ni une garantie de latence. La suppression de la reconstruction
+est établie ; **1,6–1,9 s de reconnexion MCP** restent observées sur les tours
+réutilisés. Le délai hôte comprend réseau, boucle Hermes, outils éventuels et
+traitement local, pas seulement l'inférence. Aucun coût monétaire ni avantage
+de cache fournisseur n'est déduit ; certains compteurs natifs peuvent être
+cumulatifs. `host_total_seconds` mesure le tour courant, tandis que
+`worker_total_seconds` cumule la vie du résident. Les durées d'import,
+construction et préparation ne figurent qu'au premier tour.
+
+Preuves locales : `.local/realtime-voice-01/luna-qualification/resident-report.md`
+et `run-resident-g-01/` dans le même dossier, avec rapport JSON, événements
+natifs et empreintes des sources. Le module chargé est celui du checkout G:
+`2179a279ae04bfadf8efbc49a01ca0abfb738000` ; son SHA-256 observé est
+`a6839f07a53e27a9d1315bf23fb4876627c06e65a5cd2f6458072ef1af4b6539`.
+Tous les processus suivis étaient absents après fermeture. Après ces appels,
+le refus des réponses natives `failed`, `partial` ou `completed=False` a été
+renforcé et testé sur CPU, sans nouvel appel modèle. L'essai voix/corps dans la
+scène reste en cours et n'est pas validé par ces trois tours.
+
 ## Choix recommandé et limites
 
-| Option | Gain attendu, à mesurer | Coût et condition |
+| Option | Effet et état actuel | Coût et condition |
 | --- | --- | --- |
-| Un seul worker jetable préparé en avance | Sort imports/construction/MCP du chemin critique lorsqu'il est prêt | Plus petit changement compatible avec la clôture actuelle ; chaque tour consomme son worker, donc aucun partage du pool réseau entre tours |
-| Un `AIAgent` résident, serveur MCP recréé par tour | Conserve imports, agent et clients ; paie encore la reconnexion MCP | Étape intermédiaire possible, mais nécessite cycle de fermeture/reconnexion vérifié et profil stable |
-| Agent et MCP résidents | Évite davantage de démarrages | Nécessite une identité de tour de confiance par appel ; modification du pont Promethee, pas simple option Hermes |
+| Un seul worker jetable préparé en avance | Livré et qualifié ; sort imports/construction/MCP du chemin critique lorsqu'il est prêt | Choix par défaut de l'essai vocal ; chaque tour consomme son worker, donc aucun partage du pool réseau entre tours |
+| Un `AIAgent` résident, serveur MCP recréé par tour | Livré sur activation explicite ; trois tours natifs sans reconstruction | Profil stable et transport renouvelé ; reconnexion mesurée à 1,6–1,9 s après le premier tour ; qualification de scène en cours |
+| Agent et MCP résidents | Proposition non livrée ; pourrait éviter davantage de démarrages | Nécessite une identité de tour de confiance par appel ; modification du pont Promethee, pas simple option Hermes |
 | TUI gateway natif | Sessions, streaming et annulation déjà exposés | Surface officielle pertinente à long terme ; migration de l'autorité d'historique, des outils et des permissions à concevoir, pas raccourci immédiat |
 
-**Pour l'essai en cours : garder un seul worker anticipé, jetable et borné.**
+**Par défaut, garder un seul worker anticipé, jetable et borné.**
 Il reçoit un identifiant réservé mais inactif. L'ouverture atomique du vrai
 tour active exactement cet identifiant et fournit l'historique à jour,
 seulement au moment du message. La préparation ne doit produire ni appel
 modèle ni décision. En cas de worker absent, périmé ou échoué, retour au
 chemin normal ; pas de file illimitée de workers. La fermeture doit retirer
-aussi le worker préparé inutilisé et ses processus MCP. Cette proposition
-ne revendique aucun gain mesuré par le présent audit.
+aussi le worker préparé inutilisé et ses processus MCP. Ce chemin est livré ;
+ses mesures restent distinctes de celles du résident.
 
-L'étape résidente intermédiaire peut employer les primitives natives
-`shutdown_mcp_servers(scope=..., names={"promethee"})`, nouvelle configuration,
-`discover_mcp_tools()` puis `refresh_agent_mcp_tools(...)`, **après retour du
-tour précédent** et revalidation de l'ensemble exact des outils. Elle ne
-doit pas appeler `agent.close()` entre deux tours ni `reset_session_state()`
-à chaque message : ce dernier correspond à une frontière de session. Cette
-séquence reste une proposition à tester, pas une intégration livrée.
+La séquence résidente proposée par l'audit est maintenant celle du raccord
+livré : fermeture MCP, nouvelle configuration, découverte et actualisation des
+outils **après retour du tour précédent**. L'agent n'est pas fermé entre deux
+succès et `reset_session_state()` n'est pas appelé à chaque message : ce dernier
+correspond à une frontière de session. Cette livraison ne rend pas le transport
+MCP lui-même résident et ne supprime pas le coût de sa reconnexion.
 [Fermeture MCP ciblée](https://github.com/NousResearch/hermes-agent/blob/2179a279ae04bfadf8efbc49a01ca0abfb738000/tools/mcp_tool_lifecycle.py#L130),
 [actualisation des outils](https://github.com/NousResearch/hermes-agent/blob/2179a279ae04bfadf8efbc49a01ca0abfb738000/tools/mcp_tool_agent.py#L87).
 
@@ -288,7 +363,11 @@ d'inventer un nouveau protocole Hermes si cette migration devient utile.
 Elle ne remplace cependant pas les garanties du runtime du monde.
 [Intégration programmatique officielle](https://hermes-agent.nousresearch.com/docs/developer-guide/programmatic-integration).
 
-## Qualification minimale avant de changer de cycle de vie
+## Contrôles de qualification et suivi dans la scène
+
+Les critères ci-dessous restent le guide de suivi. Les tests CPU et les trois
+tours natifs ci-dessus en couvrent une partie ; ils ne constituent pas une
+qualification de toutes les interruptions dans une conversation vocale réelle.
 
 - Vérifier les sources effectivement importées et comparer à configuration
   identique : premier démarrage, tour préparé, message arrivant avant la fin

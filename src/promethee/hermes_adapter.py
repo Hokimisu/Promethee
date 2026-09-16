@@ -123,3 +123,36 @@ def create_agent(
             "Hermes scope differs from the qualified tool and provider configuration."
         )
     return agent
+
+
+def refresh_resident_agent(agent, *, settings, provider, api_key, schemas, memory_enabled=False):
+    """Re-register a newly connected MCP transport using Hermes' native refresh.
+
+    The caller must have closed the previous transport and rebound its profile
+    to the newly activated turn. This function never opens a reasoning turn.
+    """
+    from tools.mcp_tool import discover_mcp_tools
+    from tools.mcp_tool_agent import refresh_agent_mcp_tools
+
+    expected = WORLD_TOOLS | MEMORY_TOOLS if memory_enabled else WORLD_TOOLS
+    if set(discover_mcp_tools()) != expected:
+        raise RuntimeError("Resident MCP discovery changed the qualified tool scope.")
+    refresh_agent_mcp_tools(
+        agent,
+        enabled_override=["mcp-promethee"],
+        quiet_mode=True,
+        content_aware=True,
+        preserve_prefix=False,
+    )
+    if (
+        set(agent.valid_tool_names) != expected
+        or agent.tools != schemas
+        or agent._fallback_chain
+        or agent.provider != provider
+        or agent.model != settings["model"]
+        or agent.api_mode != settings["api_mode"]
+        or agent.base_url != settings["base_url"]
+        or agent.api_key != api_key
+        or agent.session_id != settings["session_id"]
+    ):
+        raise RuntimeError("Resident agent identity, transport or schemas changed.")

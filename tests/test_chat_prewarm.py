@@ -124,7 +124,7 @@ def test_reserved_activation_checks_session_and_existing_id(tmp_path):
         store.begin("Duplicate", reservation=reserved)
 
 
-def fake_hermes(tmp_path, *, delay=0, changed_auth=False, child=False):
+def fake_hermes(tmp_path, *, delay=0, changed_auth=False, child=False, result_flags=None):
     root = tmp_path / "hermes"
     root.mkdir()
     child_code = (
@@ -147,7 +147,8 @@ def fake_hermes(tmp_path, *, delay=0, changed_auth=False, child=False):
         "  Path(__file__).with_name('called.json').write_text(json.dumps(\n"
         "   {'message':message,'history':conversation_history,'system_message':system_message}))\n"
         "  return {'final_response':'Fixture','messages':[*conversation_history,\n"
-        "   {'role':'user','content':message},{'role':'assistant','content':'Fixture'}]}\n"
+        "   {'role':'user','content':message},{'role':'assistant','content':'Fixture'}],"
+        f"**{result_flags or {}!r}}}\n"
     )
     (root / "tools").mkdir()
     (root / "tools/__init__.py").write_text("")
@@ -237,6 +238,39 @@ def test_cold_worker_also_passes_system_message_without_transcript_pollution(tmp
         assert call["system_message"] == "Stable persona"
         assert host.store.context()["messages"][0]["content"] == "Only user message"
         assert "Stable persona" not in json.dumps(host.store.context())
+
+
+@pytest.mark.parametrize("prewarm", [False, True], ids=["cold", "prewarm"])
+@pytest.mark.parametrize(
+    "flags,failed",
+    [
+        pytest.param({}, False, id="legacy-success"),
+        pytest.param(
+            {"failed": False, "partial": False, "completed": True}, False, id="native-success"
+        ),
+        pytest.param({"error": "Fixture failure"}, True, id="error"),
+        pytest.param({"failed": True}, True, id="native-failed"),
+        pytest.param({"partial": True}, True, id="native-partial"),
+        pytest.param({"completed": False}, True, id="native-incomplete"),
+    ],
+)
+def test_cold_and_prewarm_preserve_native_failure_flags(tmp_path, prewarm, flags, failed):
+    root = fake_hermes(tmp_path, result_flags=flags)
+    args = host_args(tmp_path, root)
+    args.prewarm = prewarm
+    with open_text_host(args) as host:
+        if prewarm:
+            until(lambda: host.warm_status()["state"] == "ready")
+        host.start("Neutral fixture")
+        worker = host.worker
+        response = until(host.poll)
+        assert response["status"] == ("failed" if failed else "completed")
+        expected = [{"role": "user", "content": "Neutral fixture"}]
+        if not failed:
+            expected.append({"role": "assistant", "content": "Fixture"})
+        assert host.store.context()["messages"] == expected
+        assert host.store.service.get_world()["conversation"] is None
+        assert worker.process.poll() is not None
 
 
 def test_cancel_during_preparation_fences_before_stopping_and_retains_user(tmp_path):

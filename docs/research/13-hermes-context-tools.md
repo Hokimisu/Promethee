@@ -1,12 +1,14 @@
 # Hermes : contexte, personnalité, mémoire et outils
 
-Recherche du 16 septembre 2026. Lecture du code et des sources officielles, sans appel de modèle, sans GPU et sans modification du runtime par cette enquête. La scène vocale de qualification reste séparée des souvenirs personnels.
+Recherche initiale du 16 septembre 2026 : lecture du code et des sources officielles, sans appel de modèle, sans GPU et sans modification du runtime par cette enquête. Les mises à jour signalées ci-dessous reprennent les livraisons et qualifications réalisées ensuite, sans nouvel appel pour cette mise à jour documentaire. La scène vocale de qualification reste séparée des souvenirs personnels.
 
 ## Conclusion opérationnelle
 
 Hermes gère déjà la boucle d'outils et l'historique natif de Promethee. Les principales restrictions de l'essai sont intentionnelles : aucune mémoire personnelle, aucun terminal généraliste, aucun deuxième agent décidant du corps. Les retirer ne rendrait pas automatiquement le dialogue plus rapide.
 
-Le défaut concret est le placement du contrat vocal : `dialogue.instructions()` était ajouté entièrement à **chaque message utilisateur**, puis conservé dans l'historique réinjecté. Le raccord natif recommandé est `run_conversation(message_utilisateur, system_message=contrat_stable, conversation_history=historique, task_id=tour)`. Il conserve les instructions approuvées, sans activer SOUL, mémoire ou outils supplémentaires. Mise à jour après l'enquête : ce raccord et le préchauffage jetable sont intégrés, avec [qualification mesurée](11-short-dialogue.md#préchauffage-hermes-qualifié). Le gain est réel lorsque le worker est prêt ; la fluidité continue reste non acquise.
+Le défaut initial concernait le placement du contrat vocal : `dialogue.instructions()` était ajouté entièrement à **chaque message utilisateur**, puis conservé dans l'historique réinjecté. Le raccord natif `run_conversation(message_utilisateur, system_message=contrat_stable, conversation_history=historique, task_id=tour)` est désormais livré. Il conserve les instructions approuvées, sans activer SOUL, mémoire ou outils supplémentaires. Le préchauffage jetable est également intégré, avec [qualification mesurée](11-short-dialogue.md#préchauffage-hermes-qualifié).
+
+Le mode résident, proposé lors de l'audit, est maintenant livré sur activation explicite et qualifié sur trois tours natifs Luna. Il garde l'agent, ferme puis reconnecte MCP pour chaque tour. Le préchauffage jetable reste le choix par défaut de l'essai vocal ; la qualification du résident dans la scène voix/corps est en cours. Les mesures natives détaillées figurent dans le [rapport de cycle de vie](12-hermes-lifecycle.md#mode-résident-livré-et-qualification-native).
 
 ## Versions et périmètre réellement consultés
 
@@ -28,7 +30,7 @@ La construction est explicite dans `src/promethee/hermes_adapter.py`, fonction `
 | Réglage actuel | Comportement natif vérifié | Avis pour cet essai |
 |---|---|---|
 | `skip_context_files=True` | Évite les instructions du dépôt et leur découverte progressive. | À conserver : les plans et fixtures du développeur ne sont pas la vie d'Ariane. |
-| `load_soul_identity=False` | Avec le réglage précédent, SOUL n'est pas chargé ; Hermes conserve son identité système par défaut. | Ne pas importer le SOUL personnel. Le contrat Ariane doit devenir une instruction système explicite et stable. |
+| `load_soul_identity=False` | Avec le réglage précédent, SOUL n'est pas chargé ; Hermes conserve son identité système par défaut. | Ne pas importer le SOUL personnel. Le contrat Ariane utilise désormais l'instruction système explicite `system_message`. |
 | `skip_memory=True` | Sans toolset natif `memory`, ni MEMORY.md/USER.md ni fournisseur de mémoire externe ne sont initialisés. | À conserver pendant la qualification. Ce réglage ne supprime **pas** l'historique conversationnel transmis par Promethee. |
 | `skip_background_review=True` | Supprime les revues natives de mémoire/skills en fin de tour. | À conserver : elles ne répondent pas au besoin vocal immédiat et ne doivent pas apprendre les essais. |
 | `max_iterations=8` | Borne la boucle de décisions/appels API, pas la durée d'une inférence ni le nombre de tokens pensés. Une sortie de grâce sans outils existe à l'épuisement du budget. | Ne pas l'abaisser arbitrairement : un dialogue simple n'utilise normalement qu'un appel ; des actions peuvent nécessiter plusieurs résultats. |
@@ -45,7 +47,7 @@ Avec un appel API par tour et sans compression, le dixième appel contient 28 52
 
 Le JSON final `{text, delivery}` a une utilité différente : il associe la réplique à son intention vocale. `DirectedWorker` conserve les `messages` Hermes et enregistre séparément le texte parlé. Il ne faut pas réécrire les anciens appels/résultats d'outils pour « nettoyer » arbitrairement l'historique, ni assimiler texte généré et parole effectivement lue.
 
-Raccord natif précis, sans changer les mots approuvés :
+Raccord natif désormais livré, sans changer les mots approuvés :
 
 ```python
 agent.run_conversation(
@@ -60,16 +62,18 @@ La [signature](https://github.com/NousResearch/hermes-agent/blob/2179a279ae04bfa
 
 **Piège de configuration :** renseigner seulement `agent.system_prompt` dans YAML ne suffit pas à notre constructeur direct `AIAgent`. C'est la CLI qui résout ce champ et transmet `ephemeral_system_prompt` (`cli.py:2779`, `hermes_cli/cli_agent_setup_mixin.py:546`). Le chemin Promethee saute cette CLI. Le paramètre explicite `system_message` est donc le raccord approprié ; `platform` et les `platform_hints` servent aux consignes d'une surface, pas à stocker un historique. Pas besoin d'activer SOUL.
 
-Lors du passage, ne pas modifier rétrospectivement les historiques existants : lancer une session de qualification neuve pour l'A/B. La validation de `ConversationStore.finish` exige que le message utilisateur réellement soumis soit conservé par l'historique natif ; un changement de `persist_user_message` implicite casserait ce contrat.
+Le passage ne doit pas modifier rétrospectivement les historiques existants : les comparaisons utilisent des sessions de qualification neuves. La validation de `ConversationStore.finish` exige que le message utilisateur réellement soumis soit conservé par l'historique natif ; un changement de `persist_user_message` implicite casserait ce contrat.
 
 ## Cache : bénéfice certain et limite réelle
 
-Hermes met son prompt système en cache dans l'instance et peut le restaurer depuis sa base de session. Nos profils jetables reconstruisent une instance et un environnement par tour : le même `session_id` Promethee ne suffit pas à retrouver la base d'un autre profil. [Restauration native](https://github.com/NousResearch/hermes-agent/blob/2179a279ae04bfadf8efbc49a01ca0abfb738000/agent/conversation_loop.py#L651).
+Hermes met son prompt système en cache dans l'instance et peut le restaurer depuis sa base de session. Dans le mode jetable, nos profils reconstruisent une instance et un environnement par tour : le même `session_id` Promethee ne suffit pas à retrouver la base d'un autre profil. [Restauration native](https://github.com/NousResearch/hermes-agent/blob/2179a279ae04bfadf8efbc49a01ca0abfb738000/agent/conversation_loop.py#L651).
+
+Le mode résident livré conserve maintenant l'instance et son profil entre des tours terminés avec succès. Les outils sont néanmoins actualisés et leurs schémas revalidés après reconnexion MCP. La présence d'un profil stable ne prouve donc ni un cache fournisseur touché ni une économie de tokens ; aucun de ces gains n'est établi par les trois appels de qualification.
 
 Deux détails évitent un mauvais diagnostic :
 
 - `_timestamp_line` ne contient pas l'heure à la seconde : la **date est stable dans la journée**. `pass_session_id` est faux par défaut. Le modèle/fournisseur changent seulement si notre configuration change. [Source](https://github.com/NousResearch/hermes-agent/blob/2179a279ae04bfadf8efbc49a01ca0abfb738000/agent/system_prompt.py#L433).
-- `_active_profile_line` inclut le nom et le chemin du profil `promethee-turn-…`. Ils changent réellement à chaque tour et figurent dans le préfixe natif. Le transport Codex calcule sa clé avec le **texte complet des instructions**, les outils et le périmètre de session. [Profil](https://github.com/NousResearch/hermes-agent/blob/2179a279ae04bfadf8efbc49a01ca0abfb738000/agent/system_prompt.py#L344), [calcul de clé](https://github.com/NousResearch/hermes-agent/blob/2179a279ae04bfadf8efbc49a01ca0abfb738000/agent/transports/codex.py#L304), [utilisation](https://github.com/NousResearch/hermes-agent/blob/2179a279ae04bfadf8efbc49a01ca0abfb738000/agent/transports/codex.py#L602).
+- `_active_profile_line` inclut le nom et le chemin du profil `promethee-turn-…`. Ils changent à chaque tour jetable et figurent dans le préfixe natif ; le résident garde ce profil jusqu'à sa destruction. Le transport Codex calcule sa clé avec le **texte complet des instructions**, les outils et le périmètre de session. [Profil](https://github.com/NousResearch/hermes-agent/blob/2179a279ae04bfadf8efbc49a01ca0abfb738000/agent/system_prompt.py#L344), [calcul de clé](https://github.com/NousResearch/hermes-agent/blob/2179a279ae04bfadf8efbc49a01ca0abfb738000/agent/transports/codex.py#L304), [utilisation](https://github.com/NousResearch/hermes-agent/blob/2179a279ae04bfadf8efbc49a01ca0abfb738000/agent/transports/codex.py#L602).
 
 Une vérification CPU de la fonction de hash extraite du code confirme : entrées identiques → même clé ; seul nom de profil différent → autre clé. Aucun constructeur d'agent et aucun appel API n'ont été exécutés. Cette clé est un **indice de routage**, pas la preuve d'un cache touché ou manqué côté fournisseur. Le passage à `system_message` supprime la croissance répétitive, mais ne garantit pas à lui seul un cache fournisseur chaud.
 
@@ -83,14 +87,20 @@ Ne pas falsifier le profil annoncé, réutiliser un transport MCP lié à un aut
 
 Sources : [admission et barrières du scheduler](https://github.com/NousResearch/hermes-agent/blob/2179a279ae04bfadf8efbc49a01ca0abfb738000/agent/tool_dispatch_helpers.py#L148), [opt-in MCP](https://github.com/NousResearch/hermes-agent/blob/2179a279ae04bfadf8efbc49a01ca0abfb738000/tools/mcp_tool_discovery.py#L526), [documentation MCP](https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp#parallel-tool-calls), [boucle native](https://hermes-agent.nousresearch.com/docs/developer-guide/agent-loop).
 
-Les observations de présence modifient toujours la révision entre lecture et soumission. Les cinq outils actuels passent directement par leur `ExecutionService`, sans rendez-vous avec `BodyAdapter`. Ce problème d'action explicite **reste distinct et non résolu par ce rapport**, par le JSON vocal ou par le préchauffage.
+Les observations de présence modifient toujours la révision entre lecture et soumission. Les cinq outils actuels passent directement par leur `ExecutionService`, sans rendez-vous avec `BodyAdapter`. Ce problème d'action explicite **reste distinct et non résolu par ce rapport**, par le JSON vocal, par le préchauffage ou par le mode résident.
+
+## Ce que les trois tours résidents vérifient
+
+Le rapport local `.local/realtime-voice-01/luna-qualification/resident-report.md` archive trois tours sans relance sur la source G `2179a279`, avec `gpt-5.6-luna`, effort `low`, contrat système et cinq outils inchangés. Les délais message → résultat sont **6,298 / 6,630 / 10,410 s**, après une préparation initiale séparée de **7,781 s**. Les tours 2 et 3 réutilisent le même processus et le même agent, avec respectivement 2 et 4 messages d'historique frais. Le troisième comporte un vrai `read_world` portant le bon tour actif ; les mutations sous des tours différents restent une preuve de tests CPU, pas de cet essai modèle en lecture seule.
+
+Une batterie CPU a démarré pendant la qualification : ce n'est pas une comparaison isolée avec le préchauffage jetable. Les reconnexions MCP des tours réutilisés prennent **1,642 et 1,863 s** et restent dans le chemin critique. La réutilisation effective est prouvée ; aucun gain de latence, de facturation ou de cache fournisseur n'est déduit de ces trois observations. Les JSON `{text, delivery}` sont validés, mais cet essai ne synthétise aucune voix et ne qualifie pas encore la scène complète. Le refus des drapeaux natifs `failed`, `partial` et `completed=False` a ensuite été renforcé sur CPU, sans nouvel appel modèle.
 
 ## Cinq actions pragmatiques, sans nouvelle bibliothèque d'outils
 
 | Priorité | Action | Statut et validation attendue |
 |---|---|---|
 | 1 | Déplacer les instructions approuvées vers `system_message`, avec un message utilisateur contenant uniquement l'intervention/contexte utile. | Intégré. Six tours réels : aucune copie du contrat dans les messages utilisateur persistés, JSON vocal validé. Historique natif conservé. |
-| 2 | Préchauffer un seul worker jetable sur un futur identifiant privé, puis activer **ce même tour** avec historique frais ; vérifier les empreintes de prompt/cache en parallèle. | Préchauffage intégré et mesuré sur la même source G ; instrumentation du cache fournisseur encore à faire. Aucun `run_conversation` ni mutation autorisée avant activation. `host.cancel()` invalide le tour actif et conserve le worker réservé inactif ; le serveur vivant l'utilise pour les interruptions start/say/stop. `host.close()` détruit actif et réserve à la fermeture du service ; la réserve a aussi une expiration bornée. |
+| 2 | Conserver le préchauffage jetable par défaut de l'essai vocal ; qualifier séparément le mode résident explicite dans la scène. | Les deux chemins sont livrés. Le jetable active son identifiant réservé avec historique frais. Le résident est activé par `--resident` / `args.resident=True`, avec authentification native Hermes Codex ; il reconnecte MCP et revalide les schémas à chaque tour. Trois tours natifs sont qualifiés, l'essai de scène est en cours. Aucun appel modèle avant activation. `host.cancel()` invalide et détruit un tour actif, mais conserve une réserve inactive ou un résident au repos ; `host.close()` les détruit aussi. Le résident expire après 120 s d'inactivité par défaut et `warm()` ne crée pas de second agent pendant son tour. Instrumentation du cache fournisseur encore à faire. |
 | 3 | Tester `agent.environment_probe: false` dans le profil dédié. | Recommandé, non appliqué par ce rapport. Hermes lance autrement des sondes d'environnement en arrière-plan (`agent_init.py:1336–1340`) sans utilité pour nos cinq outils. Le commentaire upstream estime environ 0,5 s de sous-processus ; ce n'est **pas** une économie de 0,5 s démontrée sur notre chemin critique. Mesurer construction et délai avant appel. |
 | 4 | Tester `agent.task_completion_guidance: false` uniquement dans le profil vocal, en conservant intégralement les règles explicites « accepté ≠ terminé » et monde autoritaire. | Recommandé pour A/B, non appliqué. Le bloc générique demande de finir/vérifier le travail avant de répondre ; il peut concurrencer notre objectif parler pendant l'action. C'est une hypothèse de comportement, pas la cause prouvée des lectures en boucle. Vérifier action acceptée puis parole sans polling répété, refus explicite et interruption correcte. |
 | 5 | Rendre les réponses des **outils existants** plus compactes pour le dialogue, sans modifier leurs reçus persistés. | Recommandé, non appliqué. Garder identité d'action, statut, erreur, source, fraîcheur et position/posture effectives ; éviter de réinjecter chaque matrice/quaternion VRM pour un simple statut. Préserver révision et provenance, ne pas résumer un échec en succès. Mesurer caractères/tokens avant et après, puis vérifier reprise après interruption. |

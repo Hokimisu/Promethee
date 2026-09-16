@@ -241,6 +241,105 @@ class WorkerProcess:
             self.process.stdout.close()
 
 
+class ResidentProcess(WorkerProcess):
+    """One serialized native agent; only successful completed turns may reuse it."""
+
+    resident = True
+
+    def __init__(self, command, request, *, lifetime=120):
+        self.requests = queue.Queue(maxsize=1)
+        self.current_turn = None
+        self.used_turns = set()
+        self.idle_lifetime = lifetime
+        super().__init__(command, request, prewarm=True, lifetime=lifetime)
+
+    def _frame(self):
+        line = self.process.stdout.readline(4_194_305)
+        if len(line) > 4_194_304 or not line.endswith("\n"):
+            raise ValueError("Invalid resident response.")
+        result = json.loads(line)
+        if not isinstance(result, dict):
+            raise ValueError("Invalid resident response.")
+        return result
+
+    def _exchange(self, payload):
+        try:
+            self.process.stdin.write(payload)
+            self.process.stdin.flush()
+            if self._frame() != {
+                "type": "ready",
+                "turn_id": self.setup["turn_id"],
+                "session_id": self.setup["session_id"],
+            }:
+                raise ValueError("Resident prepared a different turn or session.")
+            self.ready_seconds = time.monotonic() - self.started
+            self.ready.set()
+            while (payload := self.requests.get()) is not None:
+                self.process.stdin.write(payload)
+                self.process.stdin.flush()
+                result = self._frame()
+                if result.get("type") == "result" and result.get("turn_id") != self.current_turn:
+                    raise ValueError("Resident returned a different turn.")
+                self.results.put_nowait(result)
+                if (
+                    result.get("type") != "result"
+                    or result.get("failed")
+                    or result.get("interrupted")
+                ):
+                    return
+        except (OSError, ValueError, queue.Full):
+            with contextlib.suppress(queue.Full):
+                self.results.put_nowait({"type": "error", "code": "worker_failure"})
+
+    def warm_status(self):
+        status = super().warm_status()
+        if status["state"] in {"ready", "preparing"} and self.current_turn is not None:
+            return {"state": "active"}
+        return status
+
+    def activate(self, request):
+        payload = json.dumps(request, ensure_ascii=False, allow_nan=False) + "\n"
+        expected = {k: v for k, v in self.setup.items() if k not in {"standby_seconds", "turn_id"}}
+        actual = {k: v for k, v in request.items() if k not in {"message", "history", "turn_id"}}
+        turn_id = request.get("turn_id")
+        with self._lock:
+            if (
+                self.current_turn is not None
+                or self.warm_status()["state"] not in {"ready", "preparing"}
+                or time.monotonic() >= self.expires_at
+                or len(payload) > 1_048_576
+                or actual != expected
+                or not isinstance(turn_id, str)
+                or turn_id in self.used_turns
+                or (not self.used_turns and turn_id != self.setup["turn_id"])
+            ):
+                raise ValueError("Resident is busy, expired or bound to different settings.")
+            if self.timer:
+                self.timer.cancel()
+            self.current_turn = turn_id
+            self.used_turns.add(turn_id)
+            self.activation.set()
+            self.requests.put_nowait(payload)
+        return self
+
+    def release_turn(self):
+        """Called only after the trusted host commits the matching successful result."""
+        with self._lock:
+            if self.closed or self.current_turn is None:
+                raise ValueError("Resident no longer owns a completed turn.")
+            self.current_turn = None
+            self.activation.clear()
+            self.expires_at = time.monotonic() + self.idle_lifetime
+            self.timer = threading.Timer(self.idle_lifetime, self._expire)
+            self.timer.daemon = True
+            self.timer.start()
+
+    def close(self):
+        with contextlib.suppress(queue.Full):
+            self.requests.put_nowait(None)
+        super().close()
+
+
 class TextHost:
     """The UI serializes start/poll/close; only the pipe reader runs in a thread."""
 
@@ -258,8 +357,11 @@ class TextHost:
         prewarm_factory=None,
         prewarm_lifetime=120,
         system_message=None,
+        resident=False,
     ):
         validate_chat_options(reasoning_effort, measure_timing)
+        if type(resident) is not bool:
+            raise ValueError("Resident mode must be explicitly enabled or disabled.")
         if system_message is not None and (
             not isinstance(system_message, str)
             or not system_message.strip()
@@ -271,6 +373,8 @@ class TextHost:
         if self.prewarm_lifetime > 300:
             raise ValueError("A prepared worker may live for at most 300 seconds.")
         self.prewarm_factory = prewarm_factory
+        self.resident_mode = resident
+        self.resident_worker = None
         self.spare = self.reservation = None
         self.worker_wrapper = lambda worker, request: worker
         self.settings = {"model": model, "base_url": base_url, "api_mode": api_mode}
@@ -297,6 +401,12 @@ class TextHost:
         """Nonblocking status; never starts inference or activates a turn."""
         if self.prewarm_factory is None:
             return {"state": "disabled"}
+        if self.resident_worker is not None:
+            status = self.resident_worker.warm_status()
+            if status["state"] in {"expired", "failed"}:
+                self.resident_worker.close()
+                self.resident_worker = None
+            return status
         if self.spare is None:
             return {"state": "idle"}
         status = self.spare.warm_status()
@@ -309,7 +419,7 @@ class TextHost:
     def warm(self):
         """Explicitly prepare at most one next turn, without reading its future history."""
         status = self.warm_status()
-        if status["state"] in {"disabled", "preparing", "ready"}:
+        if status["state"] in {"disabled", "preparing", "ready", "active"}:
             return status
         reservation = self.store.reserve_turn(lifetime=self.prewarm_lifetime)
         try:
@@ -330,18 +440,21 @@ class TextHost:
     def start(self, message, *, source="user"):
         started = time.monotonic()
         usable = self.warm_status()["state"] in {"ready", "preparing"}
+        reusable = self.resident_worker if usable and self.worker is None else None
         try:
             opened = self.store.begin(
                 message,
                 timeout=self.timeout,
                 trigger=source,
-                reservation=self.reservation if usable else None,
+                reservation=self.reservation if usable and reusable is None else None,
             )
         except ReservationExpired:
             self._discard_spare()
             usable = False
             opened = self.store.begin(message, timeout=self.timeout, trigger=source)
-        prepared = self.spare if usable else None
+        prepared = reusable or (self.spare if usable else None)
+        if reusable:
+            self.resident_worker = None
         if usable:
             self.spare = self.reservation = None
         self.initiative_turn = None
@@ -359,6 +472,9 @@ class TextHost:
             if self.worker:
                 self.worker.close()
                 self.worker = None
+                self.resident_worker = None
+            elif prepared is None and self.resident_worker is not None:
+                prepared, self.resident_worker = self.resident_worker, None
             if prepared is None:
                 self._discard_spare()
                 worker = self.factory(request)
@@ -376,6 +492,8 @@ class TextHost:
                     }
                     return self.turn_id
             self.worker = worker
+            if self.resident_mode and isinstance(worker, ResidentProcess):
+                self.resident_worker = worker
             self.worker = self.worker_wrapper(worker, request)
         except Exception:
             self.store.abort(self.turn_id)
@@ -384,6 +502,7 @@ class TextHost:
             if self.worker:
                 self.worker.close()
                 self.worker = None
+                self.resident_worker = None
             raise
         return self.turn_id
 
@@ -421,7 +540,10 @@ class TextHost:
         result = self.worker.poll()
         if result is None:
             return None
-        self.worker.close()
+        completed_worker = self.worker
+        resident = self.resident_worker
+        if resident is None:
+            completed_worker.close()
         self.worker = None
         timings = {}
         try:
@@ -438,6 +560,7 @@ class TextHost:
                     "standby_wait_seconds",
                     "activation_seconds",
                     "auth_recheck_seconds",
+                    "mcp_rebind_seconds",
                 }
                 if (
                     not isinstance(raw, dict)
@@ -452,14 +575,22 @@ class TextHost:
             text = self.store.finish(self.turn_id, result)
         except ActionError:
             self.store.abort(self.turn_id, status="interrupted")
+            if resident:
+                completed_worker.close()
+                self.resident_worker = None
             return self._timed_result(
                 {"status": "interrupted", "code": "obsolete_response"}, timings
             )
         except ValueError:
             self.store.abort(self.turn_id)
+            if resident:
+                completed_worker.close()
+                self.resident_worker = None
             return self._timed_result(
                 {"status": "failed", "code": "model_or_worker_failure"}, timings
             )
+        if resident:
+            resident.release_turn()
         return self._timed_result({"status": "completed", "text": text}, timings)
 
     def _timed_result(self, result, timings=None):
@@ -480,6 +611,7 @@ class TextHost:
         if self.worker:
             self.worker.close()
             self.worker = None
+            self.resident_worker = None
 
     def close(self):
         """Dispose active and prepared processes; safe to call repeatedly."""
@@ -487,6 +619,9 @@ class TextHost:
             self.cancel()
         finally:
             self._discard_spare()
+            if self.resident_worker:
+                self.resident_worker.close()
+                self.resident_worker = None
 
 
 def configure(parser):
@@ -507,6 +642,7 @@ def configure(parser):
     parser.add_argument("--reasoning-effort", choices=REASONING_EFFORTS)
     parser.add_argument("--measure-timing", action="store_true")
     parser.add_argument("--prewarm", action="store_true", help="Prepare one disposable next turn.")
+    parser.add_argument("--resident", action="store_true", help="Reuse one isolated native agent.")
     parser.add_argument("--vault", type=Path, help="Optional sourced interactive memory vault.")
 
 
@@ -515,11 +651,17 @@ def open_text_host(args):
     reasoning_effort = getattr(args, "reasoning_effort", None)
     measure_timing = getattr(args, "measure_timing", False)
     prewarm = getattr(args, "prewarm", False)
+    resident = getattr(args, "resident", False)
+    if type(resident) is not bool:
+        raise ValueError("Resident mode must be explicitly enabled or disabled.")
     if type(prewarm) is not bool:
         raise ValueError("Prewarming must be explicitly enabled or disabled.")
+    prewarm = prewarm or resident
     validate_chat_options(reasoning_effort, measure_timing)
     auth = getattr(args, "auth", "api-key")
     auth_root = getattr(args, "hermes_auth_root", None)
+    if resident and auth != "hermes-codex":
+        raise ValueError("Resident mode currently requires native Hermes Codex authentication.")
     if auth not in {"api-key", "hermes-codex"}:
         raise ValueError("Unknown authentication mode.")
     if auth == "api-key" and not os.environ.get("PROMETHEE_OPENAI_API_KEY"):
@@ -567,6 +709,19 @@ def open_text_host(args):
             "--auth",
             auth,
         ]
+        if resident:
+            setup = (
+                request
+                if preparing
+                else {k: v for k, v in request.items() if k not in {"message", "history"}}
+                | {"standby_seconds": 120}
+            )
+            process = ResidentProcess(
+                [*command, "--resident"], setup, lifetime=setup["standby_seconds"]
+            )
+            if not preparing:
+                process.activate(request)
+            return process
         if preparing:
             return WorkerProcess(
                 [*command, "--prewarm"], request, prewarm=True, lifetime=request["standby_seconds"]
@@ -585,6 +740,7 @@ def open_text_host(args):
             measure_timing=measure_timing,
             prewarm_factory=(lambda request: factory(request, preparing=True)) if prewarm else None,
             system_message=getattr(args, "system_message", None),
+            resident=resident,
         )
         try:
             if prewarm:
