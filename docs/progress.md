@@ -25,6 +25,24 @@ leurs limites décrivent la version de chaque essai, pas nécessairement la dern
 
 Les journaux de test et données locales restent dans `.local/` et ne sont pas publiés.
 
+## Outils Hermes et latence — 16 septembre 2026
+
+Les lectures MCP disposent d'une vue synthétique par défaut, sans modifier les
+reçus persistés. Le schéma des actions explicite l'imbrication `kind` / `args`,
+avec contrôle de la coercition native Hermes. Les tests de projection et de
+transport conservent refus, idempotence, révisions, statuts et provenance.
+Validation locale : 686 tests du socle, 2 ignorés ; 331 tests et 7 sous-tests de
+la scène. Les 11 tests stdio ciblés passent après le dernier ajustement de
+schéma ; lint, format et construction réussissent.
+
+Une paire native isolée mesure 23,885 → 12,535 s pour demander une posture,
+avec un refus de format en moins, mais 9,713 → 16,525 s pour sa relecture.
+Le second tour demande la vue complète. Ce résultat exploratoire ne prouve
+pas un gain général de latence et ne clôt pas T11. Le
+[rapport](research/14-hermes-tool-latency.md) conserve les quatre échantillons,
+les huit essais antérieurs invalides comme A/B, et leurs limites. Hermes et
+Luna sont réels ; le contrôleur de cette comparaison est simulé, sans audio.
+
 ## Microphone local — 16 septembre 2026
 
 La livraison suivante raccorde aussi l'initiative à la scène : activation
@@ -79,8 +97,9 @@ La [scène expérimentale](../experiments/voice/realtime/README.md) est maintena
 livrée : serveur, rendu, lèvres liées au PCM lu, worker Vox, présence ARDY,
 encodeur CPU et configuration des chemins. Les dépendances vocales ont été
 réinstallées dans un environnement neuf ; poids, référence et conversations
-restent exclus du dépôt. Elle reçoit du texte, pas le microphone. Les limites
-de 60 secondes et 12 appels ne remplacent pas le budget persistant de T12.
+restent exclus du dépôt. Cet essai précède l'entrée microphone et le raccord
+de l'initiative désormais décrits plus haut ; ses limites de 60 secondes et
+12 appels ne constituaient pas le budget persistant de T12.
 
 Après correction du renouvellement des connexions HTTP, le
 [nouvel essai complet](research/11-short-dialogue.md#scène-livrée-avec-hermes-résident)

@@ -2,10 +2,11 @@
 
 import argparse
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any, Literal
 
 from promethee.execution import ExecutionService
 from promethee.runtime import Runtime
+from promethee.tool_views import project_execution, project_world
 from promethee.world import BODY_ACTION_FIELDS, POSTURES
 
 
@@ -15,9 +16,9 @@ class WorldTools:
         self.turn_id = turn_id
         service.runtime.require_session()
 
-    def world(self):
+    def world(self, *, detail="full"):
         self.service.runtime.require_session()
-        return self.service.get_world(include_executions=True)
+        return project_world(self.service.get_world(include_executions=True), detail=detail)
 
     def capabilities(self):
         self.service.runtime.require_session()
@@ -61,9 +62,9 @@ class WorldTools:
             expected_command_revision=expected_command_revision,
         )
 
-    def execution(self, request_id):
+    def execution(self, request_id, *, detail="full"):
         self.service.runtime.require_session()
-        return self.service.get(request_id)
+        return project_execution(self.service.get(request_id), detail=detail)
 
     def cancel(self, request_id):
         self.service.runtime.require_session()
@@ -74,7 +75,32 @@ def create_server(service, *, turn_id=None, vault=None):
     # The CPU runtime remains usable without installing the optional MCP SDK.
     from mcp.server import MCPServer
     from mcp_types import ToolAnnotations
-    from pydantic import StrictInt, StrictStr
+    from pydantic import StrictInt, StrictStr, WithJsonSchema
+
+    # Describe the wire format without moving malformed-action refusals out of
+    # the durable runtime registry or silently coercing/repairing their payload.
+    action_schema = {
+        "type": "object",
+        "properties": {
+            "kind": {"type": "string", "enum": sorted(BODY_ACTION_FIELDS)},
+            "args": {
+                # A nested object type makes Hermes coerce JSON strings to dicts
+                # before MCP sees them. Describe it without enabling that repair.
+                "description": (
+                    "A JSON object, never a JSON-encoded string. Arguments belong inside args. "
+                    "Required keys by kind: "
+                    + "; ".join(
+                        f"{kind}: {', '.join(sorted(fields)) or 'empty object'}"
+                        for kind, fields in sorted(BODY_ACTION_FIELDS.items())
+                    )
+                    + ". Use list_capabilities for currently supported actions and values."
+                ),
+            },
+        },
+        "required": ["kind", "args"],
+        "additionalProperties": False,
+        "examples": [{"kind": "posture", "args": {"name": "arms_raised"}}],
+    }
 
     tools = WorldTools(service, turn_id=turn_id)
     memory = None
@@ -99,8 +125,12 @@ def create_server(service, *, turn_id=None, vault=None):
     )
 
     @server.tool(annotations=read)
-    def read_world() -> dict[str, Any]:
+    def read_world(detail: Literal["summary", "full"] = "summary") -> dict[str, Any]:
         """Read the observed world, revisions, body freshness and provenance.
+
+        Default summary omits only articulated pose and appearance arrays, named
+        in projection.omitted. Use detail="full" for these numerical render data.
+        All other fields come from the same snapshot, including body freshness.
 
         command_revision excludes idle pose changes so a command can start from the
         latest observed pose while the avatar moves naturally. Objects, attachments,
@@ -116,7 +146,7 @@ def create_server(service, *, turn_id=None, vault=None):
         playback does not identify an exact spoken prefix. Consult these receipts
         before claiming a previous response was delivered aloud.
         """
-        return tools.world()
+        return tools.world(detail=detail)
 
     @server.tool(annotations=read)
     def list_capabilities() -> dict[str, Any]:
@@ -126,7 +156,7 @@ def create_server(service, *, turn_id=None, vault=None):
     @server.tool(annotations=mutate)
     def submit_action(
         request_id: StrictStr,
-        action: dict,
+        action: Annotated[dict, WithJsonSchema(action_schema)],
         expected_revision: StrictInt | None = None,
         expected_command_revision: StrictInt | None = None,
     ) -> dict[str, Any]:
@@ -151,9 +181,16 @@ def create_server(service, *, turn_id=None, vault=None):
         )
 
     @server.tool(annotations=read)
-    def read_execution(request_id: StrictStr) -> dict[str, Any]:
-        """Read an existing action's status and observed result; never retries the action."""
-        return tools.execution(request_id)
+    def read_execution(
+        request_id: StrictStr, detail: Literal["summary", "full"] = "summary"
+    ) -> dict[str, Any]:
+        """Read an action's status and observed result; never retries the action.
+
+        Default summary omits only observation.pose and observation.appearance,
+        explicitly named in projection.omitted. Status, errors, provenance and
+        every other field are preserved. Use detail="full" for numerical render data.
+        """
+        return tools.execution(request_id, detail=detail)
 
     @server.tool(annotations=mutate)
     def cancel_action(request_id: StrictStr) -> dict[str, Any]:

@@ -106,7 +106,7 @@ def test_stdio_idle_pose_only_preserves_command_guard(
             pose = copy.deepcopy(articulated_pose)
             pose["positions"][7][0] += 0.01
             assert handle.observe_idle(observed(pose))
-            current = (await client.call_tool("read_world")).structured_content
+            current = (await client.call_tool("read_world", {"detail": "full"})).structured_content
             assert current["revision"] == original["revision"] + 1
             assert current["command_revision"] == original["command_revision"]
             assert current["pose"] == pose

@@ -112,6 +112,26 @@ La [validation transactionnelle](contracts.md#exécutions-du-corps) vérifie tou
 les objets, la portée, le contrôleur et le tour actuels. Après une mise à jour
 du schéma des outils, fermer l'agent résident puis en ouvrir un nouveau.
 
+Les outils MCP `read_world` et `read_execution` renvoient par défaut une vue
+`detail="summary"`. Elle retire uniquement `pose` et `appearance` du monde,
+ou `observation.pose` et `observation.appearance` du reçu. Le champ
+`projection.omitted` énumère les chemins effectivement retirés. Les révisions,
+la confirmation du corps, les positions, objets, attachements, conversations,
+erreurs et reçus de lecture audio restent identiques au même instantané.
+Une observation absente ou `null` le reste. `detail="full"` restitue le contenu
+complet, sans marqueur ajouté. Les appels Python `WorldTools.world()` et
+`WorldTools.execution()` gardent leur défaut complet ; ni la base, ni le rendu,
+ni les anciens messages Hermes ne sont modifiés.
+
+Le schéma d'action expose explicitement `kind` et `args` obligatoires, les
+types d'action connus et un exemple imbriqué. Les capacités actives restent
+celles de `list_capabilities`. Cette description guide le modèle : elle ne
+répare aucun appel et ne remplace pas la validation autoritaire du runtime.
+Une action mal formée reste un refus durable, rejouable avec son même ID et
+son même contenu. Cette évolution vise les corrections de format et le volume
+de contexte ; les [mesures séparées](research/14-hermes-tool-latency.md)
+précisent ce qui est effectivement vérifié.
+
 `read_world` ajoute `recent_executions`, contenant les huit résultats les plus
 récemment mis à jour et un indicateur `has_more` si d'autres sont omis. Chaque
 entrée donne l'identifiant, l'action, le statut, l'éventuelle demande d'arrêt,
