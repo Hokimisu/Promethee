@@ -1,8 +1,8 @@
 # Voix locale expressive pour Ariane
 
-Recherche et essais du **16 septembre 2026**. La voix Qwen a été approuvée par l’utilisateur et sert de référence synthétique. À sa demande, la comparaison locale suit ensuite l’ordre **VoxCPM2 → Confucius4 → dots**, puis **Sopro v2 Turbo**, ajouté pendant les essais. Les nouveaux échantillons restent à juger à l’écoute.
+Recherche et essais du **16 septembre 2026**. La voix Qwen a été approuvée par l’utilisateur et sert de référence synthétique. Après écoute des nouvelles versions, **l’utilisateur classe VoxCPM2 optimisé premier, Confucius4 deuxième et OmniVoice troisième**. Il garde OmniVoice comme alternative si Vox n’est pas assez rapide en situation réelle. Dots et Sopro lui paraissent robotiques, avec un rejet particulièrement marqué de Sopro. Ce jugement porte sur les extraits testés, pas sur toutes les configurations possibles. AuK-Flash est également demandé pour compléter la comparaison.
 
-**Sopro v2 Turbo est le premier de ces essais à produire l’audio plus vite que sa lecture, sur CPU uniquement.** À chaud, 7,371 secondes de parole demandent 5,062 secondes de calcul ; un délai initial calculé de 1,094 seconde suffirait à éviter les interruptions dans la trace mesurée. La qualité reste à juger à l’écoute. Les configurations Qwen, Vox, Confucius et dots testées restent plus lentes que la lecture. Ces essais ne fixent pas la limite des modèles avec d’autres moteurs d’inférence.
+**VoxCPM2 optimisé est le candidat principal pour la suite ; Confucius4 reste l’alternative de qualité et OmniVoice celle de rapidité.** La vitesse CPU de Sopro ne compense pas le défaut perçu à l’écoute. Son audit de format et d’export n’a pas démontré de bug d’intégration ; les variantes de contrôle restent distinctes de l’échantillon rejeté. Les mesures de débit ne remplacent pas le jugement de qualité et ne fixent pas la limite des modèles avec d’autres moteurs d’inférence.
 
 Les versions majeures Qwen, Fish et Vox présélectionnées datent de janvier, mars et avril 2026. Les nouvelles propositions Confucius4 et Sopro sont plus récentes. Les révisions exactes testées figurent ci-dessous.
 
@@ -49,9 +49,50 @@ L’essai `.local/voice-voxcpm-01/benchmark.json` contient deux appels à l’AP
 | Pic réservé par PyTorch | 5,877 GiB | 6,014 GiB |
 | Attente initiale minimale calculée sans trou | 15,903 s | **8,442 s** |
 
-Les deux WAV sont finis, sans NaN, sans écrêtage et sans atténuation ajoutée. Fichiers : `.local/voice-voxcpm-01/ariane-voxcpm-cold.wav` et `ariane-voxcpm-warm.wav`. L’utilisation de la référence ne prouve pas à elle seule la fidélité du timbre, du français ou de l’émotion ; aucune préférence d’écoute n’est encore conclue ici.
+Les deux WAV sont finis, sans NaN, sans écrêtage et sans atténuation ajoutée. Fichiers : `.local/voice-voxcpm-01/ariane-voxcpm-cold.wav` et `ariane-voxcpm-warm.wav`. L’utilisateur a retenu cet échantillon comme le meilleur du premier comparatif. La fidélité sur d’autres textes et styles reste à éprouver.
 
 L’audit CPU `playback-diagnostic.json` calcule `max(arrivée_du_fragment − durée_des_fragments_précédents)`. Le premier PCM chaud à 0,411 s ne permet donc pas de démarrer et continuer immédiatement : il faut environ **8,44 s** de délai initial dans cette trace pour éviter les interruptions, hors transport et périphérique audio. Il s’agit d’un calcul sur les arrivées, pas d’une latence sonore mesurée au haut-parleur. Les pics PyTorch ne représentent pas toute l’occupation de la carte.
+
+### VoxCPM2 optimisé sous WSL
+
+L’essai `.local/voice-voxcpm-02/benchmark.json` conserve les poids, VoxCPM
+2.0.3, le texte, la référence, la direction, les dix étapes et le guidage 2.
+Un environnement WSL neuf utilise Python 3.10.12, Torch 2.7.0+cu126,
+Triton 3.3.0 et Transformers 4.57.3. Le profil officiel de référence est
+réutilisé et l’optimisation native `tts_model.optimize()` compile les quatre
+composants prévus par le paquet, sans quantification ni Nano-vLLM.
+
+| Mesure, profil prêt | WSL sans compilation | Compilé chaud 1 | Compilé chaud 2 |
+|---|---:|---:|---:|
+| Durée audio | 7,360 s | 7,360 s | 7,360 s |
+| Génération complète | 11,091 s | 4,947 s | 5,255 s |
+| Premier PCM | 0,801 s | 0,093 s | 0,093 s |
+| RTF complet | 1,507 | 0,672 | 0,714 |
+| Attente initiale idéale sans coupure | 3,890 s | 0,093 s | 0,093 s |
+| Pic alloué par PyTorch | 5,537 GiB | 5,459 GiB | 5,459 GiB |
+
+Le modèle chargé est identique entre le contrôle WSL et les appels compilés :
+le gain attribuable à la compilation est ici de 2,1 à 2,2 fois. Le gain global
+par rapport aux 15,643 s Windows comprend aussi le système, Torch et le profil.
+Chargement (30,283 s), création initiale du profil (16,410 s) et premier passage
+de compilation/échauffement (114,163 s) sont mesurés séparément. Quatre graphes
+sont capturés ; aucun nouveau graphe n’est compilé pendant les deux appels chauds.
+
+Les 46 vrais fragments de 160 ms permettent une consommation simulée sans
+interruption dès le premier fragment sur ces deux traces. **Ce n’est pas une
+latence sonore mesurée au haut-parleur**, ni une qualification avec ARDY ou des
+textes nouveaux. Les sorties compilées sont identiques pour cette graine,
+finies et sans saturation, mais diffèrent de la sortie sans compilation :
+`ariane-voxcpm-warm-2.wav` est ajouté au comparatif sans remplacer la voix
+approuvée. L’utilisateur a depuis écouté cette version compilée et l’a classée
+première, devant Confucius4 et OmniVoice.
+
+Le profil de référence de 58 024 octets se recharge en 15,7 ms avec égalité
+des tenseurs vérifiée. Il doit rester sur CPU pour cette API. Le modèle et son
+décodeur ont des états mutables ; un seul thread doit posséder le générateur.
+Une fermeture après deux fragments, au point de retour du générateur, prend
+0,462 ms et permet une nouvelle génération valide. Cette sonde ne mesure pas
+l’interruption d’un calcul CUDA actif. Le raccord vocal du runtime reste à faire.
 
 ## Mesure Confucius4 effectuée
 
@@ -165,9 +206,19 @@ Les WAV `.local/voice-sopro-01/ariane-sopro-cold.wav` et
 écrêtage ni gain d’export ajouté. Les traitements officiels de normalisation
 de référence et le limiteur doux de sortie sont conservés. Le texte est celui
 des autres essais, avec `lang='fr'`. **L’API n’expose pas de prompt d’émotion** :
-le jeu vocal dépend ici de la référence. Ce critère reste à comparer à Qwen,
-dont l’utilisateur a approuvé l’expression. Aucun profil Sopro n’a encore été
+le jeu vocal dépend ici de la référence. L’utilisateur a rejeté la qualité de
+cet extrait, malgré sa rapidité. Aucun profil Sopro n’a encore été
 persisté sur disque.
+
+Un diagnostic séparé dans `.local/voice-sopro-01/diagnostic-01/report.json`
+vérifie les poids strictement chargés, le calcul CPU FP32, la référence et la
+sortie mono 24 kHz, ainsi que la balise française. Deux appels officiels avec
+référence fraîche, `stream` et `synthesize`, produisent des fichiers de contrôle.
+Pour le même nouveau flux, notre exporteur et `tts.save_wav` produisent des
+octets WAV identiques : aucune déformation par concaténation ou export n’est
+démontrée. La référence expressive, le chemin streaming ou les deux étapes
+acoustiques restent des hypothèses de qualité, pas des causes établies. Les
+nouvelles variantes n’ont pas été approuvées à l’écoute. L’original est conservé.
 
 Poids : [`samuel-vitorino/sopro-v2-turbo@f747f9edfb7b0233a3b7105af3a75603a7213d26`](https://huggingface.co/samuel-vitorino/sopro-v2-turbo/tree/f747f9edfb7b0233a3b7105af3a75603a7213d26).
 Code Git consulté : [`7bfcf9a0539d274f6593959a21da948f506ceee1`](https://github.com/samuel-vitorino/sopro/tree/7bfcf9a0539d274f6593959a21da948f506ceee1) ;
@@ -181,6 +232,94 @@ possibilités de direction émotionnelle diffèrent entre moteurs. Il s’agit
 d’essais d’intégration sur cette machine, pas d’un classement universel de
 qualité ou de performances. La phrase cible reprend en outre le texte de la
 référence : la fidélité sur de nouvelles phrases reste à éprouver après écoute.
+
+## Mesures OmniVoice effectuées
+
+OmniVoice a généré deux fois le même texte français avec la référence Qwen
+inchangée et sa transcription. L’API officielle `generate()` fournit une
+phrase complète à 24 kHz ; **cet essai ne mesure pas de streaming**. Les
+32 étapes et les pré/post-traitements officiels sont conservés, avec FP16,
+SDPA et graine 42 réinitialisée. Aucun ASR, FlashInfer ou compilation n’est
+activé. Le prétraitement de référence reste dans chaque appel chronométré.
+
+| Mesure | Premier appel | Appel chaud |
+|---|---:|---:|
+| Durée audio | 8,520 s | 8,520 s |
+| Génération et phrase complète disponible | 2,952 s | 1,606 s |
+| RTF | 0,346 | 0,189 |
+| Pic alloué par PyTorch | 2,151 GiB | 2,151 GiB |
+
+Le chargement de 10,213 s est séparé. Les WAV sont identiques pour ces deux
+appels, finis et sans écrêtage ; la référence reste identique avant/après.
+Fichier d’écoute : `.local/voice-omnivoice-01/ariane-omnivoice-warm.wav`.
+L’utilisateur juge cet extrait satisfaisant et le classe troisième derrière
+VoxCPM2 optimisé et Confucius4. Sa rapidité justifie de le conserver si Vox
+ne tient pas la cadence en situation réelle ; aucun basculement automatique
+de moteur n’est implémenté ou demandé à ce stade.
+
+Environnement WSL neuf, Python 3.11.16, Torch 2.8.0+cu126, Transformers 5.8.1.
+OmniVoice 0.2.1 est construit et installé depuis le checkout Git ci-dessous,
+pas depuis sa wheel PyPI : les 48 fichiers Python installés sont identiques au
+checkout propre, avec `direct_url.json` et hashes archivés. Code exécuté :
+[`08be0b4ccbac3e13e374e86fbfead4b4cac343e2`](https://github.com/k2-fsa/OmniVoice/tree/08be0b4ccbac3e13e374e86fbfead4b4cac343e2) ;
+poids : [`c5fdb5ccb189668d56333f77ba2629f4cd7535f4`](https://huggingface.co/k2-fsa/OmniVoice/tree/c5fdb5ccb189668d56333f77ba2629f4cd7535f4).
+Le code est Apache-2.0, les poids CC-BY-NC selon leur fiche ; le codec embarqué
+possède sa licence Boson Higgs Audio 2 Community distincte. Ce périmètre diffère
+des poids Apache de Vox. Le journal local conserve les versions effectivement
+importées, paramètres, hashes et mesures. [Fiche officielle](https://huggingface.co/k2-fsa/OmniVoice).
+
+## AuK-Flash : essai avec correctif mémoire
+
+Le chemin officiel avec déchargement CPU annonce encore 16,75–16,98 GiB de
+mémoire graphique dans ses exemples, au-delà de la capacité de notre 4080.
+L’inspection trouve une conversion globale FP32 qui double inutilement le
+stockage de l’encodeur Qwen initialement chargé en BF16. Un correctif proposé
+dans les [PR 18](https://github.com/Tencent-Hunyuan/AuK/pull/18) et
+[PR 12](https://github.com/Tencent-Hunyuan/AuK/pull/12) fournit une voie à tester.
+Nous remplaçons uniquement `model.to(torch.float32)` par
+`model.transformer.to(torch.float32)` dans une copie isolée, puis activons
+`cpu_offload=True`. Les paramètres de fusion et le VAE restent FP32 ; le
+chargement vérifie effectivement Qwen BF16. **Il s’agit d’une variante locale
+corrigée, pas de performances du code officiel inchangé.**
+
+Deux appels sont terminés sous Windows, Python 3.10.19, Torch 2.7.1+cu126 et
+Transformers 4.57.3, dans un environnement distinct. Ils utilisent la même
+référence synthétique et la même phrase française. La durée demandée de 8,8 s
+est arrondie à 8,82 s par le modèle. Les quatre étapes et le guidage nul
+imposés par Flash restent intacts, sans service externe de préparation du prompt.
+
+| Mesure, avec correctif et déchargement CPU | Premier appel | Appel chaud |
+|---|---:|---:|
+| Durée audio à 24 kHz | 8,820 s | 8,820 s |
+| Génération et phrase complète disponible | 58,315 s | 11,705 s |
+| RTF | 6,612 | 1,327 |
+| Pic alloué par PyTorch | 9,535 GiB | 9,963 GiB |
+| Pic réservé par PyTorch | 9,734 GiB | 10,189 GiB |
+
+Le chargement de 21,094 s est séparé. La mesure inclut les transferts CPU/GPU
+et le retour de la forme d’onde sur CPU, sans streaming ni lecture au haut-parleur.
+Le système dispose de peu de RAM libre pendant l’essai ; les chiffres incluent
+cette situation et ne définissent pas un plafond de performance du modèle.
+Les deux WAV sont finis et sans écrêtage, mais diffèrent malgré la même graine.
+Fichier d’écoute : `.local/voice-auk-01/ariane-auk-flash-warm.wav` ; mesures et
+empreinte du fichier source corrigé dans `benchmark.json`.
+
+La fiche des poids annonce chinois et anglais, **pas le français** : cette
+synthèse française reste exploratoire, et sa réussite technique ne prouve pas
+sa qualité linguistique. Le verdict d’écoute reste ouvert. Le correctif a
+permis une exécution réelle sous 16 Go ; le pré-audit documentaire seul ne
+justifiait donc pas de conclure à l’impossibilité sur cette machine.
+
+Code officiel de départ :
+[`e1c935e81e356c87419d9509d7f8a4091457bdca`](https://github.com/Tencent-Hunyuan/AuK/tree/e1c935e81e356c87419d9509d7f8a4091457bdca),
+avec le correctif explicite ci-dessus. Poids Flash :
+[`575b92f0895f75180bf2cbd35f2e176c5732b8ed`](https://huggingface.co/tencent/AuK-Flash/tree/575b92f0895f75180bf2cbd35f2e176c5732b8ed).
+Encodeur Qwen2.5-Omni-3B :
+[`f75b40e3da2003cdd6e1829b1f420ca70797c34e`](https://huggingface.co/Qwen/Qwen2.5-Omni-3B/tree/f75b40e3da2003cdd6e1829b1f420ca70797c34e).
+AuK déclare MIT ; l’encodeur conserve sa licence Qwen Research distincte.
+Les quelque 18,7 Go de fichiers requis restent en cache sur C:, hors Git.
+[Documentation AuK](https://github.com/Tencent-Hunyuan/AuK),
+[fiche Flash](https://huggingface.co/tencent/AuK-Flash).
 
 ## IndexTTS
 
@@ -198,7 +337,7 @@ RTF = temps de calcul / durée de l’audio. Un RTF inférieur à 1 ne suffit pa
 
 ## Environnements et provenance
 
-Les essais ci-dessus ont effectivement tourné sous **Windows natif**. VoxCPM dispose d’un environnement neuf `.local/voice-voxcpm-01/.venv`, Python 3.12.12, qui hérite en lecture des dépendances de l’environnement Qwen existant. Seul `voxcpm==2.0.3` y a été installé, sans modifier Qwen, ARDY ou le cœur de Promethee. Torch et torchaudio sont en 2.5.1+cu124 ; transformers en 4.57.3. Vox utilise BF16, `load_denoiser=False`, **`optimize=False`**, sans compilation ni Nano-vLLM. WSL et un moteur accéléré restent des pistes distinctes à mesurer, pas des gains déjà obtenus.
+Les premiers essais Qwen et Vox ont tourné sous **Windows natif**. VoxCPM dispose d’un environnement neuf `.local/voice-voxcpm-01/.venv`, Python 3.12.12, qui hérite en lecture des dépendances de l’environnement Qwen existant. Seul `voxcpm==2.0.3` y a été installé, sans modifier Qwen, ARDY ou le cœur de Promethee. Torch et torchaudio sont en 2.5.1+cu124 ; transformers en 4.57.3. Ce premier essai Vox utilise BF16, `load_denoiser=False`, **`optimize=False`**, sans compilation ni Nano-vLLM. Les autres environnements et les optimisations sont distingués dans leurs mesures respectives.
 
 Les poids Vox épinglés ont été téléchargés publiquement sur C: dans `C:/Users/Cat6A/.cache/promethee/voxcpm2/32279effe8c19989596f05d353d1447f51d9e915` ; le téléchargement a pris 94,958 s. L’inférence a ensuite été exécutée hors ligne. `download.json` et `benchmark.json` conservent les chemins, versions et paramètres. Les prérequis officiels et versions de paquets sont disponibles dans [VoxCPM Quick Start](https://voxcpm.readthedocs.io/en/latest/quickstart.html), [VoxCPM PyPI](https://pypi.org/project/voxcpm/2.0.3/) et [Qwen PyPI](https://pypi.org/project/qwen-tts/0.1.1/).
 
@@ -224,6 +363,6 @@ Direction de voix utilisée par Qwen puis Vox :
 
 Avec **VoxCPM2**, placer cette description entre parenthèses au début de `text`, comme dans son API officielle. Charger avec `load_denoiser=False`, puis commencer avec `cfg_value=2.0`, `inference_timesteps=10`, `retry_badcase=False`. Pour **voxcpm 2.0.3**, fixer `torch.manual_seed(42)` avant l’appel : sa wheel officielle vérifiée n’accepte pas l’argument `seed`, malgré l’exemple du README GitHub plus récent. Écrire le WAV à `model.tts_model.sample_rate`. Avec **Qwen**, appeler `generate_voice_design(text=..., language="French", instruct=...)` en BF16. Les fonctions et formats sont documentés dans les [exemples VoxCPM 2.0.3](https://pypi.org/project/voxcpm/2.0.3/) et [Qwen VoiceDesign](https://github.com/QwenLM/Qwen3-TTS#voice-design).
 
-Vox utilise en plus la référence synthétique Qwen, sans cache de profil ; Base réutilise son profil. Vox et le premier VoiceDesign partagent le texte complet, mais les six phrases du benchmark Base diffèrent : ce n’est pas un classement contrôlé de vitesse entre les modèles. L’écoute doit vérifier français, colère, pauses, mots conservés et stabilité de l’identité. Les deux appels Vox ont réinitialisé la graine 42, mais leurs fichiers diffèrent : aucun déterminisme binaire n’est affirmé.
+Le premier essai Vox utilise en plus la référence synthétique Qwen, sans cache de profil ; l’essai Vox WSL optimisé et Qwen Base réutilisent leur profil. Vox et le premier VoiceDesign partagent le texte complet, mais les six phrases du benchmark Base diffèrent : ce n’est pas un classement contrôlé de vitesse entre les modèles. L’écoute doit vérifier français, colère, pauses, mots conservés et stabilité de l’identité. Les deux appels Vox Windows ont réinitialisé la graine 42, mais leurs fichiers diffèrent : aucun déterminisme binaire général n’est affirmé.
 
 Après sélection, générer les six répliques d’Ariane, vérifier la cohérence du timbre, puis recalculer leurs repères depuis le PCM final. Ne pas imposer aux nouvelles voix les durées de Hortense. Pour une identité stable avec styles variables, VoxCPM2 peut réutiliser **notre propre voix synthétique**, sans chercher une personne à cloner. Cette voix restitue les textes du même agent ; elle ne crée ni second cerveau, ni mémoire séparée, ni preuve d’un état émotionnel vécu.
