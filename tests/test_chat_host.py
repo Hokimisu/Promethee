@@ -1,5 +1,6 @@
 """Real subprocess lifecycle tests with a deterministic worker, never a model."""
 
+import argparse
 import ctypes
 import json
 import os
@@ -7,10 +8,19 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
-from promethee.chat import TextHost, WorkerProcess, exclusive_host, prepare_profile
+from promethee.chat import (
+    TextHost,
+    WorkerProcess,
+    configure,
+    exclusive_host,
+    open_text_host,
+    prepare_profile,
+)
 from promethee.conversation import ConversationStore
 from promethee.execution import ExecutionService
 from promethee.runtime import Runtime
@@ -269,3 +279,179 @@ def test_cli_without_credentials_does_not_create_a_world(tmp_path, command):
     assert result.returncode == 2
     assert "PROMETHEE_OPENAI_API_KEY" in result.stderr
     assert not target.exists()
+
+
+def local_result(request, **extra):
+    return {
+        "type": "result",
+        "turn_id": request["turn_id"],
+        "failed": False,
+        "interrupted": False,
+        "text": "Fixture response",
+        "messages": [
+            *request["history"],
+            {"role": "user", "content": request["message"]},
+            {"role": "assistant", "content": "Fixture response"},
+        ],
+        **extra,
+    }
+
+
+@pytest.mark.parametrize("effort", [None, "low"])
+@pytest.mark.parametrize("measure", [False, True])
+def test_host_options_and_timings_are_opt_in_and_not_conversation_history(
+    tmp_path, effort, measure
+):
+    store = ConversationStore(
+        ExecutionService(Runtime(tmp_path / "world.sqlite3", data_origin="session"))
+    )
+    requests = []
+
+    def factory(request):
+        requests.append(request)
+        return SimpleNamespace(
+            close=lambda: None,
+            poll=lambda: local_result(request, timings={"worker_total_seconds": 0.25}),
+        )
+
+    host = TextHost(
+        store,
+        factory,
+        model="fixture",
+        base_url="unused",
+        api_mode="codex_responses",
+        reasoning_effort=effort,
+        measure_timing=measure,
+    )
+    host.start("A neutral fixture")
+    response = host.poll()
+    assert requests[0].get("reasoning_effort") == effort
+    assert ("reasoning_effort" in requests[0]) == (effort is not None)
+    assert ("measure_timing" in requests[0]) == measure
+    if measure:
+        assert response["timings"]["worker_total_seconds"] == 0.25
+        assert response["timings"]["host_total_seconds"] >= 0
+        assert requests[0]["measure_timing"] is True
+    else:
+        assert response == {"status": "completed", "text": "Fixture response"}
+    assert store.begin("Next")["history"] == [
+        {"role": "user", "content": "A neutral fixture"},
+        {"role": "assistant", "content": "Fixture response"},
+    ]
+
+
+@pytest.mark.parametrize(
+    "timings",
+    [
+        "private",
+        {"prompt": "private"},
+        {"auth_seconds": "private"},
+        {"auth_seconds": True},
+        {"auth_seconds": -1},
+        {"auth_seconds": float("nan")},
+        {"auth_seconds": float("inf")},
+    ],
+)
+def test_host_rejects_malformed_timing_metadata_without_exposing_it(tmp_path, timings):
+    store = ConversationStore(
+        ExecutionService(Runtime(tmp_path / "world.sqlite3", data_origin="session"))
+    )
+    host = TextHost(
+        store,
+        lambda request: SimpleNamespace(
+            close=lambda: None, poll=lambda: local_result(request, timings=timings)
+        ),
+        model="fixture",
+        base_url="unused",
+        api_mode="codex_responses",
+        measure_timing=True,
+    )
+    host.start("A neutral fixture")
+    response = host.poll()
+    assert response["status"] == "failed"
+    assert set(response["timings"]) == {"host_total_seconds"}
+    assert "private" not in json.dumps(response)
+    assert store.begin("Next")["history"] == [{"role": "user", "content": "A neutral fixture"}]
+
+
+def test_worker_error_timings_reach_host_without_exception_details(tmp_path):
+    store = ConversationStore(
+        ExecutionService(Runtime(tmp_path / "world.sqlite3", data_origin="session"))
+    )
+    host = TextHost(
+        store,
+        lambda request: SimpleNamespace(
+            close=lambda: None,
+            poll=lambda: {
+                "type": "error",
+                "code": "conversation_failed",
+                "exception": "RuntimeError",
+                "timings": {"import_seconds": 0.02, "worker_total_seconds": 0.04},
+            },
+        ),
+        model="fixture",
+        base_url="unused",
+        api_mode="codex_responses",
+        measure_timing=True,
+    )
+    host.start("A neutral fixture")
+    response = host.poll()
+    assert response["status"] == "failed"
+    assert response["timings"]["import_seconds"] == 0.02
+    assert "exception" not in response
+
+
+@pytest.mark.parametrize(
+    "options",
+    [
+        {"reasoning_effort": "medium"},
+        {"reasoning_effort": []},
+        {"measure_timing": 1},
+        {"measure_timing": "true"},
+        {"measure_timing": None},
+    ],
+)
+def test_invalid_options_are_rejected_before_host_or_runtime_side_effects(options):
+    store = Mock()
+    with pytest.raises(ValueError):
+        TextHost(
+            store, Mock(), model="fixture", base_url="unused", api_mode="codex_responses", **options
+        )
+    store.recover.assert_not_called()
+    with pytest.raises(ValueError):
+        with open_text_host(SimpleNamespace(**options)):
+            pytest.fail("Invalid options must not open a host")
+
+
+def test_configure_and_open_host_forward_optional_options(tmp_path, monkeypatch):
+    parser = argparse.ArgumentParser()
+    configure(parser)
+    arguments = [
+        "--hermes-python",
+        sys.executable,
+        "--hermes-root",
+        str(tmp_path),
+        "--model",
+        "gpt-6-astra",
+        "--api-mode",
+        "codex_responses",
+    ]
+    defaults = parser.parse_args(arguments)
+    assert defaults.reasoning_effort is None and defaults.measure_timing is False
+    args = parser.parse_args([*arguments, "--reasoning-effort", "low", "--measure-timing"])
+    args.data_dir = tmp_path
+    Runtime(tmp_path / "world.sqlite3", data_origin="session")
+    monkeypatch.setenv("PROMETHEE_OPENAI_API_KEY", "fixture-only")
+    requests = []
+
+    def worker(command, request):
+        requests.append(request)
+        return SimpleNamespace(close=lambda: None, poll=lambda: None)
+
+    monkeypatch.setattr("promethee.chat.WorkerProcess", worker)
+    with open_text_host(args) as host:
+        host.start("A neutral fixture")
+    assert requests[0]["reasoning_effort"] == "low"
+    assert requests[0]["measure_timing"] is True
+    with pytest.raises(SystemExit):
+        parser.parse_args([*arguments, "--reasoning-effort", "invalid"])

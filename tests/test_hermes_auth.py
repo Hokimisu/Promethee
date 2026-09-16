@@ -125,3 +125,51 @@ def test_constructed_agent_must_preserve_native_scope(monkeypatch, changed):
             create_agent(**arguments)
     else:
         assert create_agent(**arguments).api_mode == "codex_responses"
+
+
+@pytest.mark.parametrize("effort", [None, "low"])
+def test_reasoning_option_reaches_native_constructor_exactly(monkeypatch, effort):
+    calls = []
+
+    def factory(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(
+            provider=kwargs["provider"],
+            model=kwargs["model"],
+            api_mode=kwargs["api_mode"],
+            valid_tool_names=WORLD_TOOLS,
+            _fallback_chain=[],
+        )
+
+    monkeypatch.setitem(sys.modules, "run_agent", SimpleNamespace(AIAgent=factory))
+    monkeypatch.setitem(
+        sys.modules, "tools.mcp_tool", SimpleNamespace(discover_mcp_tools=lambda: WORLD_TOOLS)
+    )
+    create_agent(
+        model="gpt-6-astra",
+        api_key="fixture-credential",
+        base_url=CODEX_BASE_URL,
+        api_mode="codex_responses",
+        provider="openai-codex",
+        session_id="fixture",
+        reasoning_effort=effort,
+    )
+    if effort is None:
+        assert "reasoning_config" not in calls[0]
+    else:
+        assert calls[0]["reasoning_config"] == {"enabled": True, "effort": "low"}
+
+
+@pytest.mark.parametrize("effort", ["", "LOW", "none", "medium", False, 1, [], {"effort": "low"}])
+def test_malformed_reasoning_rejected_before_native_import(monkeypatch, effort):
+    monkeypatch.setitem(sys.modules, "run_agent", None)
+    with pytest.raises(ValueError, match="Reasoning effort"):
+        create_agent(
+            model="gpt-6-astra",
+            api_key="fixture-credential",
+            base_url=CODEX_BASE_URL,
+            api_mode="codex_responses",
+            provider="openai-codex",
+            session_id="fixture",
+            reasoning_effort=effort,
+        )

@@ -62,6 +62,37 @@ sans les confondre avec les états d'exécution du corps. Le délai maximal vaut
 60 secondes par défaut (`--timeout`). Sans initiative configurée, aucun appel
 au modèle n'est fait pendant l'attente d'un message.
 
+Pour un essai de dialogue avec Astra, `--reasoning-effort low` transmet
+explicitement le niveau de réflexion à la boucle native Hermes. Sans cette
+option, Promethee conserve le réglage par défaut du fournisseur. Ce choix ne
+change pas le modèle et ne supprime ni les contrôles des outils ni leurs
+confirmations d'exécution.
+
+`--measure-timing` ajoute un objet `timings` aux réponses de l'hôte : résolution
+du fournisseur, imports, construction de l'agent, conversation native, fermeture
+MCP et durées totales du worker et de l'hôte. Les totaux englobent les étapes et
+ne doivent pas être additionnés à celles-ci. Les phases mesurent le temps écoulé,
+sans journaliser les accès ni un raisonnement interne. Elles ne séparent pas
+lecture du contexte, choix d'émotion et rédaction à l'intérieur d'un appel au
+modèle. Les options restent désactivées par défaut et les erreurs peuvent ne
+contenir que les mesures disponibles avant l'échec.
+
+`--prewarm` prépare à l'avance un unique processus Hermes et ses outils, sans
+appel modèle ni tour actif. Le message réel active ce processus avec
+l'historique courant ; la réserve expire après 120 secondes. `/cancel`
+conserve la réserve inactive, tandis que la fermeture du chat la détruit.
+L'option est désactivée par défaut. Avec les mesures activées, la préparation,
+l'attente inactive et l'activation sont distinguées ; le temps total du worker
+peut donc inclure une longue attente avant le message.
+
+La qualification sur Hermes **0.21.3**, révision `2179a279…`, et Luna montre
+un gain lorsque la réserve est prête, mais pas une fluidité garantie sur des
+répliques successives : voir [les mesures complètes](research/11-short-dialogue.md#préchauffage-hermes-qualifié)
+et les audits [cycle de vie](research/12-hermes-lifecycle.md) et
+[contexte/outils](research/13-hermes-context-tools.md). Le paramètre Python
+`system_message` de l'hôte transmet aussi un contrat stable à la boucle native,
+hors des messages utilisateur persistés ; il n'active ni SOUL ni mémoire.
+
 Un verrou détenu par le système autorise un seul hôte de conversation par monde.
 Le redémarrage ferme les anciens tours, conserve les messages restés sans réponse
 et ne réémet aucune action. Chaque appel reçoit un profil neuf dans

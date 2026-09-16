@@ -325,6 +325,139 @@ Les quelque 18,7 Go de fichiers requis restent en cache sur C:, hors Git.
 [Documentation AuK](https://github.com/Tencent-Hunyuan/AuK),
 [fiche Flash](https://huggingface.co/tencent/AuK-Flash).
 
+## Essai intégré en direct du 16 septembre 2026
+
+Un harnais local expérimental relie maintenant le même agent Astra/Hermes aux
+outils corporels ARDY et au worker VoxCPM2 optimisé résident. Le navigateur lit
+le PCM 48 kHz au fil de sa génération et affiche les poses réellement observées.
+Cet essai utilise un monde de qualification, sans microphone ni mémoire
+personnelle. Aucun mouvement ni dialogue enregistré n'est rejoué. Les objets
+de la pièce restent décoratifs ; les actions disponibles sont les déplacements
+et deux postures. Il ne valide donc pas encore une gestuelle conversationnelle
+riche ou une synchronisation fine des intentions, du corps et de la parole.
+
+Sur cette machine, pendant un essai de 60 secondes à partir du premier son :
+
+- La première réplique complète contient **18,40 s d'audio**, calculées en
+  **14,15 s** ; premier fragment en **149 ms**, hors réflexion d'Astra et
+  prébuffer navigateur de 0,5 s. Le lecteur a consommé les 883 200 échantillons
+  sans sous-alimentation. Le pic mémoire allouée par Vox est de **5,28 Gio**,
+  distinct de la consommation totale du GPU.
+- La réplique suivante a commencé **0,63 s** après la fin de la première.
+  Une intervention textuelle a ensuite remplacé la suite en cours ; sa réponse
+  a bien repris le nouveau sujet. Aucune sous-alimentation du lecteur n'a été
+  relevée sur l'essai. Cela n'exclut pas les silences pendant la réflexion.
+- Le délai de production du texte reste élevé : **42,58 s** pour le premier
+  tour avec déplacement, **17,62 s** pour la suite préparée pendant la parole,
+  **18,27 s** pour la réponse à l'intervention. Ces mesures incluent le chemin
+  Hermes et ses appels d'outils ; elles ne mesurent pas Vox seul.
+- Un déplacement demandé vers `[0.6, 0]` a été exécuté et observé. Le corps
+  est ensuite resté dans sa pose finale. La variété et la tenue des poses
+  restent à améliorer ; le streaming vocal ne les corrige pas.
+- L'échéance de 60 s a arrêté la lecture, y compris une réplique encore en
+  cours. L'interruption est enregistrée comme telle. Le délai de 0,7 ms mesuré
+  côté navigateur concerne l'appel de mise en silence, pas une mesure acoustique
+  de la sortie matérielle.
+
+Pour faire cohabiter les modèles, les trois textes fixes utilisés par les
+commandes corporelles ont été encodés une fois avec le véritable encodeur ARDY.
+Le gros encodeur est ensuite déchargé ; un service CPU sert ces embeddings et
+refuse tout texte inconnu. Le mouvement reste généré à la demande. Cette économie
+de mémoire limite explicitement le vocabulaire de cet essai.
+
+Page locale : `http://127.0.0.1:2392/`, contexte modifiable, démarrage 60 s,
+intervention textuelle et arrêt. Le harnais, les profils, les historiques privés
+et les preuves détaillées restent dans `.local/realtime-voice-01/`, hors Git.
+Il s'agit d'une qualification locale ; le parcours vocal de production et tous
+les critères du ticket T11 ne sont pas déclarés terminés.
+
+### Direction vocale et ventilation des délais
+
+Le harnais fait désormais produire à Astra un objet `text` / `delivery` dans
+le même tour. `delivery` décrit librement le jeu vocal ; il est ajouté aux
+consignes Vox et n'est pas prononcé. Le texte effectivement destiné à la voix
+est conservé séparément de l'historique natif Hermes, qui reste intact. Une
+réponse mal formée est refusée plutôt que lue comme du JSON ou jouée avec
+l'émotion du tour précédent. Une nouvelle intervention invalide aussi la
+direction d'une réponse devenue obsolète.
+
+**Ce raccord n'a pas suffi à l'écoute.** Lors du nouvel essai, Astra a choisi
+une surprise heureuse puis un ton chaleureux pour la bonne nouvelle ;
+l'utilisateur entend toujours une voix énervée. Cela invalide une déclaration
+de réussite acoustique. L'audit du VoxCPM 2.0.3 installé ne trouve pas de
+prétraitement de style manquant : wrapper public et appel avec cache utilisent
+le même générateur, avec le préfixe textuel et le mode référence isolée. La
+référence synthétique initiale est en colère ; son influence est une hypothèse
+à comparer, sans affirmer que c'est la seule cause. Le champ de métriques
+vocales devient `style_requested` : il atteste l'envoi, pas l'émotion entendue.
+
+Les journaux natifs du premier essai permettent de distinguer :
+
+| Tour initial | Total hôte | Avant le tour Hermes | Appels API, cumul | Outils |
+|---|---:|---:|---:|---:|
+| Première réponse avec déplacement | 42,58 s | 14,05 s | 6, environ 24,7 s | 6, environ 0,62 s |
+| Suite | 17,62 s | 9,57 s | 1, environ 5,7 s | 0 |
+| Intervention | 18,27 s | 8,81 s | 1, environ 7,2 s | 0 |
+
+Ces catégories ne couvrent pas tous les frais annexes. Les 8,42 s d'exécution
+du déplacement recouvrent une partie des appels et ne s'ajoutent pas au total.
+Le premier tour relit trois fois l'exécution complète ; son contexte passe de
+2 961 à 31 175 tokens. La taille du contexte est observée, son coût temporel
+individuel ne l'est pas.
+
+Un essai suivant active `reasoning_effort=low` et les nouvelles mesures de
+phases, avec choix de direction vocale et sans déplacement demandé :
+
+| Phase | Première réplique | Réponse à l'intervention |
+|---|---:|---:|
+| Résolution du fournisseur | 1,02 s | 0,90 s |
+| Imports natifs | 2,24 s | 1,97 s |
+| Construction de l'agent et découverte des outils | 5,09 s | 4,74 s |
+| Conversation native | 8,58 s | 8,43 s |
+| Fermeture MCP | 0,09 s | 0,08 s |
+| Total hôte, frais annexes compris | 17,94 s | 16,83 s |
+
+Les mesures ne séparent pas rédaction, choix d'émotion et réflexion sur le
+contexte à l'intérieur du modèle. Elles n'établissent pas un gain causal du
+réglage `low`, les demandes et la sortie ayant changé. Elles montrent surtout
+qu'une part importante du délai précède l'inférence. La prochaine optimisation
+doit traiter la reconstruction de l'agent et les retours d'outils volumineux,
+en préservant le rattachement des outils au tour et les annulations. Le prompt
+du harnais autorise désormais la parole pendant une action acceptée sans
+boucler sur son résultat ; il interdit de présenter ce résultat comme acquis.
+
+Les captures de cet essai et les directions réellement choisies restent dans
+`.local/realtime-voice-01/delivery-trial-0ed62d45/` et `delivery.jsonl`, hors Git.
+
+Deux échantillons courts ont ensuite été produits pour isoler l'effet de la
+référence : même texte, direction joyeuse courte, graine 42, CFG 2 et 10 pas.
+A utilise la référence approuvée initiale ; B utilise une référence candidate
+issue de cette même voix, générée avec une consigne calme et CFG 3,5. La
+neutralité de cette candidate et la conservation de l'identité demandent une
+écoute ; la génération ne les prouve pas. A dure 5,28 s (calcul 3,57 s), B 5,92 s
+(calcul 4,11 s). Poids Vox identiques, aucun réentraînement. Les fichiers et
+leur provenance sont dans `.local/realtime-voice-01/emotion-reference-01/`.
+**L'utilisateur rejette les deux échantillons A et B** : il ne reconnaît pas
+Ariane et décrit les voix comme déformées ou métalliques. Aucune des deux
+variantes, ni la référence candidate, ne remplace donc la voix approuvée.
+
+L'audit CPU vérifie les fichiers approuvé, A, B, référence candidate et capture
+heureuse `delivery-trial-0ed62d45/2.wav` : tous sont en PCM16 mono à 48 kHz,
+sans saturation ni répétition exacte de blocs de 160 ms. Les empreintes des
+WAV et des profils correspondent aux rapports. Les pics absolus valent
+respectivement 0,927, 0,585, 0,914, 0,992 et 0,803 ; le décalage continu reste
+inférieur à 0,0011 en valeur absolue. Ces contrôles ne démontrent aucun défaut
+simple d'export, mais ne mesurent ni la fidélité du timbre ni l'absence de
+déformation perçue.
+
+A conserve le profil original, mais change le texte et remplace la description
+vocale approuvée par une direction émotionnelle courte. B ajoute un passage
+de synthèse à CFG 3,5 puis un nouvel encodage de référence avant la génération
+à CFG 2. Une dérive d'identité est donc une hypothèse, pas une cause établie.
+La capture heureuse provient du PCM généré, pas du son enregistré au haut-parleur.
+Le prochain contrôle doit d'abord reproduire le texte, la direction, le profil
+et les paramètres exacts du fichier approuvé, sans nouvelle référence.
+
 ## IndexTTS
 
 **IndexTTS : non testé.** La version officielle 2.5, publiée le 10 août 2026, annonce chinois, anglais, japonais, espagnol et arabe ; **le français n’est pas dans cette liste**. Son contrôle émotionnel ne suffit donc pas à le qualifier pour Ariane francophone. [Dépôt officiel IndexTTS](https://github.com/index-tts/index-tts).

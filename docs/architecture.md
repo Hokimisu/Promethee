@@ -55,11 +55,19 @@ manuelles. Les notes restent des données historiques : le monde courant fait
 autorité et une recherche ne reprend aucune activité. Les jeux de qualification
 et les anciennes sessions non classées sont exclus. Voir le [contrat mémoire](memory.md).
 
-La piste principale reste GPT-Live avec délégation vers Hermes/Astra. `voice.py`
-fournit désormais une chaîne de diagnostic transcription → même hôte Hermes →
-synthèse, avec micro à la demande et génération invalidée lors d'une correction.
-Les clients audio sont vérifiés contre un fournisseur local simulé ; accès,
-périphériques réels et interruption automatique restent à qualifier. Voir les
+Le choix vocal actuel de l'utilisateur est VoxCPM2 local, avec Luna testé pour
+les répliques du même contexte Hermes. La scène expérimentale qualifie la sortie
+vocale, ses directions et la présence corporelle, mais reste hors du paquet et
+sans microphone. Le [rapport de dialogue](research/11-short-dialogue.md) mesure
+les délais et distingue ce qui est effectivement joué. Le préchauffage optionnel
+du socle construit un worker avant le message, sans appel modèle ; son activation
+reçoit l'historique frais. Le contrat vocal stable utilise `system_message`.
+
+La piste GPT-Live reste un raccord distinct à qualifier avec un fournisseur
+réel. `voice.py` fournit une chaîne de diagnostic transcription → même hôte
+Hermes → synthèse, avec micro à la demande et génération invalidée lors d'une
+correction. Ses clients audio ont été vérifiés contre un fournisseur simulé ;
+périphériques réels et interruption acoustique restent à qualifier. Voir les
 [commandes et limites](voice.md).
 
 Les événements d'interruption doivent parvenir à la conversation et au corps. Si l'avatar est assis, interrompre une réponse vocale ne doit pas le téléporter debout. L'annulation d'une action physique doit aboutir à une posture valide, puis être attestée par le contrôleur.

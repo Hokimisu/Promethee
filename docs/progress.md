@@ -19,11 +19,32 @@ leurs limites décrivent la version de chaque essai, pas nécessairement la dern
 | T08 | Interactions cinématiques implémentées et vérifiées | Doudou et balle, plusieurs positions, géométries et orientations ; prise, dépôt, impossibilités, annulation avant/après contact et restauration. [Contrôleur](spatial-objects.md), [portée VRM](avatar-arm-reach.md) et [session en direct](live-avatar.md). Ni doigts physiques ni appuis validés |
 | T09 | Vérifié avec Astra et ARDY réels | Authentification ChatGPT native de Hermes, conversation sans action, lecture du monde, historique après redémarrage, posture exécutée et résultat observé. Après interruption pendant le mouvement, le nouveau tour retrouve l'annulation sans relancer l'action. Refus d'un objet absent. [Configuration, essais et limites](hermes-setup.md) |
 | T10 | Mémoire sourcée vérifiée sur CPU et avec Astra | Six appels réels dans deux mondes : recherche vide, proposition, correction retrouvée avec l'ancien terme, source relue et distinction du monde actuel. Deux notes dans le premier coffre, zéro dans le second, aucune action ; coffres ensuite exclus comme qualification. Retrait d'objet et contenus non fiables couverts par tests CPU ; pas de revue visuelle Obsidian. [Contrat et qualification](memory.md) |
-| T11 | Raccord Live/Hermes implémenté ; audio réel à qualifier | SDK Live isolé et vrai Astra testés avec serveur vocal simulé, historique partagé au démarrage, usage final contrôlé. Mode fichier et périphériques explicites avec buffers bornés ; erreurs et coupure locale testées sans matériel audio. Migration v11 pour les comptes rendus du diagnostic. Accès vocal réel, interruption acoustique sans parole tardive, latence et coût restent à qualifier. [Raccord et limites](live-integration.md), [configuration](live-file-session.md) |
+| T11 | Voix locale réelle qualifiée partiellement ; ticket ouvert | Essai Hermes/Luna → VoxCPM2 approuvé à l'écoute, phrases courtes et directions vocales, lecture navigateur et présence ARDY observées. Préchargement Hermes et contrat système intégrés au socle. Serveur vocal encore sous `.local/`, sans microphone ; interruption acoustique et coût réel non qualifiés. [Mesures et limites](research/11-short-dialogue.md). Le raccord Live antérieur reste un diagnostic distinct avec fournisseur simulé |
 | T12 | Initiative textuelle vérifiée avec Astra ; dépendance vocale ouverte | Deux séries réelles : mondes sans historique et après sollicitation, contrôleur ARDY actif puis retiré, pause après redémarrage et budgets épuisés. Aucun appel supplémentaire ni action corporelle. Référence active corrigée après fin de tour ; 363 tests passent. Aucune initiative personnelle activée ; T11 reste à qualifier. [Contrat et limites](initiative.md) |
 | T13 | Appuis corrigés et génération par blocs intégrée ; naturalité ouverte | [Recherche](research/humanlike-solutions-2026-09-15.md), [correction talon/pointe](avatar-foot-roll.md) et [mode continu expérimental](continuous-motion.md) : historique et futur séparés, génération pendant la lecture, annulation réelle conservant exactement la pose. Deux postures réussissent dans la série indépendante, deux déplacements échouent et cinq attentes persistent. Aucun entraînement ni connecteur supplémentaire revendiqué |
 
 Les journaux de test et données locales restent dans `.local/` et ne sont pas publiés.
+
+## Dialogue et Hermes — 16 septembre 2026
+
+Le choix exprimé par l'utilisateur retient VoxCPM2 optimisé, avec Luna pour les
+répliques. Le socle expose maintenant l'effort `low`, des mesures de phases et
+un préchauffage optionnel sans appel modèle avant activation. Les instructions
+stables passent par `system_message`, hors de l'historique utilisateur répété.
+Le contrôleur peut aussi enregistrer une pose de présence observée sans la
+présenter comme une action terminée, et refuse cette observation pendant une
+exécution. Les [recherches Hermes](research/12-hermes-lifecycle.md) et
+[contexte/outils](research/13-hermes-context-tools.md) fondent ces changements.
+
+Vérification : 577 tests CPU réussis, 2 ignorés ; Ruff et construction réussis.
+L'essai complet de 60 s confirme cinq lectures vocales et des poses de présence,
+mais les délais de texte varient de 3,50 à 26,35 s. Le préchauffage ne garantit
+pas encore la fluidité. Les réglages et instructions vocales approuvés sont
+inchangés. Les scripts de scène, leur serveur et leur rendu restent des
+prototypes locaux : leur validation ne constitue pas encore une commande
+vocale reproductible depuis un clone du dépôt.
+
+Les sections suivantes décrivent les qualifications historiques.
 
 Le [processus GPT-Live](live-integration.md#processus-de-transport) utilise un
 environnement SDK séparé. Cinq essais locaux du vrai processus vérifient

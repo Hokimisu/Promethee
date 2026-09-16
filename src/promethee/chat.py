@@ -2,6 +2,7 @@
 
 import contextlib
 import json
+import math
 import os
 import queue
 import signal
@@ -11,8 +12,9 @@ import threading
 import time
 from pathlib import Path
 
-from promethee.conversation import ConversationStore
+from promethee.conversation import ConversationStore, ReservationExpired
 from promethee.execution import ExecutionService, positive_seconds
+from promethee.hermes_adapter import REASONING_EFFORTS, validate_chat_options
 from promethee.runtime import Runtime
 from promethee.world import ActionError
 
@@ -89,11 +91,23 @@ def prepare_profile(profile, data_dir, turn_id, *, vault=None):
 class WorkerProcess:
     """One bounded private JSON exchange, with an interruptible owned subprocess."""
 
-    def __init__(self, command, request):
+    def __init__(self, command, request, *, prewarm=False, lifetime=120):
         payload = json.dumps(request, ensure_ascii=False, allow_nan=False) + "\n"
         if len(payload) > 1_048_576:
             raise ValueError("Conversation request is too large.")
         self.results = queue.Queue(maxsize=1)
+        self.prewarm = prewarm
+        self.setup = dict(request) if prewarm else None
+        self.started = time.monotonic()
+        self.expires_at = self.started + positive_seconds(lifetime)
+        self.ready = threading.Event()
+        self.activation = threading.Event()
+        self.activation_payload = None
+        self.ready_seconds = None
+        self.closed = False
+        self.expired = False
+        self._lock = threading.RLock()
+        self.timer = None
         self.process = subprocess.Popen(
             command,
             stdin=subprocess.PIPE,
@@ -121,10 +135,71 @@ class WorkerProcess:
                 raise
         self.reader = threading.Thread(target=self._exchange, args=(payload,), daemon=True)
         self.reader.start()
+        if prewarm:
+            self.timer = threading.Timer(lifetime, self._expire)
+            self.timer.daemon = True
+            self.timer.start()
+
+    def _expire(self):
+        with self._lock:
+            if not self.activation.is_set():
+                self.expired = True
+                self.close()
+
+    def warm_status(self):
+        if self.expired:
+            return {"state": "expired"}
+        if self.closed or self.process.poll() is not None:
+            return {"state": "failed"}
+        if self.ready.is_set():
+            return {"state": "ready", "prewarm_seconds": self.ready_seconds}
+        if not self.results.empty():
+            return {"state": "failed"}
+        return {"state": "preparing"}
+
+    def activate(self, request):
+        """One message and fresh history, only after the host has activated its turn."""
+        if not self.prewarm:
+            raise ValueError("This worker was not prepared.")
+        payload = json.dumps(request, ensure_ascii=False, allow_nan=False) + "\n"
+        expected = {k: v for k, v in self.setup.items() if k != "standby_seconds"}
+        with self._lock:
+            if (
+                not self.prewarm
+                or self.activation.is_set()
+                or self.warm_status()["state"] not in {"ready", "preparing"}
+                or time.monotonic() >= self.expires_at
+                or len(payload) > 1_048_576
+                or {k: v for k, v in request.items() if k not in {"message", "history"}} != expected
+            ):
+                raise ValueError("Prepared worker is expired, used or bound to another request.")
+            if self.timer:
+                self.timer.cancel()
+            self.activation_payload = payload
+            self.activation.set()
+        return self
 
     def _exchange(self, payload):
         try:
             self.process.stdin.write(payload)
+            self.process.stdin.flush()
+            if self.prewarm:
+                line = self.process.stdout.readline(4_194_305)
+                if len(line) > 4_194_304 or not line.endswith("\n"):
+                    raise ValueError("Invalid preparation response.")
+                ready = json.loads(line)
+                if ready != {
+                    "type": "ready",
+                    "turn_id": self.setup["turn_id"],
+                    "session_id": self.setup["session_id"],
+                }:
+                    raise ValueError("Worker did not prepare the expected turn and session.")
+                self.ready_seconds = time.monotonic() - self.started
+                self.ready.set()
+                self.activation.wait()
+                if self.activation_payload is None:
+                    raise ValueError("Prepared worker was discarded.")
+                self.process.stdin.write(self.activation_payload)
             self.process.stdin.close()
             line = self.process.stdout.readline(4_194_305)
             if len(line) > 4_194_304 or not line.endswith("\n"):
@@ -145,38 +220,137 @@ class WorkerProcess:
             return None
 
     def close(self):
-        if self.job:
-            self.job.close()
-        elif os.name != "nt":
-            with contextlib.suppress(ProcessLookupError):
-                os.killpg(self.process.pid, signal.SIGKILL)
-        self.process.wait(timeout=5)
-        self.reader.join(timeout=2)
-        if self.reader.is_alive():
-            raise RuntimeError("Conversation worker pipes did not close.")
-        with contextlib.suppress(OSError):
-            self.process.stdin.close()
-        self.process.stdout.close()
+        with self._lock:
+            if self.closed:
+                return
+            self.closed = True
+            if self.timer:
+                self.timer.cancel()
+            self.activation.set()  # Release a reader waiting for an unused reservation.
+            if self.job:
+                self.job.close()
+            elif os.name != "nt":
+                with contextlib.suppress(ProcessLookupError):
+                    os.killpg(self.process.pid, signal.SIGKILL)
+            self.process.wait(timeout=5)
+            self.reader.join(timeout=2)
+            if self.reader.is_alive():
+                raise RuntimeError("Conversation worker pipes did not close.")
+            with contextlib.suppress(OSError):
+                self.process.stdin.close()
+            self.process.stdout.close()
 
 
 class TextHost:
     """The UI serializes start/poll/close; only the pipe reader runs in a thread."""
 
-    def __init__(self, store, factory, *, model, base_url, api_mode, timeout=60):
+    def __init__(
+        self,
+        store,
+        factory,
+        *,
+        model,
+        base_url,
+        api_mode,
+        timeout=60,
+        reasoning_effort=None,
+        measure_timing=False,
+        prewarm_factory=None,
+        prewarm_lifetime=120,
+        system_message=None,
+    ):
+        validate_chat_options(reasoning_effort, measure_timing)
+        if system_message is not None and (
+            not isinstance(system_message, str)
+            or not system_message.strip()
+            or len(system_message) > 16000
+        ):
+            raise ValueError("Expected a nonempty system message of at most 16000 characters.")
         self.store, self.factory = store, factory
+        self.prewarm_lifetime = positive_seconds(prewarm_lifetime)
+        if self.prewarm_lifetime > 300:
+            raise ValueError("A prepared worker may live for at most 300 seconds.")
+        self.prewarm_factory = prewarm_factory
+        self.spare = self.reservation = None
+        self.worker_wrapper = lambda worker, request: worker
         self.settings = {"model": model, "base_url": base_url, "api_mode": api_mode}
+        if system_message is not None:
+            self.settings["system_message"] = system_message
+        if reasoning_effort is not None:
+            self.settings["reasoning_effort"] = reasoning_effort
+        self.measure_timing = measure_timing
+        if measure_timing:
+            self.settings["measure_timing"] = True
         self.timeout = positive_seconds(timeout)
         self.worker, self.turn_id = None, None
+        self.pending_result = None
         self.initiative_turn = None
         store.recover()
 
+    def _discard_spare(self):
+        if self.spare:
+            self.spare.close()
+        self.spare = self.reservation = None
+        self.store.discard_reservation()
+
+    def warm_status(self):
+        """Nonblocking status; never starts inference or activates a turn."""
+        if self.prewarm_factory is None:
+            return {"state": "disabled"}
+        if self.spare is None:
+            return {"state": "idle"}
+        status = self.spare.warm_status()
+        if self.store.service.clock() >= self.reservation.expires_at:
+            status = {"state": "expired"}
+        if status["state"] in {"expired", "failed"}:
+            self._discard_spare()
+        return status
+
+    def warm(self):
+        """Explicitly prepare at most one next turn, without reading its future history."""
+        status = self.warm_status()
+        if status["state"] in {"disabled", "preparing", "ready"}:
+            return status
+        reservation = self.store.reserve_turn(lifetime=self.prewarm_lifetime)
+        try:
+            self.spare = self.prewarm_factory(
+                {
+                    **self.settings,
+                    "turn_id": reservation.turn_id,
+                    "session_id": reservation.session_id,
+                    "standby_seconds": self.prewarm_lifetime,
+                }
+            )
+            self.reservation = reservation
+        except Exception:
+            self._discard_spare()
+            raise
+        return self.warm_status()
+
     def start(self, message, *, source="user"):
         started = time.monotonic()
-        opened = self.store.begin(message, timeout=self.timeout, trigger=source)
+        usable = self.warm_status()["state"] in {"ready", "preparing"}
+        try:
+            opened = self.store.begin(
+                message,
+                timeout=self.timeout,
+                trigger=source,
+                reservation=self.reservation if usable else None,
+            )
+        except ReservationExpired:
+            self._discard_spare()
+            usable = False
+            opened = self.store.begin(message, timeout=self.timeout, trigger=source)
+        prepared = self.spare if usable else None
+        if usable:
+            self.spare = self.reservation = None
         self.initiative_turn = None
-        return self._launch(opened, message, started)
+        return self._launch(opened, message, started, prepared=prepared)
 
-    def _launch(self, opened, message, started):
+    def _launch(self, opened, message, started, *, prepared=None):
+        self.pending_result = None
+        if self.measure_timing:
+            self.timing_started = time.perf_counter()
         # Fence the old tools BEFORE stopping their process or starting a new one.
         self.turn_id = opened["turn_id"]
         self.deadline = started + self.timeout
@@ -185,9 +359,31 @@ class TextHost:
             if self.worker:
                 self.worker.close()
                 self.worker = None
-            self.worker = self.factory(request)
+            if prepared is None:
+                self._discard_spare()
+                worker = self.factory(request)
+            else:
+                try:
+                    worker = prepared.activate(request)
+                except ValueError:
+                    # No payload was sent. Preserve this input as an unanswered
+                    # turn; never reuse the profile or infer under a replacement ID.
+                    self.store.abort(self.turn_id)
+                    prepared.close()
+                    self.pending_result = {
+                        "status": "failed",
+                        "code": "prepared_worker_unavailable",
+                    }
+                    return self.turn_id
+            self.worker = worker
+            self.worker = self.worker_wrapper(worker, request)
         except Exception:
             self.store.abort(self.turn_id)
+            if prepared:
+                prepared.close()
+            if self.worker:
+                self.worker.close()
+                self.worker = None
             raise
         return self.turn_id
 
@@ -199,7 +395,7 @@ class TextHost:
         if state is None:
             return None
         if state["paused"] and self.initiative_turn:
-            self.close()
+            self.cancel()
             self.initiative_turn = None
             return {"paused": True}
         if not allow_start or self.worker is not None:
@@ -214,32 +410,83 @@ class TextHost:
         return {"started": self.turn_id}
 
     def poll(self):
+        if self.pending_result is not None:
+            result, self.pending_result = self.pending_result, None
+            return self._timed_result(result)
         if self.worker is None:
             return None
         if time.monotonic() >= self.deadline:
-            self.close()
-            return {"status": "failed", "code": "deadline_exceeded"}
+            self.cancel()
+            return self._timed_result({"status": "failed", "code": "deadline_exceeded"})
         result = self.worker.poll()
         if result is None:
             return None
         self.worker.close()
         self.worker = None
+        timings = {}
         try:
+            if self.measure_timing and isinstance(result, dict):
+                raw = result.get("timings", {})
+                allowed = {
+                    "import_seconds",
+                    "auth_seconds",
+                    "agent_construct_seconds",
+                    "run_conversation_seconds",
+                    "mcp_shutdown_seconds",
+                    "worker_total_seconds",
+                    "prewarm_seconds",
+                    "standby_wait_seconds",
+                    "activation_seconds",
+                    "auth_recheck_seconds",
+                }
+                if (
+                    not isinstance(raw, dict)
+                    or not set(raw) <= allowed
+                    or any(
+                        type(value) not in (int, float) or not math.isfinite(value) or value < 0
+                        for value in raw.values()
+                    )
+                ):
+                    raise ValueError("Invalid worker timing measurements.")
+                timings = dict(raw)
             text = self.store.finish(self.turn_id, result)
         except ActionError:
             self.store.abort(self.turn_id, status="interrupted")
-            return {"status": "interrupted", "code": "obsolete_response"}
+            return self._timed_result(
+                {"status": "interrupted", "code": "obsolete_response"}, timings
+            )
         except ValueError:
             self.store.abort(self.turn_id)
-            return {"status": "failed", "code": "model_or_worker_failure"}
-        return {"status": "completed", "text": text}
+            return self._timed_result(
+                {"status": "failed", "code": "model_or_worker_failure"}, timings
+            )
+        return self._timed_result({"status": "completed", "text": text}, timings)
 
-    def close(self):
+    def _timed_result(self, result, timings=None):
+        if self.measure_timing:
+            # Includes subprocess startup, polling and cleanup, from _launch.
+            result["timings"] = {
+                **(timings or {}),
+                "host_total_seconds": time.perf_counter() - self.timing_started,
+            }
+        return result
+
+    def cancel(self):
+        """Fence and stop the active turn; preserve the unactivated spare."""
+        self.pending_result = None
         if self.turn_id:
             self.store.abort(self.turn_id, status="interrupted")
+            self.turn_id = None
         if self.worker:
             self.worker.close()
             self.worker = None
+
+    def close(self):
+        """Dispose active and prepared processes; safe to call repeatedly."""
+        try:
+            self.cancel()
+        finally:
+            self._discard_spare()
 
 
 def configure(parser):
@@ -257,11 +504,20 @@ def configure(parser):
         "--api-mode", choices=["chat_completions", "codex_responses"], required=True
     )
     parser.add_argument("--timeout", type=float, default=60)
+    parser.add_argument("--reasoning-effort", choices=REASONING_EFFORTS)
+    parser.add_argument("--measure-timing", action="store_true")
+    parser.add_argument("--prewarm", action="store_true", help="Prepare one disposable next turn.")
     parser.add_argument("--vault", type=Path, help="Optional sourced interactive memory vault.")
 
 
 @contextlib.contextmanager
 def open_text_host(args):
+    reasoning_effort = getattr(args, "reasoning_effort", None)
+    measure_timing = getattr(args, "measure_timing", False)
+    prewarm = getattr(args, "prewarm", False)
+    if type(prewarm) is not bool:
+        raise ValueError("Prewarming must be explicitly enabled or disabled.")
+    validate_chat_options(reasoning_effort, measure_timing)
     auth = getattr(args, "auth", "api-key")
     auth_root = getattr(args, "hermes_auth_root", None)
     if auth not in {"api-key", "hermes-codex"}:
@@ -294,26 +550,28 @@ def open_text_host(args):
         MemoryStore(store.service, vault)
     worker_script = Path(__file__).with_name("hermes_worker.py").resolve()
 
-    def factory(request):
+    def factory(request, *, preparing=False):
         profile = data_dir / "conversation-profiles" / request["turn_id"]
         if auth == "hermes-codex":
             profile = auth_root.resolve() / "profiles" / ("promethee-" + request["turn_id"])
         prepare_profile(profile, data_dir, request["turn_id"], vault=vault)
-        return WorkerProcess(
-            [
-                str(args.hermes_python.resolve()),
-                "-X",
-                "utf8",
-                str(worker_script),
-                "--hermes-root",
-                str(args.hermes_root.resolve()),
-                "--profile",
-                str(profile),
-                "--auth",
-                auth,
-            ],
-            request,
-        )
+        command = [
+            str(args.hermes_python.resolve()),
+            "-X",
+            "utf8",
+            str(worker_script),
+            "--hermes-root",
+            str(args.hermes_root.resolve()),
+            "--profile",
+            str(profile),
+            "--auth",
+            auth,
+        ]
+        if preparing:
+            return WorkerProcess(
+                [*command, "--prewarm"], request, prewarm=True, lifetime=request["standby_seconds"]
+            )
+        return WorkerProcess(command, request)
 
     with exclusive_host(data_dir):
         host = TextHost(
@@ -323,8 +581,14 @@ def open_text_host(args):
             base_url=base_url,
             api_mode=args.api_mode,
             timeout=args.timeout,
+            reasoning_effort=reasoning_effort,
+            measure_timing=measure_timing,
+            prewarm_factory=(lambda request: factory(request, preparing=True)) if prewarm else None,
+            system_message=getattr(args, "system_message", None),
         )
         try:
+            if prewarm:
+                host.warm()
             yield host
         finally:
             host.close()
@@ -357,7 +621,7 @@ def run_chat(args):
                     if not line or line.strip() == "/quit":
                         break
                     if line.strip() == "/cancel":
-                        host.close()
+                        host.cancel()
                     elif line.strip() in {"/pause", "/resume"}:
                         from promethee.initiative import Initiative
 
@@ -375,6 +639,8 @@ def run_chat(args):
                 result = host.poll()
                 if result:
                     print(json.dumps(result, ensure_ascii=False), flush=True)
+                    if getattr(args, "prewarm", False):
+                        host.warm()
                 time.sleep(0.05)
         finally:
             host.close()

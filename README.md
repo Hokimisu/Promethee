@@ -55,7 +55,7 @@ Cette commande réalise une transition instantanée, sans activité préécrite 
 | Mémoire Markdown lisible dans Obsidian | Sources, recherche et corrections ; six appels Astra réels dans deux mondes de qualification |
 | Contrôles automatiques et tests de comportement | Fournis |
 | Pont d'outils Hermes | Astra réel : conversation, historique, posture exécutée et annulation retrouvée après interruption |
-| Voix de diagnostic | Chaîne transcription/Hermes/synthèse testée avec fournisseurs simulés ; microphone et voix réels non qualifiés |
+| Voix | Essai local Hermes/Luna → VoxCPM2 réel avec rendu, lecture et interruption ; voix approuvée par l'utilisateur. Microphone et distribution de ce serveur expérimental encore ouverts |
 | ARDY Core et rendu Viser | Pilotage cinématique manuel ; qualification des déplacements incomplète |
 | Apparence anime en VRM | Lecture et [session en direct](docs/live-avatar.md) ; prise/dépôt cinématiques, arrêt et restauration ; contacts géométriques des poses préparées mesurés, équilibre physique non validé |
 | Initiative à budget explicite | Essais Astra réels : pause persistante, budgets, historiques variés et capacités retirées ; dépendance vocale encore ouverte |
@@ -112,6 +112,8 @@ docs/            Vision, architecture, contrats et jalons
 - [Génération corporelle par blocs : activation, essais et limites](docs/continuous-motion.md)
 - [Pont Hermes et accès au modèle](docs/hermes-setup.md)
 - [Voix de diagnostic et interruptions](docs/voice.md)
+- [Dialogue court, VoxCPM2 et latence mesurée](docs/research/11-short-dialogue.md)
+- [Audit de l'intégration Hermes](docs/research/12-hermes-lifecycle.md)
 - [Initiative, budget et pause](docs/initiative.md)
 - [Provenance de l'avatar VRM](docs/assets/pixiv-vrm-sample.md)
 - [Lecture animée de l'avatar](docs/avatar-rendering.md)

@@ -21,6 +21,17 @@ MEMORY_TOOLS = frozenset(
 
 
 CODEX_BASE_URL = "https://chatgpt.com/backend-api/codex"
+REASONING_EFFORTS = ("low",)
+
+
+def validate_chat_options(reasoning_effort=None, measure_timing=False):
+    """Keep opt-in controls explicit; omission preserves the qualified defaults."""
+    if reasoning_effort is not None and (
+        not isinstance(reasoning_effort, str) or reasoning_effort not in REASONING_EFFORTS
+    ):
+        raise ValueError("Reasoning effort must be omitted or explicitly set to low.")
+    if type(measure_timing) is not bool:
+        raise ValueError("Timing measurement must be explicitly enabled or disabled.")
 
 
 def resolve_hermes_codex_credentials(*, model, base_url, api_mode):
@@ -42,7 +53,15 @@ def resolve_hermes_codex_credentials(*, model, base_url, api_mode):
 
 
 def create_agent(
-    *, model, api_key, base_url, api_mode, session_id, memory_enabled=False, provider="openai"
+    *,
+    model,
+    api_key,
+    base_url,
+    api_mode,
+    session_id,
+    memory_enabled=False,
+    provider="openai",
+    reasoning_effort=None,
 ):
     """Use the installed Hermes loop, with no project context or fallback model.
 
@@ -63,6 +82,7 @@ def create_agent(
         raise ValueError("Hermes ChatGPT authentication requires its official Codex endpoint.")
     if type(memory_enabled) is not bool:
         raise ValueError("Memory scope must be explicitly enabled or disabled.")
+    validate_chat_options(reasoning_effort)
     expected = WORLD_TOOLS | MEMORY_TOOLS if memory_enabled else WORLD_TOOLS
     from run_agent import AIAgent
     from tools.mcp_tool import discover_mcp_tools
@@ -86,6 +106,11 @@ def create_agent(
         skip_background_review=True,
         fallback_model=None,
         checkpoints_enabled=False,
+        **(
+            {"reasoning_config": {"enabled": True, "effort": reasoning_effort}}
+            if reasoning_effort is not None
+            else {}
+        ),
     )
     if (
         set(agent.valid_tool_names) != expected

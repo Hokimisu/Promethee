@@ -5,6 +5,25 @@ Audit du 15 septembre 2026, sur le code `f15c577`. Il complète le
 Les archives ci-dessous sont des qualifications locales, pas des souvenirs
 de session. Une réussite ancienne n'atteste pas automatiquement le raccord actuel.
 
+## Mise à jour du 16 septembre 2026
+
+Le choix vocal utilisateur s'est porté sur VoxCPM2 optimisé, puis Luna pour
+le dialogue. La [qualification locale](research/11-short-dialogue.md) vérifie
+maintenant de vraies sorties vocales et leurs reçus de lecture dans le navigateur,
+avec ARDY actif. Elle ne ferme pas T11 : entrée microphone, interruption
+acoustique aux différentes étapes, coût réel et reproductibilité du serveur
+depuis le dépôt restent ouverts. Le prototype de scène est encore sous `.local/`.
+
+Le préchauffage Hermes, le contrat système séparé et la mesure des phases sont
+implémentés dans le socle. Six tours réels montrent des réponses de 3,50 à
+26,35 s ; aucune fluidité continue n'est revendiquée. Le profil vocal approuvé
+est conservé. Les 577 tests réussis et les deux tests ignorés couvrent les
+contrats du code, pas les critères audio matériels manquants. T12 conserve sa
+dépendance vocale ; aucun nouveau succès T07–T08 n'est déduit de la gestuelle
+de présence de cet essai.
+
+Le reste du document conserve les preuves de l'audit du 15 septembre.
+
 ## T07 — Corps et résultat observé
 
 | Exigence | Preuve inspectée | Conclusion |
