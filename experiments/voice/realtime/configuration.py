@@ -18,7 +18,7 @@ def load_configuration(path):
     }
     if not isinstance(value, dict) or not required <= value.keys():
         raise ValueError("Configuration requires explicit body, voice and Hermes paths.")
-    if value.keys() - required - {"port", "model", "resident", "asr_command"}:
+    if value.keys() - required - {"port", "model", "resident", "asr_command", "resume_world"}:
         raise ValueError("Unknown configuration field.")
     result = dict(value)
     for key in required - {"body", "voice_command"}:
@@ -32,6 +32,14 @@ def load_configuration(path):
     for key in ("hermes_root", "hermes_auth_root"):
         if not result[key].is_dir():
             raise ValueError(f"Missing directory: {key}.")
+    resume = value.get("resume_world")
+    if resume is not None:
+        if not isinstance(resume, str) or not resume.strip() or "\x00" in resume:
+            raise ValueError("resume_world must be an existing world directory or null.")
+        resume = (path.parent / resume).resolve()
+        if not resume.is_dir() or not (resume / "world.sqlite3").is_file():
+            raise ValueError("resume_world requires an existing directory with world.sqlite3.")
+    result["resume_world"] = resume
     command = value["voice_command"]
     if (
         not isinstance(command, list)

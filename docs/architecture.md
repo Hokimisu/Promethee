@@ -59,7 +59,7 @@ Le choix vocal actuel de l'utilisateur est VoxCPM2 local, avec Luna testé pour
 les répliques du même contexte Hermes. La [scène expérimentale](../experiments/voice/realtime/README.md)
 est livrée dans le dépôt, séparée du paquet, avec chemins et commande vocale
 configurables. Elle qualifie la sortie vocale, ses directions et la présence
-corporelle, sans microphone. Le [rapport de dialogue](research/11-short-dialogue.md) mesure
+corporelle, avec un [microphone local facultatif](microphone.md). Le [rapport de dialogue](research/11-short-dialogue.md) mesure
 les délais et distingue ce qui est effectivement joué. Le préchauffage optionnel
 du socle construit un worker avant le message, sans appel modèle ; son activation
 reçoit l'historique frais. Le contrat vocal stable utilise `system_message`.
@@ -94,5 +94,12 @@ Les positions sont sur un plan de sol de 10 × 10 mètres. La portée d'un mètr
 tour du même Hermes. Les changements sont regroupés pendant une décision ;
 la pause survit au redémarrage. Aucun réveil n'est actif sans configuration
 explicite. Voir le [contrat et la qualification](initiative.md).
+
+La scène Vox utilise ce même mécanisme, sans seconde boucle de relance. Le
+budget compte les tours autonomes ; les messages utilisateur gardent leur
+provenance et leur priorité. Une décision silencieuse conserve son résultat
+natif sans lancer la voix. La reprise explicite du monde conserve pause et
+historique, puis le contrôleur réconcilie sa dernière pose confirmée. Le
+navigateur doit autoriser sa sortie avant un nouveau départ autonome.
 
 Une activité échouée conserve son erreur et son curseur ; elle n'est pas relancée automatiquement. La replanification après changement du monde sera une responsabilité de l'adaptateur agent.

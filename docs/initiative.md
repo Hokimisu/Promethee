@@ -84,6 +84,24 @@ de la mémoire personnelle selon le [contrat mémoire](memory.md).
 
 ## Qualification et limites
 
+La [scène VoxCPM2](../experiments/voice/realtime/README.md#initiative-et-reprise)
+raccorde maintenant ce même ordonnanceur. Son activation navigateur est
+distincte du bouton d'essai ; elle ne transforme plus les relances autonomes
+en messages utilisateur. Les événements restent regroupés pendant l'écoute,
+la transcription, la décision et la lecture. Une pause coupe la sortie
+autonome jusque dans les trames audio tardives, sans arrêter le corps.
+
+La décision vocale peut rester silencieuse. Seul un réveil authentifié par
+l'hôte accepte `{"silent": true}` ; le JSON et l'historique natifs sont conservés,
+aucun texte ni reçu audio n'est inventé. La reprise explicite `resume_world`
+conserve le même monde de qualification, sa pause et son budget. Le navigateur
+doit réactiver sa sortie après redémarrage avant tout nouveau départ autonome.
+
+Ces raccords disposent de tests CPU de la composition réelle
+`Initiative` / `TextHost` / `ConversationStore`, avec transports synthétiques.
+Ils ne constituent pas des observations acoustiques ni une validation générale
+du comportement autonome.
+
 Les tests avec horloge contrôlée couvrent budget épuisé, événements regroupés
 pendant un appel lent, pause/reprise, redémarrage après réservation, correction,
 capacités retirées, rollback et provenance. Ils vérifient que lire la mémoire
@@ -151,3 +169,56 @@ capacité générale à former des projets. Les réponses similaires sont cohér
 avec deux mondes vides, mais cette série courte ne mesure pas les répétitions
 sur une longue durée. T12 conserve sa dépendance à la voix réelle T11 ; la
 qualification textuelle ne valide pas une session autonome vocale.
+
+## Composition réelle avec Luna, Vox et le navigateur
+
+Le 16 septembre, l'essai local `initiative-voice-real-01` utilise Hermes 0.21.3
+`2179a279`, Luna en raisonnement faible et la référence VoxCPM2 approuvée.
+Le monde `session-be6e4ab39b93` est neuf, classé qualification, sans contexte
+prérempli. Deux réveils sont d'abord autorisés, avec une cadence de 20 secondes.
+
+| Étape | Observation |
+|---|---|
+| Premier réveil, historique vide | Décision silencieuse terminée en 15,66 s ; aucun Vox ni reçu audio |
+| Deuxième réveil | Pause pendant la décision ; tour interrompu, budget consommé, aucune réponse tardive |
+| Recharge explicite d'un appel | Pause conservée ; compteurs `used=2`, `remaining=1` |
+| Redémarrage du même monde | Pause, compteurs, identifiant du monde et historique conservés ; aucun réveil pendant le chargement |
+| Question utilisateur pendant la pause | Réponse terminée en 7,19 s ; budget inchangé ; lecture navigateur complète de 8,64 s, zéro sous-alimentation |
+| Reprise explicite | Dernier réveil silencieux terminé en 6,78 s ; `used=3`, `remaining=0`, aucun tour supplémentaire après plusieurs cadences |
+
+Le premier redémarrage, demandé avant expiration du bail de cinq secondes,
+est refusé. Après expiration et vérification de l'absence des anciens workers,
+la reprise fonctionne avec la réconciliation existante. Une seule instance
+Vox et une seule instance ARDY sont présentes. Les nouveaux artefacts corporels
+sont séparés des précédents, et le dernier historique natif contient encore
+le silence initial ainsi que la question utilisateur.
+
+La réponse utilisateur commence à être lue 7,76 s après ouverture de son tour.
+Cette mesure n'est pas une garantie de conversation fluide. Les deux décisions
+autonomes terminées restent silencieuses ; l'essai vérifie leur droit au silence,
+pas leur expressivité vocale ni une capacité générale à former des projets.
+La scène corporelle présente encore des poses de fin de geste peu naturelles,
+observées visuellement. La pause vocale ne les remplace pas artificiellement.
+
+Une demande utilisateur supplémentaire de retour debout a produit deux rejets
+de commande, puis une correction native acceptée et terminée. La réponse a pris
+22,52 s et a été lue complètement. L'image finale conserve pourtant une pose
+peu reposante ; le résultat `completed` ne suffit donc pas à qualifier cette
+allure. La corrélation a ensuite isolé un [défaut du lecteur après reprise](live-avatar.md#ordre-des-os-après-reprise) :
+l'ordre des os changeait sans reconstruire les correspondances. Sur le même
+VRM et les mêmes données, le correctif ramène l'erreur maximale de 48,54 cm
+à l'arrondi numérique. L'émetteur stabilise aussi son ordre. L'arrêt de présence
+conserve toujours exactement la dernière pose sans phase de retour ; cette
+question de naturel reste distincte du défaut de lecture corrigé.
+
+Pour reproduire le protocole : activer deux tours dans un monde neuf, observer
+une fin, mettre en pause pendant le tour suivant, ajouter explicitement un
+appel par la CLI, arrêter le serveur puis reprendre via `resume_world`. Vérifier
+la pause et les compteurs avant d'envoyer une question, puis reprendre le dernier
+tour. Le contenu des décisions n'est pas prescrit ; un choix différent du
+silence n'invalide pas le test. Les archives locales conservent les états,
+empreintes de sources, identifiants, statuts et reçus de lecture.
+
+T11 reste ouvert pour le microphone matériel, l'interruption acoustique et
+la latence. Ce raccord ne remplace pas les observations textuelles antérieures
+avec retrait effectif des capacités, ni une qualification longue de l'initiative.

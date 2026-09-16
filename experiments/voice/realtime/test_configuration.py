@@ -43,6 +43,36 @@ def test_paths_resolve_from_config_and_loading_creates_no_runtime(
     assert config["model"] == "gpt-5.6-luna"
     assert config["voice_command"] == configured[1]["voice_command"]
     assert config["asr_command"] is None
+    assert config["resume_world"] is None
+
+
+def test_resume_world_is_resolved_from_config_without_opening_or_migrating(configured, tmp_path):
+    world = tmp_path / "previous" / "world"
+    world.mkdir(parents=True)
+    database = world / "world.sqlite3"
+    # Configuration validates paths only; BodyAdapter validates the database itself.
+    database.write_bytes(b"schema validation belongs to Runtime")
+    configured[1]["resume_world"] = "previous/world"
+    assert save(configured)["resume_world"] == world
+    assert database.read_bytes() == b"schema validation belongs to Runtime"
+    assert not (tmp_path / "runs").exists()
+
+
+def test_explicit_null_resume_keeps_new_world_default(configured):
+    configured[1]["resume_world"] = None
+    assert save(configured)["resume_world"] is None
+
+
+@pytest.mark.parametrize("kind", ["missing", "directory_without_database", "database_directory"])
+def test_resume_world_requires_an_existing_database_file(configured, tmp_path, kind):
+    world = tmp_path / "old-world"
+    if kind != "missing":
+        world.mkdir()
+    if kind == "database_directory":
+        (world / "world.sqlite3").mkdir()
+    configured[1]["resume_world"] = str(world)
+    with pytest.raises(ValueError, match="world.sqlite3"):
+        save(configured)
 
 
 def test_optional_asr_command_is_an_unmodified_argument_list(configured):
@@ -70,6 +100,11 @@ def test_optional_asr_command_is_an_unmodified_argument_list(configured):
         ("body", {"ardy_python": "python", "checkpoint_root": "c", "wsl": 4}),
         ("model", "silent-fallback"),
         ("resident", "true"),
+        ("resume_world", True),
+        ("resume_world", 123),
+        ("resume_world", " "),
+        ("resume_world", []),
+        ("resume_world", "bad\x00path"),
         ("avatar", "missing.vrm"),
         ("secret", "not-supported"),
     ],

@@ -1,5 +1,6 @@
 {
   "data_dir": "../../../.local/realtime-runs",
+  "resume_world": null,
   "avatar": "../../../.local/assets/pixiv-vrm/VRM1_Constraint_Twist_Sample.vrm",
   "hermes_python": "/path/to/hermes-venv/bin/python",
   "hermes_root": "../../../.local/hermes-agent",

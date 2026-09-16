@@ -7,6 +7,12 @@ import { consumeEvents } from "./stream-events.mjs";
 import { AudioMouth } from "./audio-mouth.mjs";
 import { MicrophoneInput } from "./microphone.mjs";
 import { createSileroDetector } from "./silero-microphone.mjs";
+import {
+    InitiativeControls,
+    initiativeButtonState,
+    shouldSendClientStats,
+    handleSessionStop,
+} from "./initiative-controls.mjs";
 
 const $ = (id) => document.getElementById(id);
 const { renderer, scene, camera, orbit } = createRoom($("stage"));
@@ -160,7 +166,61 @@ const microphone = new MicrophoneInput({
     },
     onState: () => controls(),
 });
+const initiativeControls = new InitiativeControls({
+    request: (path, body) => request(path, body, 20000),
+    enableAudio: () => audio.enable(),
+    current: () => ({ fence, session, cursor, audioAllowed }),
+    apply: (result) => {
+        if (result.resetAudio) {
+            stopLocal(false);
+            session = result.session;
+            cursor = result.cursor;
+            audio.reset(session);
+        } else if (result.enableAudio && !audio.session) {
+            // A previous local stop can leave this session unbound. Reattach
+            // without discarding samples, statistics or the event cursor.
+            audio.session = session;
+        }
+        audioAllowed = result.audioAllowed;
+        if (result.enableAudio || result.interrupted) freezeMotion = false;
+        if (result.interrupted) active = false;
+        state = { ...state, initiative: result.initiative };
+        if (audioAllowed && session)
+            telemetry("client_stats", null, {
+                ...audio.stats,
+                rendered_frames: renderedFrames,
+            });
+    },
+    onChange: () => controls(),
+    onError: (error) => showError(error),
+});
 function controls() {
+    const initiative = state?.initiative;
+    const hasInitiative = initiative != null;
+    $("initiative-budget").disabled =
+        hasInitiative || initiativeControls.pending;
+    $("initiative-interval").disabled =
+        hasInitiative || initiativeControls.pending;
+    if (hasInitiative) {
+        $("initiative-budget").value = initiative.remaining + initiative.used;
+        $("initiative-interval").value = initiative.interval ?? "";
+    }
+    $("initiative-toggle").disabled =
+        pending ||
+        initiativeControls.pending ||
+        !connected ||
+        !state?.ready ||
+        microphone.busy ||
+        (hasInitiative && initiative.paused && initiative.remaining === 0);
+    $("initiative-toggle").textContent = initiativeButtonState(
+        initiative,
+        audioAllowed,
+    ).label;
+    $("initiative-status").textContent = initiativeControls.pending
+        ? "Demande en cours…"
+        : !hasInitiative
+          ? "Désactivée"
+          : `${initiative.paused ? "En pause" : initiative.remaining ? "Active" : "Budget épuisé"} · ${initiative.remaining} appel${initiative.remaining > 1 ? "s" : ""} restant${initiative.remaining > 1 ? "s" : ""} · ${initiative.used} utilisé${initiative.used > 1 ? "s" : ""}`;
     const transcript =
         typeof state?.transcript === "string" ? state.transcript.trim() : "";
     $("transcript").textContent = transcript ? `Vous : ${transcript}` : "";
@@ -178,7 +238,11 @@ function controls() {
         !vrm ||
         Boolean(avatarError);
     $("stop").disabled =
-        !active && !pending && !microphone.enabled && !microphone.busy;
+        !active &&
+        !pending &&
+        !microphone.enabled &&
+        !microphone.busy &&
+        !(hasInitiative && !initiative.paused);
     $("message").disabled = !connected || !state?.ready || pending;
     $("send").disabled = $("message").disabled;
     $("scenario").disabled = active || pending;
@@ -307,6 +371,33 @@ $("say-form").onsubmit = (event) => {
     void command("/say", { text });
 };
 $("stop").onclick = () => void command("/stop", {});
+$("initiative-form").onsubmit = (event) => {
+    event.preventDefault();
+    if (
+        pending ||
+        initiativeControls.pending ||
+        !connected ||
+        !state?.ready ||
+        microphone.busy
+    )
+        return;
+    showError(null);
+    try {
+        if (state.initiative)
+            void initiativeControls.pause(
+                initiativeButtonState(state.initiative, audioAllowed).paused,
+            );
+        else {
+            const interval = $("initiative-interval").value.trim();
+            void initiativeControls.configure(
+                Number($("initiative-budget").value),
+                interval ? Number(interval) : null,
+            );
+        }
+    } catch (error) {
+        showError(error);
+    }
+};
 $("microphone").onclick = () => {
     if (microphone.enabled) {
         microphone.disable();
@@ -332,11 +423,15 @@ $("close").onclick = () => {
 };
 
 function receiveMotion(motion) {
+    if (!vrm || freezeMotion || !motion) return;
+    const sameBoneOrder =
+        Array.isArray(motion.bone_names) &&
+        motion.bone_names.length === boneNodes.length &&
+        boneNodes.every(({ name, index }) => motion.bone_names[index] === name);
     if (
-        !vrm ||
-        freezeMotion ||
-        !motion ||
-        (motion.sequence === motionSequence && motion.id === motionId)
+        motion.sequence === motionSequence &&
+        motion.id === motionId &&
+        sameBoneOrder
     )
         return;
     if (
@@ -368,7 +463,9 @@ function receiveMotion(motion) {
         )
             throw new Error("Rotation reçue invalide.");
     if (motion.id === motionId && motion.sequence < motionSequence) return;
-    if (motion.id !== motionId) {
+    if (motion.id !== motionId || !sameBoneOrder) {
+        // Checkpoints and fresh preparations can serialize the same controller
+        // in different bone orders. Never interpolate across those layouts.
         motionFrames = [];
         motionId = motion.id;
         motionSequence = -1;
@@ -378,7 +475,7 @@ function receiveMotion(motion) {
                 if (!node) throw new Error(`Articulation absente : ${name}`);
                 let depth = 0;
                 for (let p = node.parent; p; p = p.parent) depth++;
-                return { node, index, depth };
+                return { name, node, index, depth };
             })
             .sort((a, b) => a.depth - b.depth);
     }
@@ -433,6 +530,7 @@ async function pollState() {
     const epoch = fence;
     const requestedSession = session;
     const duringInputStart = microphone.waitingForStart;
+    const duringInitiativeChange = initiativeControls.pending;
     try {
         if (pending) return;
         const next = await request("/state.json", undefined, 3000);
@@ -451,7 +549,9 @@ async function pollState() {
             next.session_id &&
             next.session_id !== session &&
             !duringInputStart &&
-            !microphone.waitingForStart
+            !microphone.waitingForStart &&
+            !duringInitiativeChange &&
+            !initiativeControls.pending
         ) {
             microphone.cancelInput();
             stopLocal(false);
@@ -459,12 +559,16 @@ async function pollState() {
             session = null;
             showError("La session a changé. Démarrez un nouvel essai.");
         }
-        if (
-            !pending &&
-            active &&
-            (terminal.has(next.status) || terminal.has(next.phase))
-        )
-            active = false;
+        if (!pending) {
+            if (terminal.has(next.status) || terminal.has(next.phase))
+                active = false;
+            else if (
+                next.turn_source === "initiative" &&
+                audioAllowed &&
+                next.session_id === session
+            )
+                active = true;
+        }
         if (!pending) receiveMotion(next.motion);
         microphone.observe(next.input);
         if (
@@ -504,13 +608,22 @@ async function pollEvents() {
             return;
         cursor = consumeEvents(next, session, cursor, (event) => {
             if (!audioAllowed) return;
-            if (event.event === "stop" && !event.id) {
-                microphone.disable();
-                stopLocal(true);
-                active = false;
-                controls();
+            if (
+                handleSessionStop(event, {
+                    disableMicrophone: () => microphone.disable(),
+                    stopLocal,
+                    resumeEvents: () => {
+                        // A delayed audio-only stop must not undo a newer resume.
+                        audio.session = session;
+                        audioAllowed = true;
+                    },
+                    onStopped: () => {
+                        active = false;
+                        controls();
+                    },
+                })
+            )
                 return;
-            }
             audio.accept(event);
         });
     } catch (error) {
@@ -580,7 +693,14 @@ controls();
 void pollState();
 void pollEvents();
 setInterval(() => {
-    if (session && active)
+    if (
+        shouldSendClientStats({
+            session,
+            audioAllowed,
+            active,
+            initiative: state?.initiative,
+        })
+    )
         telemetry("client_stats", null, {
             ...audio.stats,
             rendered_frames: renderedFrames,
@@ -588,7 +708,7 @@ setInterval(() => {
 }, 5000);
 addEventListener("pagehide", () => {
     microphone.disable();
-    audio.reset();
+    stopLocal(true);
 });
 window.arianeRealtime = {
     stats: () => ({
@@ -602,6 +722,8 @@ window.arianeRealtime = {
         mouth_weight: mouth?.value,
         rendered_rms: audio.renderedRms,
         microphone: microphone.snapshot(),
+        initiative: state?.initiative ?? null,
+        turn_source: state?.turn_source ?? null,
     }),
     stopLocal: () => {
         microphone.disable();

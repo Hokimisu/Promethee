@@ -6,7 +6,7 @@ Un avatar IA doté d'un corps, d'une mémoire et de capacités d'action dans un 
 
 Le projet fournit un espace que l'avatar peut percevoir et modifier, des objets utilisables et une mémoire consultable dans Obsidian. Un agent peut former et réviser ses intentions ; le monde lui renvoie ce qui s'est effectivement passé. Aucun scénario de vie, routine ou préférence d'objet n'est prescrit.
 
-**État actuel : monde persistant, corps cinématique ARDY et scène vocale expérimentale.** Via le [pont Hermes](docs/hermes-setup.md), Astra a conversé, retrouvé l'historique après redémarrage, demandé une posture exécutée par ARDY et rapporté une annulation confirmée. La [scène locale](experiments/voice/realtime/README.md) relie Hermes/Luna, VoxCPM2 et le VRM ; ses interventions sont écrites, sans microphone. La latence, la naturalité des mouvements et la conversation acoustique restent à qualifier. La commande `demo` ci-dessous est une fixture logique distincte : elle n'exige aucun réseau, aucune clé API ni GPU.
+**État actuel : monde persistant, corps cinématique ARDY et scène vocale expérimentale.** Via le [pont Hermes](docs/hermes-setup.md), Astra a conversé, retrouvé l'historique après redémarrage, demandé une posture exécutée par ARDY et rapporté une annulation confirmée. La [scène locale](experiments/voice/realtime/README.md) relie Hermes/Luna, VoxCPM2 et le VRM ; elle reçoit du texte ou un microphone facultatif, et propose une initiative à budget explicite. La latence, la naturalité des mouvements et la conversation acoustique restent à qualifier. La commande `demo` ci-dessous est une fixture logique distincte : elle n'exige aucun réseau, aucune clé API ni GPU.
 
 ## Essayer
 
@@ -55,10 +55,10 @@ Cette commande réalise une transition instantanée, sans activité préécrite 
 | Mémoire Markdown lisible dans Obsidian | Sources, recherche et corrections ; six appels Astra réels dans deux mondes de qualification |
 | Contrôles automatiques et tests de comportement | Fournis |
 | Pont d'outils Hermes | Astra réel : conversation, historique, posture exécutée et annulation retrouvée après interruption |
-| Voix | [Scène expérimentale livrée](experiments/voice/realtime/README.md), Hermes/Luna → VoxCPM2 réel avec rendu, lecture et interruption écrite ; voix approuvée par l'utilisateur. Microphone et interruption acoustique ouverts |
+| Voix | [Scène expérimentale livrée](experiments/voice/realtime/README.md), Hermes/Luna → VoxCPM2 réel avec rendu et reçus de lecture ; microphone local facultatif et interruption numérique vérifiés. Acoustique du matériel et latence ouvertes |
 | ARDY Core et rendu Viser | Pilotage cinématique manuel ; qualification des déplacements incomplète |
 | Apparence anime en VRM | Lecture et [session en direct](docs/live-avatar.md) ; prise/dépôt cinématiques, arrêt et restauration ; contacts géométriques des poses préparées mesurés, équilibre physique non validé |
-| Initiative à budget explicite | Essais Astra réels : pause persistante, budgets, historiques variés et capacités retirées ; dépendance vocale encore ouverte |
+| Initiative à budget explicite | Essais Astra textuels ; raccord vocal avec silence facultatif, pause et reprise du même monde. Dépendance acoustique T11 encore ouverte |
 | Services externes | Extensions ultérieures selon besoin observé |
 
 ## Architecture cible

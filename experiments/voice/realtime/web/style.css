@@ -78,6 +78,7 @@ button:disabled {
 }
 button:focus-visible,
 textarea:focus-visible,
+input:focus-visible,
 summary:focus-visible {
     outline: 2px solid #e1bb96;
     outline-offset: 3px;
@@ -113,6 +114,45 @@ aside {
 }
 form {
     margin: 0;
+}
+#initiative-form fieldset {
+    margin: 0;
+    padding: 15px 12px 12px;
+    border: 1px solid #d5b99a33;
+    border-radius: 8px;
+}
+#initiative-form legend {
+    padding: 0 6px;
+    font-weight: 600;
+}
+.initiative-options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+.initiative-options label {
+    font-size: 12px;
+}
+.initiative-options input {
+    display: block;
+    width: 100%;
+    margin-top: 7px;
+    padding: 8px;
+    border: 1px solid #a897902f;
+    border-radius: 6px;
+    background: #17171f;
+    color: inherit;
+    font: inherit;
+}
+.initiative-options input:disabled {
+    opacity: 0.65;
+}
+#initiative-status,
+.initiative-note {
+    margin: 10px 0 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #bfb4b8;
 }
 label {
     display: block;

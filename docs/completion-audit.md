@@ -68,6 +68,34 @@ reste documenté séparément ; le succès de la voix ne prouve pas celui du cor
 Le coût monétaire par tour Codex n'est pas disponible. T11 et la dépendance
 vocale de T12 restent ouverts.
 
+## Composition vocale de l'initiative — 16 septembre 2026
+
+Le raccord livré utilise l'initiative du socle dans le même hôte Hermes ;
+budget, pause, provenance et historique sont partagés. La scène ne crée plus
+de faux messages utilisateur pour prolonger l'essai. Elle peut accepter une
+décision silencieuse et reprendre explicitement une base de qualification
+existante. Les 38 tests de composition vérifient les fenêtres de course de la
+décision, de la synthèse, du microphone et de la pause, avec transports factices.
+
+L'[essai réel](initiative.md#composition-réelle-avec-luna-vox-et-le-navigateur)
+observe deux décisions silencieuses, une décision interrompue, une réponse
+utilisateur lue complètement et la reprise du même monde avec pause et budget
+conservés. Le rechargement d'un appel intermédiaire est explicite. Aucun tour
+supplémentaire ne démarre après épuisement. T12 garde sa dépendance au microphone
+matériel et aux limites T11 ; aucun comportement autonome général n'est déduit
+de ces quelques décisions.
+
+Le refus de préparation VRM de l'essai microphone a une cause identifiée et
+un [correctif géométrique vérifié](avatar-foot-roll.md) sur les mêmes poses,
+puis sur trois autres séquences. Cela ne ferme ni la qualification de marche
+indépendante ni la naturalité générale des changements d'appui.
+
+La reprise vocale a révélé un second défaut, cette fois dans le lecteur :
+les os conservaient l'index d'un ancien ordre. Le [rejeu sur le vrai VRM](live-avatar.md#ordre-des-os-après-reprise)
+isole une erreur de 48,54 cm, supprimée par reconstruction des correspondances.
+L'émetteur utilise maintenant un ordre stable. Cette correction de lecture ne
+prouve pas un retour naturel au repos à la fin de chaque geste.
+
 ## T07 — Corps et résultat observé
 
 | Exigence | Preuve inspectée | Conclusion |

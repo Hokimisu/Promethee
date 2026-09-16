@@ -20,7 +20,61 @@ import {
     settledRootLowering,
     captureFootState,
     FootPlantingTrial,
+    supportPivot,
 } from "./foot-planting-trial.js";
+
+for (const [mode, lowEnd] of [
+    ["toe", "heel"],
+    ["heel", "toe"],
+]) {
+    test(`${mode} pivot uses its own sole even when the ${lowEnd} is lower`, () => {
+        const root = new Object3D();
+        root.position.set(2, 0, -3);
+        root.rotation.y = 0.7;
+        root.updateMatrixWorld(true);
+        const world = (p) => root.localToWorld(new Vector3(...p));
+        const heelY = mode === "heel" ? 0.03 : 0;
+        const toeY = mode === "toe" ? 0.03 : 0;
+        const surface = [
+            [-0.02, heelY, -0.1],
+            [0.02, heelY, -0.1],
+            [-0.02, toeY, 0.21],
+            [0.02, toeY, 0.21],
+            [0, toeY + 0.01, 0.3], // Raised shoe tip is not its contact sole.
+            [0, heelY + 0.01, -0.15], // Nor the raised back of the shoe.
+        ].map((p) => world(p).toArray());
+        const state = {
+            target: world([0, 0.1, 0]),
+            toe: world([0, 0.05, 0.2]),
+            surface,
+        };
+        const before = JSON.stringify(state);
+        const pivot = supportPivot(state, mode);
+        assert.ok((mode === "toe" ? [2, 3] : [0, 1]).includes(pivot.vertex));
+        assert.deepEqual(pivot.position.toArray(), [
+            surface[pivot.vertex][0],
+            0,
+            surface[pivot.vertex][2],
+        ]);
+        assert.equal(JSON.stringify(state), before);
+    });
+}
+
+test("a missing requested shoe region is rejected, not replaced by the opposite support", () => {
+    const state = {
+        target: new Vector3(0, 0.1, 0),
+        toe: new Vector3(0, 0.05, 0.2),
+        surface: [
+            [0, 0, -0.1],
+            [0, 0, -0.05],
+        ],
+    };
+    assert.throws(() => supportPivot(state, "toe"), /no contact surface/);
+    assert.throws(
+        () => supportPivot({ ...state, toe: state.target.clone() }, "toe"),
+        /direction/,
+    );
+});
 
 for (const [contact, footSide] of [
     ["toe", "left"],

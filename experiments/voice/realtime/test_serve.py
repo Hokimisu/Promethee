@@ -210,6 +210,11 @@ class SessionContracts(unittest.TestCase):
         item.input_ids = set()
         item.pending_audio = None
         item.auto_continue = True
+        item.turn_source = "user"
+        item.turn_id = "current-turn"
+        item.initiative = Mock()
+        item.initiative.service.runtime.snapshot.return_value = {"initiative": None}
+        item.initiative.observe.return_value = None
         item.state = {
             "ready": True,
             "session_id": item.sid,
@@ -219,6 +224,7 @@ class SessionContracts(unittest.TestCase):
         item.host = Mock()
         item.body = Mock()
         item.body.poll.return_value = {"ready": True}
+        item.body.service.runtime.snapshot.return_value = {"initiative": None}
         item.pending_text = {"id": "pending", "text": "Next speech"}
         item.speech = {"id": "current-speech", "turn_id": "current-turn"}
         item.vox_send = Mock()
@@ -245,7 +251,8 @@ class SessionContracts(unittest.TestCase):
         item.interrupt(notify=True)
         item.vox_send.assert_called_once_with({"op": "cancel", "id": "current-speech"})
         self.assertEqual(
-            list(item.events), [{"cursor": 18, "session_id": "existing-session", "event": "stop"}]
+            list(item.events),
+            [{"cursor": 18, "session_id": "existing-session", "event": "stop", "body": False}],
         )
         item.body.cancel.assert_not_called()
 

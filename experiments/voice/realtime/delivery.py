@@ -6,10 +6,17 @@ from dialogue import MAX_DELIVERY_CHARS, MAX_TEXT_CHARS, MAX_WORDS, word_count
 from speech_text import prepare_speech_text
 
 
-def parse_delivery(raw):
+def parse_delivery(raw, *, allow_silence=False):
     if not isinstance(raw, str) or len(raw) > 2400:
         raise ValueError("Réponse vocale structurée trop longue.")
     value = json.loads(raw)
+    if (
+        allow_silence is True
+        and isinstance(value, dict)
+        and set(value) == {"silent"}
+        and value["silent"] is True
+    ):
+        return None
     if not isinstance(value, dict) or set(value) != {"text", "delivery"}:
         raise ValueError("La réponse doit contenir text et delivery.")
     for field, limit in (("text", MAX_TEXT_CHARS), ("delivery", MAX_DELIVERY_CHARS)):
@@ -28,8 +35,9 @@ def parse_delivery(raw):
 class DirectedWorker:
     """Keep native Hermes history verbatim, persist the actual spoken text separately."""
 
-    def __init__(self, worker, turn_id, deliveries):
+    def __init__(self, worker, turn_id, deliveries, *, allow_silence=False):
         self.worker, self.turn_id, self.deliveries = worker, turn_id, deliveries
+        self.allow_silence = allow_silence
 
     def poll(self):
         result = self.worker.poll()
@@ -43,9 +51,12 @@ class DirectedWorker:
         if result.get("turn_id") != self.turn_id:
             return result  # The existing host validates and rejects a mismatched result.
         try:
-            directed = parse_delivery(result.get("text"))
+            directed = parse_delivery(result.get("text"), allow_silence=self.allow_silence)
         except (ValueError, TypeError):
             return {"type": "error", "code": "invalid_vocal_direction"}
+        if directed is None:
+            self.deliveries[self.turn_id] = None
+            return result
         self.deliveries[self.turn_id] = directed["delivery"]
         return {**result, "text": directed["text"]}
 

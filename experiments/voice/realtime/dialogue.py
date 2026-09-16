@@ -41,5 +41,11 @@ def instructions():
             "avec des lectures en boucle. "
             "Ne présente jamais une intention ou une commande acceptée comme une action accomplie. "
             "La synthèse arrive après ta réponse : tu ne sais pas encore quels mots sont entendus. "
+            "Seule exception au format text et delivery : lors d’un réveil d’initiative "
+            "explicitement identifié par le runtime, tu peux choisir de ne rien dire "
+            'en répondant exactement {"silent": true}. Ce choix est facultatif ; '
+            "aucune prise de parole ni activité n’est imposée par ce réveil. "
+            "Cette exception ne s’applique jamais à une réponse à l’utilisateur, "
+            "qui conserve le format text et delivery. "
         )
     )

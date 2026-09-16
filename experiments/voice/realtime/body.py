@@ -11,6 +11,7 @@ submit to the same ExecutionService database; there is only one body writer.
 import copy
 import hashlib
 import json
+import math
 import queue
 import threading
 import time
@@ -24,7 +25,7 @@ from presence import PresenceController
 from promethee.appearance_process import AppearancePreparation
 from promethee.avatar_live import AvatarLiveServer
 from promethee.avatar_reach import PIXIV_SHA256, load_profile
-from promethee.execution import ExecutionService
+from promethee.execution import ExecutionService, command_revision
 from promethee.motion_process import start_ardy_process
 from promethee.runtime import Runtime
 
@@ -54,23 +55,42 @@ class BodyAdapter:
         encoder_url="http://127.0.0.1:9551",
         seed=138124,
         node="node",
+        resume=False,
     ):
+        if type(resume) is not bool:
+            raise ValueError("resume must be explicitly true or false.")
         self.data_dir = Path(data_dir).resolve()
         self.avatar = Path(avatar).resolve()
         if hashlib.sha256(self.avatar.read_bytes()).hexdigest() != PIXIV_SHA256:
             raise ValueError("Use the pinned pixiv VRM appearance.")
         database = self.data_dir / "world.sqlite3"
-        if database.exists():
+        if resume and not database.is_file():
+            raise ValueError("Resuming requires an existing world.sqlite3 database.")
+        if not resume and database.exists():
             raise ValueError(
                 "Use a new qualification directory; existing worlds are not overwritten."
             )
         self.service = ExecutionService(
-            Runtime(database, data_origin="session", session_kind="qualification")
+            Runtime(
+                database,
+                data_origin="session",
+                session_kind="qualification",
+                create=not resume,
+            )
         )
+        self._require_unowned()
+        # Opening must not expire executions or rewrite budget, pause, or history.
+        # The existing controller acquisition/reconciliation handles recovery at start.
+        world = self.service.runtime.snapshot()
+        world["command_revision"] = command_revision(world)
+        self.artifacts_dir = (
+            self.data_dir / "body-resumes" / uuid4().hex if resume else self.data_dir
+        )
+        self.artifacts_dir.mkdir(parents=True, exist_ok=not resume)
         self.options = {
             "python": ardy_python,
             "checkpoint_root": checkpoint_root,
-            "output": self.data_dir / "motions",
+            "output": self.artifacts_dir / "motions",
             "wsl": wsl,
             "encoder_url": encoder_url,
         }
@@ -86,11 +106,12 @@ class BodyAdapter:
             "state": None,
             "motion": None,
             "bootstrap": None,
-            "world": self.service.get_world(),
+            "world": world,
             "message": "Corps non démarré.",
             "error": None,
         }
-        (self.data_dir / "body-purpose.json").write_text(
+        purpose = self.artifacts_dir / ("body-resume.json" if resume else "body-purpose.json")
+        purpose.write_text(
             json.dumps(
                 {
                     "purpose": "real-time voice/body qualification; excluded from personal memory",
@@ -101,17 +122,34 @@ class BodyAdapter:
                     "avatar_sha256": PIXIV_SHA256,
                     "adapter_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
                     "no_archived_motion_replay": True,
+                    "resume": resume,
+                    "world_id": world["world_id"],
+                    "schema_version": world["schema_version"],
+                    "database": str(database),
+                    "opened_at_unix": time.time(),
                 },
                 indent=2,
             ),
             encoding="utf-8",
         )
 
+    def _require_unowned(self):
+        """Read-only early refusal; controller acquisition still arbitrates atomically."""
+        with self.service.runtime.connection() as conn:
+            control = self.service._control(conn)
+        if control["session_id"]:
+            expires = control.get("expires_at")
+            if type(expires) not in (int, float) or not math.isfinite(expires):
+                raise ValueError("Cannot resume a world with an invalid controller lease.")
+            if expires > self.service.clock():
+                raise ValueError("A controller already owns this world.")
+
     def start(self):
         """Nonblocking. Caller must arrange the text encoder and GPU budget first."""
         with self._lock:
             if self._closed or self._thread is not None:
                 raise RuntimeError("Body can only be started once.")
+            self._require_unowned()
             self._snapshot["message"] = "Chargement du corps ARDY réel."
             self._thread = threading.Thread(target=self._run, name="realtime-body", daemon=True)
             self._thread.start()
@@ -217,7 +255,8 @@ class BodyAdapter:
             if appearance is None:
                 raise RuntimeError("Refusing an unprepared visible pose.")
             prepared = appearance["frame"]
-            names = list(prepared["rotations"])
+            # SQLite checkpoints sort object keys; native preparation need not.
+            names = sorted(prepared["rotations"])
             root = list(state["observation"]["pose"]["positions"][0])
             root[1] += prepared["root_y_offset"]
             motion = {
@@ -256,11 +295,12 @@ class BodyAdapter:
     def _run(self):
         worker = preparation = controller = None
         try:
+            self._require_unowned()
             worker = start_ardy_process(**self.options)
             preparation = AppearancePreparation(
                 avatar=self.avatar,
                 script=ROOT / "web/avatar/measure-feet.mjs",
-                output=self.data_dir / "appearance",
+                output=self.artifacts_dir / "appearance",
                 node=self.node,
             )
             controller = PresenceController(
@@ -278,7 +318,9 @@ class BodyAdapter:
                 self._publish(controller, publisher)
                 self._stop.wait(max(0.001, 0.05 - (time.monotonic() - started)))
         except Exception as exc:
-            (self.data_dir / "body-error.txt").write_text(traceback.format_exc(), encoding="utf-8")
+            (self.artifacts_dir / "body-error.txt").write_text(
+                traceback.format_exc(), encoding="utf-8"
+            )
             with self._lock:
                 self._snapshot.update(ready=False, error=str(exc), message="Corps indisponible.")
         finally:

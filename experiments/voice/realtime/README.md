@@ -5,11 +5,13 @@ PCM au navigateur pendant qu'ARDY génère la présence corporelle. Le même mon
 enregistre les observations et les résultats d'outils. On peut écrire dès que
 la scène est prête, lancer un essai de 60 secondes, ou activer la transcription
 locale facultative. Les essais numériques ne valident pas encore l'acoustique
-du microphone de l'utilisateur ni l'initiative persistante de T12.
+du microphone de l'utilisateur. L'initiative est facultative, avec budget et
+pause persistants ; sa qualification ne suffit pas à fermer T11–T12.
 
 Les sources sont livrées ; les modèles, références vocales, caches et sessions
-restent locaux. Chaque lancement crée une nouvelle session de qualification,
-exclue de la mémoire personnelle. Aucun scénario n'est prérempli. Les décors
+restent locaux. Par défaut, chaque lancement crée une nouvelle session de
+qualification, exclue de la mémoire personnelle. Une reprise explicite est
+possible avec `resume_world`. Aucun scénario n'est prérempli. Les décors
 sont visuels, pas des objets manipulables.
 
 ## Préparer les environnements
@@ -129,6 +131,51 @@ Ouvrir l'URL locale affichée après construction du navigateur, attendre « Pr�
 et invalide ses décisions tardives ; le bouton Arrêter demande aussi l'arrêt du
 corps. Une commande acceptée n'est pas une action terminée. Le lancement refuse
 un port occupé avant de charger les modèles.
+
+## Initiative et reprise
+
+Le bloc Initiative demande un budget de tours autonomes et une cadence explicites.
+Il utilise le même `TextHost.initiative_tick` que le socle : un seul Hermes,
+historique partagé, événements regroupés pendant la parole et budget réservé
+atomiquement. Le bouton de démonstration n'ajoute aucun budget. Sans activation,
+un contexte ou un message produit seulement sa réponse ; aucune consigne
+« poursuis » n'est ajoutée automatiquement. L'essai de 60 secondes suspend
+l'initiative lorsqu'il termine, même si du budget reste disponible.
+
+Pause conserve le budget restant et coupe seulement une sortie autonome encore
+en cours. Elle n'annule pas une réponse utilisateur plus récente ni une action
+du corps. Arrêter suspend aussi l'initiative et garde sa portée sur le corps.
+Un réveil peut rendre exactement `{"silent": true}` : ce résultat reste dans
+l'historique natif, sans lancer Vox ni fabriquer de reçu de lecture.
+
+La page doit avoir activé sa sortie audio par un geste explicite. Son signal
+de présence renouvelle une disponibilité de 15 secondes ; fermer la page
+empêche ensuite de nouveaux départs. Cette disponibilité n'est pas persistée.
+Après redémarrage, même une initiative non suspendue attend donc l'activation
+de la voix dans la page. Une décision déjà réservée consomme son budget même
+si la sortie disparaît ; sans reçu navigateur, la lecture n'est pas déclarée
+réussie.
+
+Pour reprendre un monde, arrêter son ancien serveur puis ajouter à la
+configuration locale :
+
+```json
+"resume_world": "realtime-runs/session-IDENTIFIANT/world"
+```
+
+Ce chemin est relatif au fichier de configuration. Il doit contenir une base
+de qualification au schéma actuel ; une base personnelle, ancienne ou possédée
+par un contrôleur actif est refusée. Aucune migration ni reconfiguration du
+budget n'est implicite. Historique, budget et pause restent dans cette base.
+La réconciliation existante restaure le dernier état confirmé, sans rejouer
+un ancien mouvement. Les nouveaux journaux vocaux vont dans un nouveau dossier
+de lancement ; les artefacts corporels de reprise vont dans
+`world/body-resumes/<identifiant>/`.
+
+Les routes locales `initiative_configure` et `initiative_pause` exposent ces
+mêmes opérations au navigateur. Recharger le budget reste une action explicite
+via la CLI du [contrat d'initiative](../../../docs/initiative.md), jamais un
+effet de rechargement de page ou de démarrage de scène.
 
 ## Entrée vocale locale facultative
 

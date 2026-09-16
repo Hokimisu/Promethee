@@ -245,3 +245,28 @@ exécution : le script ne peut pas attester lui-même une inspection humaine.
 Les critères cinématiques de T07 sont couverts avec cet essai et les séries
 précédentes ; la fiabilité générale d'ARDY, les collisions entre les jambes et
 la physique restent hors des garanties mesurées.
+
+## Ordre des os après reprise
+
+Un essai de la scène vocale a révélé une déformation du VRM après restauration :
+les rotations du checkpoint étaient envoyées dans l'ordre alphabétique des os,
+puis celles d'un nouveau mouvement dans leur ordre hiérarchique. L'identifiant
+du contrôleur restait identique. Le lecteur conservait ses premiers indices et
+appliquait donc certaines rotations à d'autres articulations, malgré des poses
+Core et une apparence préparée cohérentes.
+
+La correction du lecteur reconstruit les associations par nom et vide son
+tampon lorsque cet ordre change, avant toute interpolation. L'émetteur utilise
+également un ordre canonique. Les anciens messages restent lisibles ; aucune
+pose enregistrée ni tolérance géométrique n'est modifiée.
+
+Le rejeu CPU des deux messages archivés sur le véritable VRM, avec les fonctions
+du lecteur, mesurait **48,544 cm** d'écart maximal entre les articulations
+affichées et le checkpoint préparé. Après correction, cet écart est de
+**1,23 × 10⁻¹⁶ m**, à l'erreur numérique près. Le genou auparavant remonté de
+35,4 cm retrouve sa position préparée. Ce résultat compare les mêmes données,
+sans nouvelle génération ARDY ni nouveau rendu dans le navigateur.
+
+Ce défaut de lecture est distinct de l'arrêt des gestes de parole : désactiver
+la présence conserve volontairement la dernière pose exécutée. Le correctif
+n'ajoute pas de retour au repos et ne garantit pas une fin de geste naturelle.

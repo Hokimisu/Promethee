@@ -17,6 +17,7 @@ from test_serve import server
 
 from promethee.conversation import ConversationStore
 from promethee.execution import ExecutionService
+from promethee.initiative import Initiative
 from promethee.runtime import Runtime
 from promethee.world import ActionError
 
@@ -46,6 +47,8 @@ def micro_session(tmp_path):
     item.input_ids = set()
     item.running = True
     item.auto_continue = True
+    item.turn_source = "user"
+    item.output_deadline = 0
     item.began = 1.0
     item.calls = 0
     service = ExecutionService(
@@ -53,6 +56,7 @@ def micro_session(tmp_path):
         clock=lambda: 100.0,
     )
     store = ConversationStore(service)
+    item.initiative = Initiative(service)
     opened = store.begin("Existing user input")
     item.turn_id = opened["turn_id"]
     item.host = Mock()

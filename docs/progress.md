@@ -27,6 +27,31 @@ Les journaux de test et données locales restent dans `.local/` et ne sont pas p
 
 ## Microphone local — 16 septembre 2026
 
+La livraison suivante raccorde aussi l'initiative à la scène : activation
+distincte, budget atomique, pause persistante, silence facultatif et reprise
+explicite du même monde de qualification. Les anciennes relances « poursuis »
+sont supprimées. Les 38 tests de composition utilisent le vrai `TextHost`,
+`Initiative` et `ConversationStore`, avec transports synthétiques. Ils couvrent
+notamment la pause entre fin du raisonnement et publication, les PCM tardifs,
+les réponses utilisateur prioritaires et la limite de 60 secondes sans dépense
+d'un nouveau tour. La qualification acoustique T11 reste distincte.
+
+L'[essai réel de composition](initiative.md#composition-réelle-avec-luna-vox-et-le-navigateur)
+conserve budget, pause et historique après redémarrage. Deux réveils choisissent
+le silence, un autre est interrompu, et une réponse utilisateur est lue en entier
+sans consommer le budget autonome. L'épuisement interdit les départs suivants.
+
+Un [défaut de pivot](avatar-foot-roll.md) du retargeting a également été isolé :
+le point d'appui demandé sur la pointe pouvait provenir du talon. Le correctif
+permet d'exporter les 41 poses auparavant refusées ; trois séquences voisines
+ou indépendantes restent validées. Les limites de naturalité sont conservées.
+
+La qualification de reprise a aussi révélé un [ordre des os incohérent](live-avatar.md#ordre-des-os-après-reprise)
+entre checkpoint et nouvelles poses. Le lecteur reconstruisait ses associations
+seulement quand le contrôleur changeait. Le correctif reconstruit aussi sur
+changement d'ordre et évite de mélanger les tableaux ; l'émetteur stabilise ses
+noms. Le rejeu réel sur le VRM réduit l'erreur de 48,54 cm à l'arrondi numérique.
+
 La [capture facultative](microphone.md) rejoint le même Hermes que le texte,
 avec clôture durable du tour interrompu avant acquittement et garde contre
 les sorties périmées. Le début de parole coupe la voix sans arrêter une action

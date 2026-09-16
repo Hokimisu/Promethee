@@ -37,6 +37,43 @@
                         </button>
                     </div>
                 </form>
+                <form id="initiative-form">
+                    <fieldset>
+                        <legend>Initiative</legend>
+                        <div class="initiative-options">
+                            <label for="initiative-budget"
+                                >Budget d’appels
+                                <input
+                                    id="initiative-budget"
+                                    type="number"
+                                    min="1"
+                                    max="1000"
+                                    step="1"
+                                    value="3"
+                                    required
+                                />
+                            </label>
+                            <label for="initiative-interval"
+                                >Cadence (s)
+                                <input
+                                    id="initiative-interval"
+                                    type="number"
+                                    min="1"
+                                    step="any"
+                                    value="20"
+                                />
+                            </label>
+                        </div>
+                        <button id="initiative-toggle" type="submit" disabled>
+                            Activer
+                        </button>
+                        <p id="initiative-status" role="status">Désactivée</p>
+                        <p class="initiative-note">
+                            Cadence vide : réveils sur événements uniquement.
+                            Ariane peut choisir de rester silencieuse.
+                        </p>
+                    </fieldset>
+                </form>
                 <form id="say-form">
                     <label for="message">Intervenir</label>
                     <textarea

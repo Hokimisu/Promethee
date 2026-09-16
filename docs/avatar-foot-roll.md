@@ -83,6 +83,37 @@ Les 423 tests Python passent, deux sont ignorés. Les 14 tests JavaScript,
 les contrôles de style et les constructions Python et navigateur passent.
 Les qualifications et leurs médias restent exclus de la mémoire de l'agent.
 
+## Correction du pivot lors d'une présence, 16 septembre 2026
+
+Un autre refus provenait du choix du sommet servant de pivot. Le sélecteur
+cherchait d'abord le bas de toute la chaussure, puis sa pointe parmi ces sommets.
+Lors du passage de la semelle à la pointe, entre les poses 32 et 33 d'un segment
+archivé, la chaussure inclinée lui faisait choisir un sommet **derrière la
+cheville**. L'IK travaillait donc autour du talon pour un contact de pointe.
+
+Le sélecteur limite désormais les candidats à la région demandée : au-delà de
+l'articulation des orteils pour la pointe, derrière la cheville pour le talon.
+Il applique ensuite la même bande basse de 2 mm. Une région absente est refusée.
+Aucun seuil, avatar ou mouvement source n'a été modifié.
+
+| Même segment, pose 33 | Avant | Après |
+|---|---|---|
+| Variation de correction verticale | 26,172 mm | 10,084 mm, sous la limite de 15 mm |
+| Point le plus bas après IK, avant remise au sol | −34,548 mm | −2,510 mm |
+| Minimum du pied opposé après remise au sol | +35,460 mm | +1,500 mm |
+| Export | Refus | 41 poses validées, origine exacte |
+
+Le rejeu CPU du segment complet passe les gardes géométriques puis le validateur
+Python. Un segment voisin et deux autres segments contenant des appuis partiels
+ont été rejoués avant et après : leurs métriques restent identiques. Les 18 tests
+JavaScript passent ; les trois nouveaux tests échouent avec l'ancien sélecteur.
+
+L'inspection visuelle porte sur les vrais sommets des chaussures, pas sur une
+vidéo complète du corps. Le genou gauche se déplace encore de **8,389 cm** à cette
+transition ; le correctif ne la lisse pas. Il ne prouve ni naturalité complète,
+ni équilibre physique, ni réalisation simultanée de tous les contacts prédits.
+Les artefacts de qualification restent locaux et hors de la mémoire de l'agent.
+
 ## Essai distinct de posture d'arrivée
 
 `continuous_trial.py --arrival-pose` peut désormais contraindre la dernière

@@ -49,16 +49,25 @@ export function captureFootState(vrm, geometry) {
     );
 }
 
-function supportPivot(state, mode) {
+export function supportPivot(state, mode) {
     const direction = state.toe.clone().sub(state.target);
     direction.y = 0;
     if (direction.lengthSq() < 1e-12)
         throw new Error("Foot support needs a heel-to-toe direction.");
     direction.normalize();
-    const floor = Math.min(...state.surface.map((point) => point[1]));
+    const toeDistance = state.toe.clone().sub(state.target).dot(direction);
+    // Find the sole within the requested anatomical region first. A tilted
+    // shoe's globally lowest vertices can all belong to the opposite end.
+    const candidates = state.surface.flatMap((point, index) => {
+        const distance = new Vector3(...point).sub(state.target).dot(direction);
+        return (mode === "toe" ? distance >= toeDistance : distance <= 0)
+            ? [{ point, index }]
+            : [];
+    });
+    const floor = Math.min(...candidates.map(({ point }) => point[1]));
     let vertex = -1;
     let best = -Infinity;
-    for (const [index, point] of state.surface.entries()) {
+    for (const { index, point } of candidates) {
         // Select a sole vertex; the final 0.1 mm contact test is unchanged.
         if (point[1] > floor + 0.002) continue;
         const score =
