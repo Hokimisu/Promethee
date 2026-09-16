@@ -379,6 +379,16 @@ class ExecutionService:
             self._observe(conn, observed, control["source"], now)
             return True
 
+    def _observe_idle(self, session_id, observation):
+        with self._transaction() as (conn, now):
+            control = self._owned(conn, session_id, now)
+            if control is None:
+                return False
+            if self._active(conn):
+                raise ActionError("Cannot observe idle motion while an execution is active.")
+            self._observe(conn, observation, control["source"], now)
+            return True
+
     def _claim(self, session_id, *, cancellation=False):
         with self._transaction() as (conn, now):
             if self._owned(conn, session_id, now) is None:
@@ -458,6 +468,15 @@ class ControllerHandle:
 
     def reconcile(self, observation, *, stopped):
         return self._service._reconcile(self.session_id, observation, stopped=stopped)
+
+    def observe_idle(self, observation):
+        """Persist observed motion outside executions without claiming a stopped body.
+
+        Return False after lease/session loss. An accepted or running execution
+        takes priority and raises ActionError; the driver must stop idle playback.
+        This records no action or execution event and does not renew the lease.
+        """
+        return self._service._observe_idle(self.session_id, observation)
 
     def claim_next(self):
         return self._service._claim(self.session_id)

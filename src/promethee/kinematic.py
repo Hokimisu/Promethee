@@ -508,6 +508,11 @@ class KinematicController:
             )
         return retry
 
+    def _target_tolerance(self):
+        if self.active and self.active["envelope"]["action"]["kind"] == "move":
+            return FREE_WALK_TARGET_TOLERANCE_M
+        return DEFAULT_TARGET_TOLERANCE_M
+
     def _result(self, item):
         if item["job_id"] != self.job_id:
             return  # Cancelled generation: retained locally, never played later.
@@ -538,9 +543,6 @@ class KinematicController:
                 target = self.motion_spec[0]
             if self.active and self.active["envelope"]["action"]["kind"] == "move":
                 target = self.active["envelope"]["action"]["args"]["position"]
-                target_tolerance = FREE_WALK_TARGET_TOLERANCE_M
-            else:
-                target_tolerance = DEFAULT_TARGET_TOLERANCE_M
             poses = read_trajectory(
                 self.worker.output / expected_file,
                 start_pose=self.motion_origin["pose"]
@@ -549,7 +551,7 @@ class KinematicController:
                 target=None
                 if self.motion_remaining is not None and self.motion_remaining > 40
                 else target,
-                target_tolerance_m=target_tolerance,
+                target_tolerance_m=self._target_tolerance(),
             )
             if self.motion_remaining is not None:
                 if len(poses) != 41:
