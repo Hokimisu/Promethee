@@ -6,10 +6,12 @@ Un avatar IA doté d'un corps, d'une mémoire et de capacités d'action dans un 
 
 Le projet fournit un espace que l'avatar peut percevoir et modifier, des objets utilisables et une mémoire consultable dans Obsidian. Un agent peut former et réviser ses intentions ; le monde lui renvoie ce qui s'est effectivement passé. Aucun scénario de vie, routine ou préférence d'objet n'est prescrit.
 
-La prochaine expérience visée est une [boîte à Ariane](docs/pet-mode.md) :
-observer ses occupations et intervenir en parlant ou en manipulant son espace.
-Hermes reste son agent, VoxCPM2 sa voix ; l'initiative et la continuité passent
-avant la réponse immédiate. Le glisser-déposer et les lancers restent à construire.
+La [boîte à Ariane](docs/pet-environment.md) est disponible dans la scène locale :
+observer ses initiatives, parler, ajouter une balle ou un doudou, déplacer Ariane
+et les objets à la souris, puis lancer les balles. Hermes garde son contexte
+dans un monde personnel et un coffre distincts des qualifications. VoxCPM2 reste
+sa voix. La [feuille de route](docs/pet-mode.md) distingue cette première version
+jouable des essais prolongés et des capacités motrices encore à qualifier.
 
 **État actuel : monde persistant, corps cinématique ARDY et scène vocale expérimentale.** Via le [pont Hermes](docs/hermes-setup.md), Astra a conversé, retrouvé l'historique après redémarrage, demandé une posture exécutée par ARDY et rapporté une annulation confirmée. La [scène locale](experiments/voice/realtime/README.md) relie Hermes/Luna, VoxCPM2 et le VRM ; elle reçoit du texte ou un microphone facultatif, et propose une initiative à budget explicite. La latence, la naturalité des mouvements et la conversation acoustique restent à qualifier. La commande `demo` ci-dessous est une fixture logique distincte : elle n'exige aucun réseau, aucune clé API ni GPU.
 
@@ -64,6 +66,7 @@ Cette commande réalise une transition instantanée, sans activité préécrite 
 | ARDY Core et rendu Viser | Pilotage cinématique manuel ; qualification des déplacements incomplète |
 | Apparence anime en VRM | Lecture et [session en direct](docs/live-avatar.md) ; prise/dépôt cinématiques, arrêt et restauration ; contacts géométriques des poses préparées mesurés, équilibre physique non validé |
 | Initiative à budget explicite | Essais Astra textuels ; raccord vocal avec silence facultatif, pause et reprise du même monde. Dépendance acoustique T11 encore ouverte |
+| Boîte à Ariane | Monde et mémoire personnels, palette balle/doudou, glisser-déposer, lancers et collisions simplifiées ; vie suspendue sans spectateur, transport animé non qualifié |
 | Services externes | Extensions ultérieures selon besoin observé |
 
 ## Architecture cible
@@ -123,6 +126,7 @@ docs/            Vision, architecture, contrats et jalons
 - [Essai du harness maison sans Hermes](docs/research/17-custom-harness.md)
 - [Contexte natif Hermes et latence](docs/research/18-hermes-world-context.md)
 - [Initiative, budget et pause](docs/initiative.md)
+- [Ouvrir la boîte à Ariane](docs/pet-environment.md)
 - [Provenance de l'avatar VRM](docs/assets/pixiv-vrm-sample.md)
 - [Lecture animée de l'avatar](docs/avatar-rendering.md)
 - [Contribuer](CONTRIBUTING.md)

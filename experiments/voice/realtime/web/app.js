@@ -7,6 +7,9 @@ import { consumeEvents } from "./stream-events.mjs";
 import { AudioMouth } from "./audio-mouth.mjs";
 import { MicrophoneInput } from "./microphone.mjs";
 import { createSileroDetector } from "./silero-microphone.mjs";
+import { ObjectVisuals } from "../../../../web/avatar/objects.js";
+import { PetInteraction, petSessionTransition } from "./pet-interaction.mjs";
+import { PetScene } from "./pet-scene.js";
 import {
     InitiativeControls,
     initiativeButtonState,
@@ -15,7 +18,12 @@ import {
 } from "./initiative-controls.mjs";
 
 const $ = (id) => document.getElementById(id);
-const { renderer, scene, camera, orbit } = createRoom($("stage"));
+const room = createRoom($("stage"));
+const { renderer, scene, camera, orbit } = room;
+let objectVisuals = null,
+    petWatching = false,
+    petMode = false;
+let petView = null;
 let state = null,
     session = null,
     cursor = 0,
@@ -74,6 +82,12 @@ const labels = {
     failed: "Essai interrompu",
     error: "Essai indisponible",
 };
+const petLabels = {
+    starting: "Préparation de la boîte…",
+    running: "Dans sa boîte",
+    failed: "Une activité s’est interrompue",
+    error: "Boîte indisponible",
+};
 function message(error) {
     return typeof error === "string"
         ? error
@@ -85,6 +99,12 @@ function showError(error) {
 }
 function telemetry(event, id, metrics, whichSession = session) {
     if (!whichSession) return;
+    if (
+        event === "client_stats" &&
+        petMode &&
+        document.visibilityState !== "visible"
+    )
+        return;
     void fetch("/telemetry", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -123,10 +143,13 @@ async function request(path, body, timeout = 6000) {
         signal: AbortSignal.timeout(timeout),
     });
     const data = await response.json();
-    if (!response.ok)
-        throw new Error(
+    if (!response.ok) {
+        const error = new Error(
             message(data.error ?? `Requête refusée (${response.status}).`),
         );
+        error.httpStatus = response.status;
+        throw error;
+    }
     return data;
 }
 const microphone = new MicrophoneInput({
@@ -144,6 +167,7 @@ const microphone = new MicrophoneInput({
     canListen: () =>
         connected && state?.ready && state?.asr?.state === "ready" && !pending,
     interrupt: () => {
+        petView?.cancel();
         const epoch = stopLocal(false);
         active = true;
         showError(null);
@@ -182,10 +206,11 @@ const initiativeControls = new InitiativeControls({
             audio.session = session;
         }
         audioAllowed = result.audioAllowed;
+        if (state?.mode === "pet" && result.enableAudio) petWatching = true;
         if (result.enableAudio || result.interrupted) freezeMotion = false;
         if (result.interrupted) active = false;
         state = { ...state, initiative: result.initiative };
-        if (audioAllowed && session)
+        if (result.enableAudio && audioAllowed && session)
             telemetry("client_stats", null, {
                 ...audio.stats,
                 rendered_frames: renderedFrames,
@@ -194,9 +219,194 @@ const initiativeControls = new InitiativeControls({
     onChange: () => controls(),
     onError: (error) => showError(error),
 });
+const petInteraction = new PetInteraction({
+    current: () => ({
+        ready:
+            petMode &&
+            petWatching &&
+            session &&
+            connected &&
+            state?.ready &&
+            !pending,
+        revision: state?.pet?.command_revision,
+        catalog: state?.pet,
+    }),
+    request: async (path, body, { cleanup } = {}) => {
+        if (cleanup) return request(path, body, 20000);
+        microphone.cancelInput();
+        const before = { session, cursor, audioAllowed, watching: petWatching };
+        before.fence = stopLocal(false);
+        try {
+            const result = await request(path, body, 20000);
+            return { ...result, clientState: before };
+        } catch (error) {
+            // A refused intervention does not change the server session. Re-arm
+            // future speech, never the discarded PCM or a newer user turn.
+            if ([400, 409].includes(error.httpStatus)) {
+                const restored = petSessionTransition(
+                    { fence, session, cursor },
+                    before,
+                );
+                if (restored) applyPetSession(restored);
+            }
+            throw error;
+        }
+    },
+    onReply: (result) => {
+        const transition = petSessionTransition(
+            { fence, session, cursor },
+            result.clientState,
+            result,
+        );
+        if (!transition) return false;
+        applyPetSession(transition);
+        state = {
+            ...state,
+            pet: { ...state.pet, command_revision: result.command_revision },
+        };
+        // The acknowledgement can render its observed objects immediately; the avatar
+        // keeps using the controller's prepared motion stream, never a client transform.
+        if (result.observation?.objects && objectVisuals)
+            objectVisuals.display(result.observation.objects);
+        $("pet-action-status").textContent = "";
+        $("pet-action-status").hidden = true;
+        showError(null);
+        return true;
+    },
+    onError: (error) => {
+        $("pet-action-status").textContent = message(error);
+        $("pet-action-status").hidden = false;
+    },
+    onChange: () => {
+        petView?.update();
+        controls();
+    },
+});
+function applyPetSession(transition) {
+    session = transition.session;
+    cursor = transition.cursor;
+    petWatching = transition.watching;
+    active = false;
+    freezeMotion = false;
+    audio.reset(transition.audioAllowed ? session : null);
+    audioAllowed = transition.audioAllowed;
+    if (petWatching && audioAllowed)
+        telemetry("client_stats", null, {
+            ...audio.stats,
+            rendered_frames: renderedFrames,
+        });
+}
+function petControls() {
+    if (!petMode) return;
+    $("pet-placement-control").hidden = petInteraction.model !== "plush";
+    $("pet-placement").value = petInteraction.placement;
+    $("pet-placement").disabled = petInteraction.busy;
+    const ready =
+        petWatching && session && connected && state?.ready && !pending;
+    for (const button of document.querySelectorAll("[data-pet-model]")) {
+        button.disabled =
+            !ready ||
+            petInteraction.busy ||
+            !petInteraction.available("spawn") ||
+            !state.pet?.object_models?.includes(button.dataset.petModel);
+        button.setAttribute(
+            "aria-pressed",
+            String(button.dataset.petModel === petInteraction.model),
+        );
+    }
+    $("pet-move").disabled =
+        !ready ||
+        petInteraction.busy ||
+        !petInteraction.available("grab_begin");
+    $("pet-throw").disabled =
+        !ready || petInteraction.busy || !petInteraction.available("throw");
+    $("pet-move").setAttribute(
+        "aria-pressed",
+        String(petInteraction.mode === "move" && !petInteraction.model),
+    );
+    $("pet-throw").setAttribute(
+        "aria-pressed",
+        String(petInteraction.mode === "throw" && !petInteraction.model),
+    );
+    $("pet-cancel").hidden = !petInteraction.operation && !petInteraction.model;
+    const phase = petInteraction.operation?.phase;
+    $("pet-hint").textContent =
+        phase === "acquiring"
+            ? "Arrêt du mouvement avant la saisie…"
+            : phase === "committing"
+              ? "Dépôt en cours de confirmation…"
+              : petInteraction.operation
+                ? "Prévisualisation · relâchez pour confirmer. Échap pour annuler."
+                : petInteraction.model
+                  ? "Cliquez dans la boîte pour poser l’objet. Échap pour annuler."
+                  : petInteraction.mode === "throw"
+                    ? "Depuis la balle, tirez une flèche puis relâchez pour lancer."
+                    : "Faites glisser Ariane ou un objet. Le clic droit tourne la vue.";
+    $("stage").dataset.gesture = petInteraction.operation
+        ? "dragging"
+        : petInteraction.model
+          ? "placing"
+          : "ready";
+}
+petView = new PetScene({
+    renderer,
+    scene,
+    camera,
+    orbit,
+    interaction: petInteraction,
+    objects: () => objectVisuals,
+    avatar: () => vrm?.scene,
+    enabled: () =>
+        petMode && petWatching && connected && state?.ready && !pending,
+    geometry: () => state?.pet?.object_geometry,
+});
+for (const button of document.querySelectorAll("[data-pet-model]"))
+    button.onclick = () => {
+        $("pet-action-status").hidden = true;
+        petInteraction.selectModel(button.dataset.petModel);
+    };
+$("pet-move").onclick = () => petInteraction.setMode("move");
+$("pet-throw").onclick = () => petInteraction.setMode("throw");
+$("pet-cancel").onclick = () => petView.cancel();
+$("pet-placement").onchange = (event) =>
+    petInteraction.setPlacement(event.target.value);
+addEventListener("keydown", (event) => {
+    if (event.key === "Escape") petView.cancel();
+});
+addEventListener("blur", () => petView.cancel());
+addEventListener("visibilitychange", () => {
+    if (document.hidden) petView.cancel();
+});
 function controls() {
+    const isPet = state?.mode === "pet";
+    if (isPet !== petMode) {
+        petMode = isPet;
+        document.body.classList.toggle("pet-mode", isPet);
+        document.querySelectorAll(".pet-only").forEach((element) => {
+            element.hidden = !isPet;
+        });
+        $("initiative-heading").textContent = isPet
+            ? "Sa vie dans la boîte"
+            : "Initiative";
+        $("message").placeholder = isPet
+            ? "Un mot à Ariane…"
+            : "Écrivez à Ariane…";
+        $("microphone-help").open = !isPet;
+        room.setMode(state?.mode);
+    }
+    $("pet-watch").disabled = pending || !connected || !state?.ready || !vrm;
+    $("pet-watch").hidden = !isPet || (petWatching && audioAllowed);
+    petControls();
     const initiative = state?.initiative;
     const hasInitiative = initiative != null;
+    $("initiative-add-budget").hidden = !isPet || !hasInitiative;
+    $("initiative-add-budget").disabled =
+        !hasInitiative ||
+        initiative.remaining > 990 ||
+        initiativeControls.pending ||
+        pending ||
+        !connected ||
+        !state?.ready;
     $("initiative-budget").disabled =
         hasInitiative || initiativeControls.pending;
     $("initiative-interval").disabled =
@@ -205,6 +415,8 @@ function controls() {
         $("initiative-budget").value = initiative.remaining + initiative.used;
         $("initiative-interval").value = initiative.interval ?? "";
     }
+    $("cadence-note").hidden =
+        isPet && $("initiative-interval").value.trim() !== "";
     $("initiative-toggle").disabled =
         pending ||
         initiativeControls.pending ||
@@ -216,6 +428,10 @@ function controls() {
         initiative,
         audioAllowed,
     ).label;
+    if (isPet && (!initiative || !initiative.paused) && audioAllowed)
+        $("initiative-toggle").textContent = initiative
+            ? "Pause de vie"
+            : "Laisser vivre";
     $("initiative-status").textContent = initiativeControls.pending
         ? "Demande en cours…"
         : !hasInitiative
@@ -290,12 +506,24 @@ function controls() {
         return;
     }
     if (freezeMotion && !active) {
-        $("status").textContent = "Essai arrêté";
+        $("status").textContent = isPet ? "En pause" : "Essai arrêté";
         return;
     }
     const phase = state?.phase ?? state?.status;
     $("status").textContent =
-        labels[phase] ??
+        (isPet &&
+        [
+            "ready",
+            "idle",
+            "stopped",
+            "complete",
+            "completed",
+            "finished",
+        ].includes(phase)
+            ? initiative?.paused
+                ? "En pause"
+                : "Dans sa boîte"
+            : ((isPet ? petLabels[phase] : null) ?? labels[phase])) ??
         (state?.ready ? (active ? "Essai en cours" : "Prête") : "Préparation…");
 }
 function stopLocal(freeze = true) {
@@ -313,6 +541,7 @@ function stopLocal(freeze = true) {
     return fence;
 }
 async function command(path, body) {
+    petView?.cancel();
     if (path === "/stop") microphone.disable();
     else microphone.cancelInput();
     const epoch = stopLocal(path === "/stop");
@@ -371,6 +600,41 @@ $("say-form").onsubmit = (event) => {
     void command("/say", { text });
 };
 $("stop").onclick = () => void command("/stop", {});
+$("pet-watch").onclick = async () => {
+    const epoch = fence;
+    pending = true;
+    controls();
+    try {
+        await audio.enable();
+        if (epoch !== fence) return;
+        const result = await request("/pet_watch", {}, 20000);
+        if (epoch !== fence) return;
+        if (
+            typeof result.session_id !== "string" ||
+            !Number.isSafeInteger(result.cursor)
+        )
+            throw new Error("Ouverture de la boîte non confirmée.");
+        if (session !== result.session_id) {
+            stopLocal(false);
+            session = result.session_id;
+            cursor = result.cursor;
+            audio.reset(session);
+        } else audio.session = session;
+        audioAllowed = true;
+        freezeMotion = false;
+        petWatching = true;
+        state = { ...state, initiative: result.initiative };
+        telemetry("client_stats", null, {
+            ...audio.stats,
+            rendered_frames: renderedFrames,
+        });
+    } catch (error) {
+        if (epoch === fence) showError(error);
+    } finally {
+        pending = false;
+        controls();
+    }
+};
 $("initiative-form").onsubmit = (event) => {
     event.preventDefault();
     if (
@@ -383,6 +647,7 @@ $("initiative-form").onsubmit = (event) => {
         return;
     showError(null);
     try {
+        petView?.cancel();
         if (state.initiative)
             void initiativeControls.pause(
                 initiativeButtonState(state.initiative, audioAllowed).paused,
@@ -398,6 +663,20 @@ $("initiative-form").onsubmit = (event) => {
         showError(error);
     }
 };
+$("initiative-add-budget").onclick = () => {
+    if (
+        state?.mode !== "pet" ||
+        !state.initiative ||
+        state.initiative.remaining > 990 ||
+        pending ||
+        initiativeControls.pending ||
+        !connected ||
+        !state.ready
+    )
+        return;
+    showError(null);
+    void initiativeControls.addBudget(10);
+};
 $("microphone").onclick = () => {
     if (microphone.enabled) {
         microphone.disable();
@@ -412,14 +691,10 @@ $("microphone").onclick = () => {
     });
 };
 $("wide").onclick = () => {
-    camera.position.set(1.6, 1.8, 5.8);
-    orbit.target.set(-0.15, 1.05, -0.6);
-    orbit.update();
+    room.frame();
 };
 $("close").onclick = () => {
-    camera.position.set(0.3, 1.6, 3.4);
-    orbit.target.set(0, 1.12, 0);
-    orbit.update();
+    room.frame(true);
 };
 
 function receiveMotion(motion) {
@@ -531,6 +806,7 @@ async function pollState() {
     const requestedSession = session;
     const duringInputStart = microphone.waitingForStart;
     const duringInitiativeChange = initiativeControls.pending;
+    const duringPetChange = petInteraction.pending > 0;
     try {
         if (pending) return;
         const next = await request("/state.json", undefined, 3000);
@@ -544,6 +820,13 @@ async function pollState() {
         state = next;
         connected = true;
         connectionError = null;
+        if (next.pet?.object_geometry && !objectVisuals)
+            objectVisuals = new ObjectVisuals(scene, next.pet.object_geometry);
+        if (objectVisuals && next.body_state?.observation?.objects)
+            objectVisuals.display(next.body_state.observation.objects);
+        const avatarPosition = next.body_state?.observation?.avatar?.position;
+        if (vrm && avatarPosition)
+            vrm.scene.userData.petRoot = [...avatarPosition];
         if (
             session &&
             next.session_id &&
@@ -551,13 +834,21 @@ async function pollState() {
             !duringInputStart &&
             !microphone.waitingForStart &&
             !duringInitiativeChange &&
-            !initiativeControls.pending
+            !initiativeControls.pending &&
+            !duringPetChange &&
+            !petInteraction.pending
         ) {
             microphone.cancelInput();
             stopLocal(false);
             active = false;
             session = null;
-            showError("La session a changé. Démarrez un nouvel essai.");
+            petWatching = false;
+            petView.cancel();
+            showError(
+                next.mode === "pet"
+                    ? "La boîte a changé de session. Rouvrez-la pour activer la voix."
+                    : "La session a changé. Démarrez un nouvel essai.",
+            );
         }
         if (!pending) {
             if (terminal.has(next.status) || terminal.has(next.phase))
@@ -588,6 +879,7 @@ async function pollState() {
         if (epoch !== fence) return;
         connectionError = message(error);
         connected = false;
+        petView.cancel();
         microphone.disable();
         if (audioAllowed) {
             stopLocal(true);
@@ -659,6 +951,7 @@ renderer.setAnimationLoop((now) => {
         vrm.update(Math.min(dt, 0.034));
     }
     orbit.update();
+    petView.update();
     renderer.render(scene, camera);
     if (active && visiblePose) renderedFrames++;
 });
@@ -699,6 +992,9 @@ setInterval(() => {
             audioAllowed,
             active,
             initiative: state?.initiative,
+            petMode,
+            petWatching,
+            visible: document.visibilityState === "visible",
         })
     )
         telemetry("client_stats", null, {
@@ -707,6 +1003,7 @@ setInterval(() => {
         });
 }, 5000);
 addEventListener("pagehide", () => {
+    petView.cancel();
     microphone.disable();
     stopLocal(true);
 });

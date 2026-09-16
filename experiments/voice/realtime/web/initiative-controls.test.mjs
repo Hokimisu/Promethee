@@ -105,6 +105,71 @@ test("pause with unchanged SID preserves an ongoing user reply and its unread cu
     assert.equal(effect.interrupted, false);
 });
 
+test("explicit budget refill preserves a paused life and does not enable voice or reset audio", async () => {
+    const h = harness();
+    h.state.audioAllowed = false;
+    const adding = h.controls.addBudget(10);
+    assert.equal(h.enables, 0);
+    assert.equal(h.calls[0].path, "/initiative_budget");
+    assert.deepEqual(h.calls[0].body, { add_budget: 10 });
+    h.calls[0].resolve(
+        response({
+            initiative: { ...initiative, remaining: 10, used: 3, paused: true },
+        }),
+    );
+    assert.equal(await adding, true);
+    const effect = h.applied[0];
+    assert.equal(effect.initiative.remaining, 10);
+    assert.equal(effect.initiative.paused, true);
+    assert.equal(effect.audioAllowed, false);
+    assert.equal(effect.enableAudio, false);
+    assert.equal(effect.resetAudio, false);
+    assert.equal(effect.session, "session");
+    assert.equal(effect.cursor, 12);
+    assert.equal(effect.interrupted, false);
+});
+
+test("a late budget acknowledgement cannot revive a session after stop", async () => {
+    const h = harness();
+    const adding = h.controls.addBudget(10);
+    h.state.fence++;
+    h.calls[0].resolve(
+        response({ initiative: { ...initiative, remaining: 10 } }),
+    );
+    assert.equal(await adding, false);
+    assert.equal(h.enables, 0);
+    assert.equal(h.applied.length, 0);
+});
+
+test("budget can be refilled before opening the box without creating an audio session", async () => {
+    const h = harness();
+    h.state.session = null;
+    h.state.audioAllowed = false;
+    const adding = h.controls.addBudget(10);
+    h.calls[0].resolve(
+        response({
+            session_id: "",
+            initiative: { ...initiative, paused: true, remaining: 10 },
+        }),
+    );
+    assert.equal(await adding, true);
+    assert.equal(h.enables, 0);
+    assert.equal(h.applied[0].session, null);
+    assert.equal(h.applied[0].resetAudio, false);
+    assert.equal(h.applied[0].audioAllowed, false);
+    assert.equal(h.applied[0].initiative.paused, true);
+});
+
+test("budget reply cannot introduce a new session or interrupt current speech", async () => {
+    const h = harness();
+    const adding = h.controls.addBudget(10);
+    h.calls[0].resolve(response({ session_id: "unexpected" }));
+    assert.equal(await adding, false);
+    assert.equal(h.applied.length, 0);
+    assert.equal(h.enables, 0);
+    assert.match(h.errors[0].message, /session/);
+});
+
 test("pause that interrupts an autonomous turn adopts the new SID and cursor", async () => {
     const h = harness();
     const pausing = h.controls.pause(true);
@@ -265,6 +330,45 @@ test("heartbeat supports idle enabled initiative, but no disabled audio or pause
     assert.equal(
         shouldSendClientStats({ ...base, initiative: null, active: true }),
         true,
+    );
+});
+
+test("hidden pet tab cannot keep life active through the qualification heartbeat branch", () => {
+    const viewing = {
+        session: "pet",
+        audioAllowed: true,
+        active: true,
+        initiative,
+        petMode: true,
+        petWatching: true,
+        visible: false,
+    };
+    assert.equal(shouldSendClientStats(viewing), false);
+    assert.equal(shouldSendClientStats({ ...viewing, visible: true }), true);
+    assert.equal(
+        shouldSendClientStats({
+            ...viewing,
+            visible: true,
+            active: false,
+            initiative: null,
+        }),
+        true,
+    );
+    assert.equal(
+        shouldSendClientStats({
+            ...viewing,
+            visible: true,
+            petWatching: false,
+        }),
+        false,
+    );
+    assert.equal(
+        shouldSendClientStats({
+            ...viewing,
+            visible: true,
+            audioAllowed: false,
+        }),
+        false,
     );
 });
 

@@ -19,8 +19,71 @@
                     ><button id="close" type="button">Se rapprocher</button>
                 </nav>
                 <div id="subtitle" hidden></div>
+                <section
+                    id="pet-palette"
+                    class="pet-only"
+                    hidden
+                    aria-label="Objets et manipulation"
+                >
+                    <div class="palette-objects">
+                        <button type="button" data-pet-model="ball" disabled>
+                            <span
+                                class="toy-icon toy-ball"
+                                aria-hidden="true"
+                            ></span>
+                            Balle
+                        </button>
+                        <button type="button" data-pet-model="plush" disabled>
+                            <span class="toy-icon toy-plush" aria-hidden="true"
+                                ><i></i
+                            ></span>
+                            Doudou
+                        </button>
+                    </div>
+                    <label id="pet-placement-control" hidden>
+                        Placer le doudou
+                        <select id="pet-placement">
+                            <option value="floor">Au sol</option>
+                            <option value="high">En hauteur · 1,25 m</option>
+                        </select>
+                        <span>Reste à la hauteur choisie.</span>
+                    </label>
+                    <div
+                        class="pet-tools"
+                        role="group"
+                        aria-label="Geste de la souris"
+                    >
+                        <button id="pet-move" type="button" aria-pressed="true">
+                            Déplacer
+                        </button>
+                        <button
+                            id="pet-throw"
+                            type="button"
+                            aria-pressed="false"
+                            disabled
+                        >
+                            Lancer
+                        </button>
+                        <button id="pet-cancel" type="button" hidden>
+                            Annuler
+                        </button>
+                    </div>
+                    <p id="pet-hint" role="status">
+                        Faites glisser Ariane ou un objet.
+                    </p>
+                    <p id="pet-action-status" role="status" hidden></p>
+                </section>
             </section>
             <aside>
+                <button
+                    id="pet-watch"
+                    class="pet-only"
+                    type="button"
+                    hidden
+                    disabled
+                >
+                    Ouvrir la boîte
+                </button>
                 <form id="start-form">
                     <label for="scenario">Contexte de l’essai</label>
                     <textarea
@@ -39,7 +102,7 @@
                 </form>
                 <form id="initiative-form">
                     <fieldset>
-                        <legend>Initiative</legend>
+                        <legend id="initiative-heading">Initiative</legend>
                         <div class="initiative-options">
                             <label for="initiative-budget"
                                 >Budget d’appels
@@ -64,12 +127,24 @@
                                 />
                             </label>
                         </div>
+                        <button
+                            id="initiative-add-budget"
+                            class="pet-only"
+                            type="button"
+                            hidden
+                            disabled
+                        >
+                            +10 décisions
+                        </button>
                         <button id="initiative-toggle" type="submit" disabled>
                             Activer
                         </button>
                         <p id="initiative-status" role="status">Désactivée</p>
                         <p class="initiative-note">
-                            Cadence vide : réveils sur événements uniquement.
+                            <span id="cadence-note"
+                                >Cadence vide : réveils sur événements
+                                uniquement.</span
+                            >
                             Ariane peut choisir de rester silencieuse.
                         </p>
                     </fieldset>
@@ -97,14 +172,18 @@
                     <p id="microphone-status" role="status">Micro coupé</p>
                     <p id="transcript" aria-live="polite" hidden></p>
                     <p id="input-error" role="alert" hidden></p>
+                    <details id="microphone-help" open>
+                        <summary>Utiliser le micro</summary>
+                        <p id="notice">
+                            Le micro s’active uniquement à votre demande. La
+                            transcription reste locale ; le texte est envoyé au
+                            même agent que vos messages écrits. Parlez par
+                            phrases de moins de 12 secondes et vérifiez le texte
+                            reconnu.
+                        </p>
+                    </details>
                 </div>
                 <p id="error" role="alert" hidden></p>
-                <p id="notice">
-                    Le micro s’active uniquement à votre demande. La
-                    transcription reste locale ; le texte est envoyé au même
-                    agent que vos messages écrits. Parlez par phrases de moins
-                    de 12 secondes et vérifiez le texte reconnu.
-                </p>
                 <details>
                     <summary>Lecture</summary>
                     <dl>

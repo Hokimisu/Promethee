@@ -23,8 +23,15 @@ export function initiativeConfiguration(budget, interval) {
     return { budget, interval };
 }
 
-export function initiativeTransition(current, result, enableAudio) {
+export function initiativeTransition(
+    current,
+    result,
+    enableAudio,
+    { allowUnbound = false } = {},
+) {
     const initiative = result?.initiative;
+    const unbound =
+        allowUnbound && current.session === null && result?.session_id === "";
     if (
         !initiative ||
         typeof initiative !== "object" ||
@@ -38,16 +45,16 @@ export function initiativeTransition(current, result, enableAudio) {
                 !Number.isFinite(initiative.interval) ||
                 initiative.interval < 1)) ||
         typeof result.session_id !== "string" ||
-        !result.session_id ||
+        (!result.session_id && !unbound) ||
         !Number.isSafeInteger(result.cursor) ||
         result.cursor < 0 ||
         typeof result.interrupted !== "boolean"
     )
         throw new Error("Réponse d’initiative invalide.");
-    const changed = result.session_id !== current.session;
+    const changed = !unbound && result.session_id !== current.session;
     return {
         initiative,
-        session: result.session_id,
+        session: unbound ? null : result.session_id,
         cursor: changed ? result.cursor : current.cursor,
         resetAudio: changed,
         interrupted: result.interrupted,
@@ -88,6 +95,19 @@ export class InitiativeControls {
             throw new Error("La pause doit être un booléen.");
         return this.send("/initiative_pause", { paused }, !paused);
     }
+    addBudget(addBudget) {
+        if (
+            !Number.isSafeInteger(addBudget) ||
+            addBudget < 1 ||
+            addBudget > 1000
+        )
+            throw new Error("Ajoutez de 1 à 1 000 décisions.");
+        return this.send(
+            "/initiative_budget",
+            { add_budget: addBudget },
+            false,
+        );
+    }
     async send(path, body, enableAudio) {
         if (this.pending) return false;
         const epoch = this.current().fence;
@@ -98,8 +118,21 @@ export class InitiativeControls {
             if (epoch !== this.current().fence) return false;
             const result = await this.request(path, body);
             if (epoch !== this.current().fence) return false;
+            const budgetOnly = path === "/initiative_budget";
+            const current = this.current();
+            if (
+                budgetOnly &&
+                (result.interrupted ||
+                    (result.session_id !== current.session &&
+                        !(
+                            current.session === null && result.session_id === ""
+                        )))
+            )
+                throw new Error("La recharge ne doit pas changer la session.");
             this.apply(
-                initiativeTransition(this.current(), result, enableAudio),
+                initiativeTransition(current, result, enableAudio, {
+                    allowUnbound: budgetOnly,
+                }),
             );
             return true;
         } catch (error) {
@@ -117,7 +150,12 @@ export function shouldSendClientStats({
     audioAllowed,
     active,
     initiative,
+    petMode = false,
+    petWatching = false,
+    visible = true,
 }) {
+    if (petMode)
+        return Boolean(visible && petWatching && session && audioAllowed);
     return Boolean(
         session &&
         audioAllowed &&

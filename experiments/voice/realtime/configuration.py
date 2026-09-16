@@ -1,6 +1,7 @@
 """Explicit machine paths for the experimental launcher; no models start here."""
 
 import json
+import math
 from pathlib import Path
 
 
@@ -10,24 +11,42 @@ def load_configuration(path):
     if not isinstance(value, dict) or value.get("brain", "hermes") not in {"hermes", "direct"}:
         raise ValueError("brain must select hermes or direct explicitly.")
     direct = value.get("brain") == "direct"
+    mode = value.get("mode", "qualification")
+    if mode not in ("qualification", "pet"):
+        raise ValueError("mode must be qualification or pet.")
+    if mode == "pet" and direct:
+        raise ValueError("Pet mode requires the Hermes backend.")
     required = {"data_dir", "avatar", "body", "voice_command"}
     required |= {"auth_file"} if direct else {"hermes_python", "hermes_root", "hermes_auth_root"}
+    if mode == "pet":
+        required |= {"world_dir", "vault"}
     if not required <= value.keys():
         raise ValueError("Configuration requires explicit body, voice and selected brain paths.")
     if (
         value.keys()
         - required
-        - {"brain", "port", "model", "resident", "asr_command", "resume_world", "world_context"}
+        - {
+            "brain",
+            "port",
+            "model",
+            "resident",
+            "asr_command",
+            "resume_world",
+            "world_context",
+            "mode",
+        }
+        - ({"initiative"} if mode == "pet" else set())
     ):
         raise ValueError("Unknown configuration field.")
     result = dict(value)
+    result["mode"] = mode
     result["brain"] = "direct" if direct else "hermes"
     result["world_context"] = value.get("world_context", False)
     if type(result["world_context"]) is not bool or (direct and result["world_context"]):
         raise ValueError("world_context must be a boolean and requires the Hermes backend.")
     for key in required - {"body", "voice_command"}:
         entry = value[key]
-        if not isinstance(entry, str) or not entry.strip():
+        if not isinstance(entry, str) or not entry.strip() or "\x00" in entry:
             raise ValueError(f"Expected a path for {key}.")
         result[key] = (path.parent / entry).resolve()
     for key in ("avatar", "auth_file" if direct else "hermes_python"):
@@ -44,6 +63,27 @@ def load_configuration(path):
         if not resume.is_dir() or not (resume / "world.sqlite3").is_file():
             raise ValueError("resume_world requires an existing directory with world.sqlite3.")
     result["resume_world"] = resume
+    if mode == "pet":
+        if resume is not None:
+            raise ValueError("Pet mode resumes its explicit world_dir, not resume_world.")
+        world, vault = result["world_dir"], result["vault"]
+        for key in ("world_dir", "vault"):
+            if result[key].exists() and not result[key].is_dir():
+                raise ValueError(f"{key} must be a directory.")
+        if world.is_relative_to(vault) or vault.is_relative_to(world):
+            raise ValueError("Pet world_dir and vault must be separate directories.")
+        initial = value.get("initiative")
+        if initial is not None:
+            if not isinstance(initial, dict) or set(initial) != {"budget", "interval"}:
+                raise ValueError("Pet initiative requires an explicit budget and interval.")
+            budget, interval = initial["budget"], initial["interval"]
+            if type(budget) is not int or not 1 <= budget <= 1000:
+                raise ValueError("Pet initiative budget must be an integer from 1 to 1000.")
+            if interval is not None and (
+                type(interval) not in (int, float) or not math.isfinite(interval) or interval < 1
+            ):
+                raise ValueError("Pet initiative interval must be null or at least one second.")
+        result["initiative"] = initial
     command = value["voice_command"]
     if (
         not isinstance(command, list)

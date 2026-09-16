@@ -1,7 +1,5 @@
 import * as THREE from "three";
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { VRMLoaderPlugin } from "@pixiv/three-vrm";
 
 export function createRoom(host) {
     const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -47,6 +45,8 @@ export function createRoom(host) {
     const warm = new THREE.PointLight(0xffad63, 9, 5);
     warm.position.set(2.5, 1.8, -1.8);
     scene.add(warm);
+    const decor = new THREE.Group();
+    scene.add(decor);
     const materials = {};
     function material(color) {
         return (materials[color] ??= new THREE.MeshStandardMaterial({
@@ -62,7 +62,7 @@ export function createRoom(host) {
         mesh.position.set(x, y, z);
         mesh.receiveShadow = true;
         mesh.castShadow = true;
-        scene.add(mesh);
+        decor.add(mesh);
         return mesh;
     }
     box(0, -0.12, 0, 7, 0.18, 7, "#4b3731");
@@ -118,7 +118,7 @@ export function createRoom(host) {
         material("#b37c63"),
     );
     pot.position.set(-2.65, 0.15, -2.1);
-    scene.add(pot);
+    decor.add(pot);
     for (let i = 0; i < 7; i++) {
         const leaf = new THREE.Mesh(
             new THREE.SphereGeometry(1, 12, 8),
@@ -132,7 +132,7 @@ export function createRoom(host) {
         );
         leaf.rotation.z = Math.sin(i * 2.4) * 0.45;
         leaf.rotation.y = i;
-        scene.add(leaf);
+        decor.add(leaf);
     }
     box(2.82, 1.1, -2.36, 0.035, 1.85, 0.035, "#dbc4a0");
     const shade = new THREE.Mesh(
@@ -143,7 +143,66 @@ export function createRoom(host) {
         }),
     );
     shade.position.set(2.82, 1.9, -2.36);
-    scene.add(shade);
+    decor.add(shade);
 
-    return { renderer, scene, camera, orbit };
+    // A simple cutaway shell, not a catalogue of pretend interactive furniture.
+    const diorama = new THREE.Group();
+    diorama.visible = false;
+    scene.add(diorama);
+    function slab(x, y, z, width, height, depth, color) {
+        const mesh = new THREE.Mesh(
+            new THREE.BoxGeometry(width, height, depth),
+            material(color),
+        );
+        mesh.position.set(x, y, z);
+        mesh.castShadow = mesh.receiveShadow = true;
+        diorama.add(mesh);
+    }
+    slab(0, -0.2, 0, 10.4, 0.38, 10.4, "#cda981");
+    slab(0, -0.015, 0, 10, 0.03, 10, "#e6d6b9");
+    slab(0, 0.65, -5.12, 10.4, 1.7, 0.22, "#edd8bd");
+    slab(-5.12, 0.65, 0, 0.22, 1.7, 10.4, "#e5c8aa");
+    for (let i = -4; i <= 4; i++) {
+        slab(i, 0.003, 0, 0.012, 0.005, 10, "#d7c5a9");
+        slab(0, 0.003, i, 10, 0.005, 0.012, "#d7c5a9");
+    }
+    let pet = false;
+    function frame(near = false) {
+        if (pet) {
+            camera.position.set(
+                near ? 3.1 : 5.7,
+                near ? 3.4 : 6.6,
+                near ? 5.8 : 10.5,
+            );
+            orbit.target.set(0, 0.7, -0.25);
+        } else {
+            camera.position.set(
+                near ? 0.3 : 1.6,
+                near ? 1.6 : 1.8,
+                near ? 3.4 : 5.8,
+            );
+            orbit.target.set(
+                near ? 0 : -0.15,
+                near ? 1.12 : 1.05,
+                near ? 0 : -0.6,
+            );
+        }
+        orbit.update();
+    }
+    function setMode(mode) {
+        const next = mode === "pet";
+        if (next === pet) return;
+        pet = next;
+        decor.visible = !pet;
+        diorama.visible = pet;
+        scene.background.set(pet ? "#f3ecdf" : "#171921");
+        renderer.toneMappingExposure = pet ? 1.3 : 1.1;
+        fill.intensity = pet ? 2 : 13;
+        warm.intensity = pet ? 2 : 9;
+        orbit.maxDistance = pet ? 18 : 11;
+        orbit.mouseButtons.LEFT = pet ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE;
+        orbit.mouseButtons.RIGHT = pet ? THREE.MOUSE.ROTATE : THREE.MOUSE.PAN;
+        frame(pet);
+    }
+    return { renderer, scene, camera, orbit, setMode, frame };
 }

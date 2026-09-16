@@ -1,4 +1,4 @@
-"""Local qualification adapter; no GPU/process starts until BodyAdapter.start().
+"""Local qualification/pet adapter; no GPU/process starts until BodyAdapter.start().
 
 Create on the server thread, open TextHost on ``adapter.data_dir``, then start
 after GPU coordination. ``poll()['motion']`` is an observed one-frame stream,
@@ -56,6 +56,7 @@ class BodyAdapter:
         seed=138124,
         node="node",
         resume=False,
+        session_kind="qualification",
     ):
         if type(resume) is not bool:
             raise ValueError("resume must be explicitly true or false.")
@@ -74,7 +75,7 @@ class BodyAdapter:
             Runtime(
                 database,
                 data_origin="session",
-                session_kind="qualification",
+                session_kind=session_kind,
                 create=not resume,
             )
         )
@@ -95,6 +96,7 @@ class BodyAdapter:
             "encoder_url": encoder_url,
         }
         self.seed, self.node = seed, node
+        self.session_kind = session_kind
         self._commands = queue.Queue(maxsize=16)
         self._stop = threading.Event()
         self._lock = threading.Lock()
@@ -114,7 +116,9 @@ class BodyAdapter:
         purpose.write_text(
             json.dumps(
                 {
-                    "purpose": "real-time voice/body qualification; excluded from personal memory",
+                    "purpose": "persistent interactive pet world"
+                    if session_kind == "interactive"
+                    else "real-time voice/body qualification; excluded from personal memory",
                     "continuous_motion": True,
                     "prepared_appearance": True,
                     "seed": seed,
@@ -156,7 +160,7 @@ class BodyAdapter:
         return self
 
     def request(self, action, *, request_id=None, expected_revision=None, turn_id=None):
-        """Submit ordinary move/posture actions; accepted never means completed.
+        """Submit supported body actions; accepted never means completed.
 
         A supplied request_id is preserved for retries. Calls from an agent
         should pass its turn_id (MCP already does this through the shared DB).
@@ -174,10 +178,23 @@ class BodyAdapter:
         return self._command("cancel", request_id=request_id, turn_id=turn_id)
 
     def set_presence(self, enabled):
-        """Enable generated conversational gestures for this temporary trial."""
+        """Enable generated presence; pet viewing also controls its idle motion."""
         if type(enabled) is not bool:
             raise ValueError("Presence must be a boolean.")
         return self._command("presence", enabled=enabled)
+
+    def catalog(self):
+        from promethee.pet_world import catalog
+
+        return catalog() if self.session_kind == "interactive" else None
+
+    def intervene(self, value):
+        if self.session_kind != "interactive":
+            raise ValueError("Interventions require the personal pet scene.")
+        return self._command("intervention", envelope=copy.deepcopy(value))
+
+    def set_viewing(self, viewing):
+        return self._command("viewing", viewing=viewing)
 
     def _command(self, kind, **value):
         future = Future()
@@ -214,6 +231,11 @@ class BodyAdapter:
                 if kind == "presence":
                     controller.set_presence(value["enabled"])
                     item = {"enabled": value["enabled"]}
+                elif kind == "intervention":
+                    item = controller.intervene(value["envelope"])
+                elif kind == "viewing":
+                    controller.set_viewing(value["viewing"])
+                    item = {"viewing": value["viewing"]}
                 elif kind == "request":
                     if not controller.ready:
                         raise RuntimeError("Body is still initializing.")
@@ -303,7 +325,12 @@ class BodyAdapter:
                 output=self.artifacts_dir / "appearance",
                 node=self.node,
             )
-            controller = PresenceController(
+            controller_type = PresenceController
+            if self.session_kind == "interactive":
+                from pet_body import PetController
+
+                controller_type = PetController
+            controller = controller_type(
                 self.service,
                 worker,
                 seed=self.seed,

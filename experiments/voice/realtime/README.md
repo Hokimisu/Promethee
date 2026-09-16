@@ -1,5 +1,10 @@
 # Scène vocale expérimentale
 
+Le [mode pet](../../../docs/pet-environment.md) utilise désormais ce même
+serveur pour une boîte persistante avec mémoire, initiatives, objets, glisser
+et lancers. `mode: "qualification"` reste le défaut pour les essais décrits
+ci-dessous ; il ne crée pas de passé personnel.
+
 Hermes produit une réplique courte et sa direction de jeu ; VoxCPM2 envoie le
 PCM au navigateur pendant qu'ARDY génère la présence corporelle. Le même monde
 enregistre les observations et les résultats d'outils. On peut écrire dès que

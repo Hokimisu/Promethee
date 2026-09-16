@@ -193,3 +193,29 @@ def test_spawn_preserves_appearance_without_repreparing_the_body(prepared_driver
     assert service.get("spawn")["status"] == "completed"
     assert controller.observation["appearance"] == appearance
     assert len(preparation.jobs) == 1
+
+
+def test_take_prepares_arms_without_discarding_observed_support(prepared_driver, monkeypatch):
+    pytest.importorskip("numpy")
+    controller, service, _, preparation, _, _ = prepared_driver
+    service.submit(
+        "spawn",
+        service.get_world()["revision"],
+        {"kind": "spawn", "args": {"object_id": "toy", "asset": "ball", "position": [0.8, 1, 0.5]}},
+    )
+    controller.tick()
+    controller.tick()
+    before = copy.deepcopy(controller.observation)
+    # This test isolates orchestration; the preparer independently rejects moving legs.
+    monkeypatch.setattr(
+        "promethee.object_actions.prepare_object_action",
+        lambda *args, **kwargs: [copy.deepcopy(before)] * 2,
+    )
+    service.submit(
+        "take", service.get_world()["revision"], {"kind": "take", "args": {"object_id": "toy"}}
+    )
+    controller.tick()
+    assert preparation.jobs[-1].get("stationary_support") is True, service.get("take")
+    assert preparation.jobs[-1]["initial_appearance"] == before["appearance"]
+    assert preparation.jobs[-1]["frames"][0] == before["pose"]
+    assert "stationary_support" not in preparation.jobs[0]

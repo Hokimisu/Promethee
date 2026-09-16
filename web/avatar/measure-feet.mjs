@@ -34,6 +34,50 @@ if (
 const motionBytes = readFileSync(motionPath);
 const data = JSON.parse(motionBytes);
 const observedOrigin = data.observed_origin === true;
+const stationarySupport = data.stationary_support === true;
+const supportBones = {
+    hips: "Hips",
+    rightUpperLeg: "RightUpLeg",
+    rightLowerLeg: "RightLeg",
+    rightFoot: "RightFoot",
+    rightToes: "RightToeBase",
+    leftUpperLeg: "LeftUpLeg",
+    leftLowerLeg: "LeftLeg",
+    leftFoot: "LeftFoot",
+    leftToes: "LeftToeBase",
+};
+if (data.stationary_support !== undefined) {
+    if (
+        !stationarySupport ||
+        observedOrigin ||
+        mode !== "--settle" ||
+        !data.initial_appearance ||
+        !isDeepStrictEqual(data.frames?.[0], data.initial_pose)
+    )
+        throw new Error(
+            "Stationary support requires an exact prepared origin.",
+        );
+    for (const frame of data.frames) {
+        for (const name of Object.values(supportBones)) {
+            const index = data.skeleton.joint_names.indexOf(name);
+            for (const field of ["positions", "rotations"]) {
+                const actual = frame[field][index].flat();
+                const initial = data.initial_pose[field][index].flat();
+                // arm_reach normalizes Core rotations; allow only its rounding.
+                if (
+                    actual.some(
+                        (v, i) =>
+                            !Number.isFinite(v) ||
+                            Math.abs(v - initial[i]) > 1e-5,
+                    )
+                )
+                    throw new Error(
+                        "Stationary support cannot change the Core lower body.",
+                    );
+            }
+        }
+    }
+}
 if (
     data.observed_origin !== undefined &&
     (!observedOrigin ||
@@ -156,7 +200,7 @@ try {
         });
     }
     for (const [index, frame] of data.frames.entries()) {
-        const isOrigin = observedOrigin && index === 0;
+        const isOrigin = (observedOrigin || stationarySupport) && index === 0;
         retarget.apply(frame);
         if (isOrigin)
             applyPreparedPose(retarget, frame, data.initial_appearance.frame);
@@ -169,10 +213,21 @@ try {
             ]),
         );
         frameWeights.push(weights);
-        let offset = isOrigin ? data.initial_appearance.frame.root_y_offset : 0;
+        let offset =
+            isOrigin || stationarySupport
+                ? data.initial_appearance.frame.root_y_offset
+                : 0;
+        if (stationarySupport && !isOrigin) {
+            // Keep the already qualified pelvis and feet while preparing the arms.
+            const supported = capturePreparedPose(retarget, offset);
+            for (const name of Object.keys(supportBones))
+                supported.rotations[name] =
+                    data.initial_appearance.frame.rotations[name];
+            applyPreparedPose(retarget, frame, supported);
+        }
         if (!isOrigin && mode === "--plant")
             offset = planting.apply(frame, data.foot_contacts?.[index], []);
-        if (!isOrigin && mode === "--settle") {
+        if (!isOrigin && !stationarySupport && mode === "--settle") {
             const before = geometry.sample();
             offset = -Math.min(
                 ...Object.values(before).flatMap((foot) =>
@@ -214,6 +269,11 @@ try {
                     : capturePreparedPose(retarget, offset),
             ),
         );
+        if (stationarySupport)
+            for (const name of Object.keys(supportBones))
+                prepared.rotations[name] = [
+                    ...data.initial_appearance.frame.rotations[name],
+                ];
         // Discard the solver state, then measure only the serialized replay.
         retarget.apply(frame);
         applyPreparedPose(retarget, frame, prepared);
@@ -303,7 +363,9 @@ const report = {
     error: failure,
     frames_requested: data.frames.length,
     frames_measured: samples.length,
-    observed_origin_preserved: observedOrigin && maximumInitialJointStep === 0,
+    observed_origin_preserved:
+        (observedOrigin || stationarySupport) && maximumInitialJointStep === 0,
+    stationary_support_preserved: stationarySupport && !failure,
     avatar_sha256: sha256(bytes),
     motion_sha256: sha256(motionBytes),
     measurement_source_sha256: sha256(readFileSync(new URL(import.meta.url))),

@@ -1,7 +1,9 @@
 # La boîte à Ariane
 
-Orientation demandée par l'utilisateur le 16 septembre 2026. Ce document
-définit le prochain produit ; il ne décrit pas des capacités déjà livrées.
+Orientation demandée par l'utilisateur le 16 septembre 2026. Une première
+implémentation locale des quatre tranches est disponible dans la scène vocale
+avec `mode: "pet"`. La qualification durable et les capacités motrices restent
+distinctes de la livraison du code. Voir [le guide jouable](pet-environment.md).
 
 ## Expérience
 
@@ -48,12 +50,12 @@ distincte à configurer. Cette hypothèse n'active aucun service ni budget actue
 | --- | --- |
 | Hermes résident, historique et observations du monde | Présents dans la scène vocale |
 | Réveils sur événements, cadence, budget et pause | Implémentés ; essais courts, pas une vie autonome durable qualifiée |
-| Mémoire sourcée en Markdown | Disponible dans le socle ; la scène de qualification actuelle n'a pas de coffre personnel |
+| Mémoire sourcée en Markdown | Coffre lié au monde personnel en mode pet ; qualifications séparées |
 | ARDY et personnage VRM | Présents ; déplacements et naturalité restent limités |
 | VoxCPM2 et lèvres liées au son | Présents ; la faible latence n'est plus un prérequis produit |
-| Prise et dépôt cinématiques de certains objets | Qualifiés dans une session distincte, pas raccordés à la présence de la scène vocale |
+| Prise et dépôt cinématiques de certains objets | Raccordés au même contrôleur en mode pet, à portée des bras ; ramassage au sol non pris en charge |
 | Décor de la scène vocale | Visuel ; ne pas le présenter comme interactif |
-| Déplacement direct par souris et lancers | À construire |
+| Déplacement direct par souris et lancers | Implémentés : saisie avec arrêt et réconciliation ; balle avec gravité et collisions simplifiées |
 
 ## Ordre de réalisation
 

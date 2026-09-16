@@ -241,7 +241,14 @@ class KinematicController:
             stream.write(json.dumps(record, allow_nan=False) + "\n")
 
     def _prepare_appearance(
-        self, poses, object_frames=None, contacts=None, *, origin=None, remaining=None
+        self,
+        poses,
+        object_frames=None,
+        contacts=None,
+        *,
+        origin=None,
+        remaining=None,
+        stationary_support=False,
     ):
         from promethee.avatar_reach import load_profile
         from promethee.spatial import follow_attachment
@@ -269,6 +276,8 @@ class KinematicController:
             document.update(initial_pose=origin["pose"], initial_appearance=origin["appearance"])
         if remaining is not None:
             document["observed_origin"] = True
+        if stationary_support:
+            document["stationary_support"] = True
         self.appearance_job = self.appearance_preparation.submit(
             document, mode="--plant" if contacts is not None else "--settle"
         )
@@ -765,7 +774,11 @@ class KinematicController:
                         return
                     if self.appearance_preparation is not None:
                         if action["kind"] != "spawn":
-                            self._prepare_appearance([frame["pose"] for frame in frames], frames)
+                            self._prepare_appearance(
+                                [frame["pose"] for frame in frames],
+                                frames,
+                                stationary_support=True,
+                            )
                             return
                         # Spawning changes only objects: retain the exact observed body.
                         for frame in frames:

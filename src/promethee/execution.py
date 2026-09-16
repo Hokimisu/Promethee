@@ -321,6 +321,10 @@ class ExecutionService:
                 self._check_turn(conn, turn_id, now)
             if conn.execute("SELECT 1 FROM commands WHERE request_id=?", (request_id,)).fetchone():
                 raise ActionError("Request ID already belongs to a logical command.")
+            if conn.execute(
+                "SELECT 1 FROM execution_events WHERE request_id=?", (request_id,)
+            ).fetchone():
+                raise ActionError("Request ID already belongs to a world event.")
             world, control = read_world(conn), self._control(conn)
             current_command_revision = command_revision(world)
             current = (
@@ -338,11 +342,23 @@ class ExecutionService:
                 )
             elif self._active(conn):
                 code, message = "busy", "Another body execution is active."
+            elif world.get("sandbox") and any(
+                world["sandbox"].get(field) for field in ("grab", "flights", "suspended")
+            ):
+                code, message = "sandbox_busy", "The scene is paused, held or simulating a throw."
             else:
                 try:
                     validate_body_action(world, action)
                     if action["kind"] not in control["supported_actions"]:
                         raise ActionError("The controller does not implement this action.")
+                    if (
+                        world.get("sandbox")
+                        and world["avatar"]["holding"]
+                        and action["kind"] in {"move", "posture"}
+                    ):
+                        raise ActionError(
+                            "Carrying while moving is not qualified here; place the object first."
+                        )
                 except ActionError as exc:
                     code, message = "invalid_action", str(exc)
             item = {
@@ -455,6 +471,13 @@ class ExecutionService:
     def _claim(self, session_id, *, cancellation=False):
         with self._transaction() as (conn, now):
             if self._owned(conn, session_id, now) is None:
+                return None
+            sandbox = read_world(conn).get("sandbox")
+            if (
+                not cancellation
+                and sandbox
+                and any(sandbox.get(field) for field in ("grab", "flights", "suspended"))
+            ):
                 return None
             for item in self._active(conn):
                 if item["controller_session"] != session_id:

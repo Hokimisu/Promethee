@@ -14,6 +14,11 @@ nouvelle expérience, finir la qualification acoustique T11 n'est plus un
 prérequis à l'initiative avec texte et voix sortante. Ses critères restent
 ouverts, sans être supprimés ni présentés comme réussis.
 
+**17 septembre :** une première implémentation B01–B04 est disponible dans le
+[guide jouable](pet-environment.md). La [qualification locale](research/19-pet-environment.md)
+distingue les capacités observées du ramassage au sol, du transport animé et
+des sessions autonomes prolongées encore ouverts.
+
 Le parcours initial était : lire [AGENTS.md](../AGENTS.md), la [vision](vision.md),
 l'[architecture](architecture.md), puis les [contrats actuels](contracts.md) ;
 exécuter T00 et livrer T01 avant de passer à la suite. Ces consignes expliquent

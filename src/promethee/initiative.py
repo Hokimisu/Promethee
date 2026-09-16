@@ -1,5 +1,6 @@
 """Explicit, persisted call budget for the same conversation agent; no activity quota."""
 
+import copy
 import hashlib
 import json
 
@@ -21,8 +22,17 @@ class Initiative:
 
     def _fingerprint(self, conn, world):
         control = self.service._control(conn)
+        objects = copy.deepcopy(world["objects"])
+        for oid, obj in objects.items():
+            moving = oid in world.get("sandbox", {}).get("flights", {})
+            held = world["avatar"]["holding"] == oid
+            if (moving or held) and "spatial" in obj:
+                obj["position"] = None
+                obj["spatial"]["position"] = None
+                obj["spatial"]["rotation"] = None
+                obj["in_flight"] = moving
         relevant = {
-            "objects": world["objects"],
+            "objects": objects,
             "body": world["body"]["status"],
             "capabilities": control.get("supported_actions", []) if control["session_id"] else [],
         }
@@ -124,6 +134,24 @@ class Initiative:
                             "status": event["kind"],
                         },
                     ][-8:]
+                elif event["kind"] in {
+                    "external_intervention",
+                    "object_contact",
+                    "object_rest",
+                    "grab_released",
+                }:
+                    state["pending"]["world_changed"] = True
+                    state["pending"]["latest"] = [
+                        *state["pending"]["latest"],
+                        {
+                            "seq": seq,
+                            **{
+                                key: value
+                                for key, value in event.items()
+                                if key not in {"envelope", "result"}
+                            },
+                        },
+                    ][-8:]
             if before != encode(state):
                 self._save(conn, world)
             return state
@@ -136,6 +164,10 @@ class Initiative:
             world = read_world(conn)
             state = world["initiative"]
             if state is None or state["paused"] or not state["remaining"] or world["conversation"]:
+                return None
+            if any(
+                world.get("sandbox", {}).get(field) for field in ("grab", "flights", "suspended")
+            ):
                 return None
             # Do not dispatch on a partially collected event backlog.
             latest = conn.execute("SELECT COALESCE(MAX(seq),0) FROM execution_events").fetchone()[0]

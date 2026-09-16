@@ -10,6 +10,10 @@ directes de l'utilisateur, puis lancers. La faible latence vocale, GPT-Live et
 la génération motrice immédiate ne bloquent plus cette première expérience.
 VoxCPM2 reste la voix retenue ; les animations continuent entre les décisions.
 
+Une première [version jouable](pet-environment.md) raccorde ces quatre tranches.
+Les [essais locaux](research/19-pet-environment.md) ne ferment pas la qualification
+de vie autonome prolongée ou les limites motrices.
+
 Les jalons ci-dessous restent des contrats techniques, avec leurs limites
 documentées. La nouvelle priorité ne les déclare pas terminés et ne demande
 pas de recommencer les tickets déjà livrés. La qualification acoustique de M2

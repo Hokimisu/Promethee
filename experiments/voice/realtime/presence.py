@@ -22,6 +22,7 @@ class PresenceController(KinematicController):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.presence_enabled = False
+        self.presence_text = PRESENCE_TEXT
         self.presence_status = "disabled"
         self.presence_error = None
         self._presence_job = None
@@ -91,7 +92,7 @@ class PresenceController(KinematicController):
         job = {
             "job_id": job_id,
             "target": copy.deepcopy(self._presence_anchor),
-            "text": PRESENCE_TEXT,
+            "text": self.presence_text,
             "seed": self.seed,
             "frames": 40,
             "future_frames": 40,
@@ -128,7 +129,7 @@ class PresenceController(KinematicController):
             "job_id": job["job_id"],
             "motion_origin": job["origin"],
             "motion_remaining": 40,
-            "motion_spec": (job["target"], PRESENCE_TEXT, 40),
+            "motion_spec": (job["target"], job["text"], 40),
             "motion_started_at": job["started"],
             "job_started": job["started"],
         }

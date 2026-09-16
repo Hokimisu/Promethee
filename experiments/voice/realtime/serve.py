@@ -25,6 +25,7 @@ from speech_text import prepare_speech_text
 
 from promethee.chat import open_text_host
 from promethee.initiative import Initiative
+from promethee.memory import MemoryStore, initialize_vault
 from promethee.world import ActionError
 
 HERE = Path(__file__).resolve().parent
@@ -39,6 +40,8 @@ STYLE = (
 class Session:
     def __init__(self, config):
         self.config = config
+        self.mode = config.get("mode", "qualification")
+        self._body_viewing = False
         self.output = config["data_dir"] / ("session-" + uuid4().hex[:12])
         self.output.mkdir(parents=True, exist_ok=False)
         self.lock = threading.RLock()
@@ -71,13 +74,33 @@ class Session:
         self.port = config["port"]
         self.voice_profile = "configured-reference"
         self.model = config["model"]
+        world_dir = (
+            config["world_dir"]
+            if self.mode == "pet"
+            else config.get("resume_world") or self.output / "world"
+        )
+        resume = (
+            (world_dir / "world.sqlite3").is_file()
+            if self.mode == "pet"
+            else config.get("resume_world") is not None
+        )
         self.body = BodyAdapter(
-            data_dir=config.get("resume_world") or self.output / "world",
-            resume=config.get("resume_world") is not None,
+            data_dir=world_dir,
+            resume=resume,
+            session_kind="interactive" if self.mode == "pet" else "qualification",
             avatar=config["avatar"],
             **config["body"],
         )
         self.initiative = Initiative(self.body.service)
+        if self.mode == "pet":
+            vault = config["vault"]
+            if not vault.exists() and not resume:
+                initialize_vault(self.body.service.runtime, vault)
+            MemoryStore(self.body.service, vault)
+            if not resume and config.get("initiative") is not None:
+                self.initiative.configure(**config["initiative"])
+                # Configuration does not constitute an audience or an audio gesture.
+                self.initiative.update(paused=True)
         self.thread = threading.Thread(target=self.run, daemon=True)
         self.thread.start()
 
@@ -97,6 +120,14 @@ class Session:
         with self.lock:
             return {
                 **self.state,
+                "mode": getattr(self, "mode", "qualification"),
+                "pet": {
+                    **self.body.catalog(),
+                    "command_revision": (body.get("world") or {}).get("command_revision"),
+                    "viewing": time.monotonic() < self.output_deadline,
+                }
+                if getattr(self, "mode", "qualification") == "pet"
+                else None,
                 "ready": self.vox_ready and bool(body["ready"]),
                 "motion": body.get("motion"),
                 "body_state": body.get("state"),
@@ -116,7 +147,11 @@ class Session:
             }
 
     def post(self, operation, value):
-        if operation in ("initiative_configure", "initiative_pause"):
+        if operation in ("pet", "pet_watch"):
+            return self._post_pet(operation, value)
+        if operation == "start" and getattr(self, "mode", "qualification") == "pet":
+            raise ValueError("Le mode pet s’ouvre sans scénario ni limite de 60 secondes.")
+        if operation in ("initiative_configure", "initiative_pause", "initiative_budget"):
             return self._post_initiative(operation, value)
         if operation in ("input_start", "input_audio", "input_cancel"):
             return self._post_input(operation, value)
@@ -137,6 +172,9 @@ class Session:
                 self.host.store.abort(self.turn_id, status="interrupted")
             if operation == "stop":
                 self._pause_initiative()
+                if getattr(self, "mode", "qualification") == "pet":
+                    self.output_deadline = 0
+                    self._set_pet_viewing(False)
             else:
                 self.output_deadline = time.monotonic() + 15
             # Fence output immediately, before model/pipe cleanup in the owner loop.
@@ -145,6 +183,55 @@ class Session:
                 session_id=sid, phase="thinking" if operation != "stop" else "stopping"
             )
             return {"session_id": sid, "cursor": self.cursor, "stopped": operation == "stop"}
+
+    def _set_pet_viewing(self, enabled):
+        if getattr(self, "mode", "qualification") == "pet" and enabled != self._body_viewing:
+            self.body.set_viewing(enabled)
+            self._body_viewing = enabled
+
+    def _post_pet(self, operation, value):
+        if getattr(self, "mode", "qualification") != "pet":
+            raise ValueError("Cette interaction nécessite le mode pet.")
+        with self.lock:
+            if not self.vox_ready or not self.body.poll()["ready"]:
+                raise ValueError("La voix et le corps se préparent encore.")
+            if operation == "pet_watch":
+                if value:
+                    raise ValueError("L’ouverture ne reçoit aucun scénario.")
+                if not self.sid:
+                    self.sid = self.active_sid = uuid4().hex
+                    self.state["session_id"] = self.sid
+                self.output_deadline = time.monotonic() + 15
+                state = self.initiative.service.runtime.snapshot()["initiative"]
+                self._set_pet_viewing(not state or not state["paused"])
+                return {
+                    "session_id": self.sid,
+                    "cursor": self.cursor,
+                    "initiative": state,
+                    "interrupted": False,
+                }
+            if not self.sid or time.monotonic() >= self.output_deadline:
+                raise ValueError("Ouvre la boîte avant d’intervenir.")
+            # Owner cleanup cannot consume this fence while this lock is held.
+            # On refusal or replay the SID stays unchanged, so cleanup is skipped.
+            sid = uuid4().hex
+            self.commands.put_nowait(("pet_intervention", {"session_id": sid}))
+            result = self.body.intervene(value)
+            # A late grab cleanup may belong to an older browser interaction;
+            # releasing that grab must not invalidate a newer spoken user turn.
+            cleanup = (value.get("action") or {}).get("kind") == "grab_cancel"
+            interrupted = not result.get("replayed", False) and not cleanup
+            if interrupted:
+                if self.turn_id:
+                    self.host.store.abort(self.turn_id, status="interrupted")
+                self.sid = sid
+                self.state.update(session_id=sid, phase="stopping")
+            return {
+                **result,
+                "session_id": self.sid,
+                "cursor": self.cursor,
+                "interrupted": interrupted,
+            }
 
     def _pause_initiative(self):
         if self.initiative.service.runtime.snapshot()["initiative"] is not None:
@@ -162,10 +249,26 @@ class Session:
     def _initiative_paused_output(self):
         return self.turn_source == "initiative" and bool(
             self.initiative.service.runtime.snapshot()["initiative"]["paused"]
+            or (
+                getattr(self, "mode", "qualification") == "pet"
+                and time.monotonic() >= self.output_deadline
+            )
         )
 
     def _post_initiative(self, operation, value):
         with self.lock:
+            if operation == "initiative_budget":
+                if getattr(self, "mode", "qualification") != "pet":
+                    raise ValueError("La recharge du budget nécessite le mode pet.")
+                if set(value) != {"add_budget"} or value["add_budget"] is None:
+                    raise ValueError("Indique le nombre de décisions à ajouter au budget.")
+                state = self.initiative.update(add_budget=value["add_budget"])
+                return {
+                    "initiative": state,
+                    "session_id": self.sid,
+                    "cursor": self.cursor,
+                    "interrupted": False,
+                }
             interrupted = False
             if operation == "initiative_configure":
                 if set(value) != {"budget", "interval"}:
@@ -191,6 +294,7 @@ class Session:
                     self.state["session_id"] = self.sid
                 # The browser invokes this only after its explicit audio gesture.
                 self.output_deadline = time.monotonic() + 15
+            self._set_pet_viewing(not state["paused"] and time.monotonic() < self.output_deadline)
             return {
                 "initiative": state,
                 "session_id": self.sid,
@@ -199,13 +303,18 @@ class Session:
             }
 
     def _poll_initiative(self):
-        state = self.initiative.observe()
+        with self.lock:
+            state = self.initiative.observe()
+            absent = time.monotonic() >= self.output_deadline
+            self._set_pet_viewing(not absent and (state is None or not state["paused"]))
         if state is None:
             return
         with self.lock:
             pause_sid = (
                 self.sid
-                if state["paused"] and self.active_sid == self.sid and self._autonomous_output()
+                if (state["paused"] or (getattr(self, "mode", "qualification") == "pet" and absent))
+                and self.active_sid == self.sid
+                and self._autonomous_output()
                 else None
             )
         if pause_sid is not None:
@@ -216,7 +325,12 @@ class Session:
                     self.running = False
                     self.turn_source = None
                     self.host.initiative_turn = None
-                    self.update(phase="idle", status="Initiative en pause")
+                    self.update(
+                        phase="idle",
+                        status="Initiative en pause"
+                        if state["paused"]
+                        else "En attente de présence",
+                    )
             return
         with self.lock:
             capture = self.input_capture
@@ -562,11 +676,11 @@ class Session:
                 auth="hermes-codex",
                 api_mode="codex_responses",
                 base_url=None,
-                vault=None,
+                vault=self.config.get("vault") if self.mode == "pet" else None,
                 timeout=90,
                 reasoning_effort="low",
                 measure_timing=True,
-                system_message=instructions(),
+                system_message=instructions(self.mode),
                 prewarm=True,
                 resident=self.config["resident"],
             )
@@ -594,7 +708,8 @@ class Session:
                         worker,
                         request["turn_id"],
                         self.deliveries,
-                        allow_silence=self.host.initiative_turn == request["turn_id"],
+                        allow_silence=self.mode == "pet"
+                        or self.host.initiative_turn == request["turn_id"],
                     )
                     self.loop()
         except Exception as exc:
@@ -619,22 +734,26 @@ class Session:
                 except queue.Empty:
                     break
                 if operation == "telemetry":
-                    if value.get("session_id") == self.sid:
-                        if value.get("event") == "client_stats":
-                            self.output_deadline = time.monotonic() + 15
-                        with (self.output / "playback.jsonl").open("a", encoding="utf-8") as log:
-                            log.write(
-                                json.dumps({"at": time.time(), **value}, ensure_ascii=False) + "\n"
-                            )
-                        if self.speech and value.get("id") == self.speech["id"]:
-                            event = value.get("event")
-                            if event == "playback_started":
-                                self.receipt("playing")
-                            elif event == "playback_finished":
-                                self.receipt("completed")
-                                self.speech["terminal"] = True
-                            elif event == "playback_interrupted":
-                                self.receipt("interrupted")
+                    with self.lock:
+                        if value.get("session_id") == self.sid:
+                            if value.get("event") == "client_stats":
+                                self.output_deadline = time.monotonic() + 15
+                            with (self.output / "playback.jsonl").open(
+                                "a", encoding="utf-8"
+                            ) as log:
+                                log.write(
+                                    json.dumps({"at": time.time(), **value}, ensure_ascii=False)
+                                    + "\n"
+                                )
+                            if self.speech and value.get("id") == self.speech["id"]:
+                                event = value.get("event")
+                                if event == "playback_started":
+                                    self.receipt("playing")
+                                elif event == "playback_finished":
+                                    self.receipt("completed")
+                                    self.speech["terminal"] = True
+                                elif event == "playback_interrupted":
+                                    self.receipt("interrupted")
                     continue
                 with self.lock:
                     current_command = value["session_id"] == self.sid
@@ -647,7 +766,7 @@ class Session:
                     continue
                 self.interrupt(
                     body=operation in ("start", "stop"),
-                    notify=operation in ("stop", "initiative_pause"),
+                    notify=operation in ("stop", "initiative_pause", "pet_intervention"),
                     expected_sid=value["session_id"],
                 )
                 with self.lock:
@@ -659,7 +778,7 @@ class Session:
                         "transcribing",
                     }:
                         self.input_capture["state"] = "cancelled"
-                    if operation in ("stop", "initiative_pause"):
+                    if operation in ("stop", "initiative_pause", "pet_intervention"):
                         self.running = False
                         if operation == "stop":
                             self.auto_continue = False
@@ -667,7 +786,11 @@ class Session:
                         self.turn_source = None
                         self.host.initiative_turn = None
                         self.update(
-                            status="Essai arrêté" if operation == "stop" else "Initiative en pause",
+                            status={
+                                "stop": "Essai arrêté",
+                                "initiative_pause": "Initiative en pause",
+                                "pet_intervention": "Prête",
+                            }[operation],
                             phase="idle",
                             text="",
                         )
@@ -938,6 +1061,9 @@ def main():
                 "/input_cancel",
                 "/initiative_configure",
                 "/initiative_pause",
+                "/initiative_budget",
+                "/pet_watch",
+                "/pet",
             ):
                 self.close_connection = True
                 return self.send(404, {"error": "Unknown route"})
@@ -969,7 +1095,7 @@ def main():
     try:
         owner = Session(config)
         print("Simulation: http://127.0.0.1:" + str(config["port"]), flush=True)
-        print("Local qualification data: " + str(owner.output), flush=True)
+        print("Local session logs: " + str(owner.output), flush=True)
         server.serve_forever()
     finally:
         if owner is not None:
