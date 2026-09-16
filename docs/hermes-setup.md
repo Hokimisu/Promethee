@@ -172,15 +172,27 @@ Le choix de Luna ne modifie pas le modèle par défaut du reste du projet :
 
 La préparation n'appelle pas le modèle et n'ouvre pas de tour actif. À
 l'arrivée du message, l'hôte ouvre le tour et charge l'historique courant.
-Après une réponse validée, le worker ferme le transport MCP. Pour le tour
-suivant, il remplace uniquement l'argument `--turn-id` du même profil dédié,
-puis redécouvre les outils et reconstruit leur snapshot natif. Il vérifie les
+Après une réponse validée, le worker conserve aussi le transport MCP. Le
+profil résident utilise `--call-authority` : le raccord transmet le `task_id`
+natif, immuable pour chaque appel, dans un champ privé absent du schéma des
+outils. Le serveur lie chaque opération à ce tour ; les mutations gardent
+leurs vérifications transactionnelles SQLite. Un appel retardé n'acquiert
+donc pas l'autorité du tour suivant. Le modèle ne peut pas fournir lui-même
+ce champ : le raccord refuse sa présence avant transmission.
+
+À chaque activation, le worker rafraîchit les outils natifs et vérifie les
 schémas complets, le modèle, le fournisseur, la session et l'authentification
 avant de rappeler `AIAgent.run_conversation`. Aucun identifiant de tour n'est
-choisi par le modèle ; conserver l'agent ne conserve pas l'autorité de l'ancien
-serveur MCP. Les audits [cycle de vie](research/12-hermes-lifecycle.md) et
+choisi par le modèle. Le raccord ciblé enveloppe la factory native des seuls
+handlers Promethee, avant découverte ; il est donc réappliqué aux handlers
+créés lors d'une reconnexion. Il conserve les RPC, délais, reprises et résultats
+natifs d'Hermes. Cette interface privée est qualifiée sur `2179a279` et doit être
+revérifiée lors d'une mise à jour. Les audits [cycle de vie](research/12-hermes-lifecycle.md) et
 [contexte et outils](research/13-hermes-context-tools.md) expliquent ces
 contraintes et les interfaces natives retenues.
+Arrêter le résident avant toute mise à jour des outils : une reconnexion
+interne Hermes pendant un tour ne repasse pas par notre contrôle des schémas
+avant le tour suivant. Voir la [recherche sur le transport](research/15-hermes-persistent-tools.md).
 
 Les limites temporelles sont distinctes :
 
@@ -212,13 +224,15 @@ tour. `host.cancel()` conserve uniquement l'instance au repos, tandis que
 puisqu'il fermerait le processus conservé. Le paramètre `system_message`
 reste fixe pendant sa durée de vie et l'historique est relu à chaque activation.
 
-Avec `--measure-timing`, `mcp_rebind_seconds` mesure la reconnexion et la
-validation des outils. `host_total_seconds` mesure le tour courant ;
+Avec `--measure-timing`, `mcp_rebind_seconds` mesure le rafraîchissement et la
+validation des outils, ainsi qu'une reconnexion si elle est nécessaire.
+Une connexion conservée n'est pas fermée entre deux réponses réussies.
+`host_total_seconds` mesure le tour courant ;
 `worker_total_seconds` est cumulatif pendant la vie du résident. Les phases
 `prewarm_seconds`, `import_seconds` et `agent_construct_seconds` ne sont
 présentes qu'au premier tour. Ne pas additionner ces phases aux totaux.
 
-### Qualification résident du 16 septembre 2026
+### Qualification initiale du résident — avant conservation de MCP
 
 Trois tours réels avec Luna, effort `low`, ont utilisé le même `AIAgent` et
 le même processus natif, mais trois transports MCP et trois identifiants de
@@ -468,6 +482,10 @@ qui invalide les mutations de l'ancien serveur. Fermer un tour via `end_turn`
 invalide aussi toute nouvelle proposition tardive. Ces opérations sont réservées
 à l'hôte, absentes des outils MCP. Le lancement sans `--turn-id` ci-dessus reste
 un diagnostic manuel, sans cette protection conversationnelle.
+
+Le mode résident actuel utilise le contrat alternatif `--call-authority`,
+exclusif avec `--turn-id`, décrit plus haut. L'identité y est liée à chaque
+appel par l'adaptateur natif, avec les mêmes gardes du runtime.
 
 Les tests du vrai transport stdio ouvrent deux processus successifs et vérifient
 qu'un ancien serveur ne peut plus soumettre ni arrêter une action après correction,

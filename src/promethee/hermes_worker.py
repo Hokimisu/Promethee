@@ -119,7 +119,6 @@ def verify_prepared_session(params, request, *, active=False):
 def resident_loop(agent, setup, *, profile, config_text, key, provider, protocol, timings, started):
     """Serialize host requests around the native Hermes loop, never own reasoning/history."""
     from hermes_adapter import refresh_resident_agent, resolve_hermes_codex_credentials
-    from tools.mcp_tool import get_mcp_status, shutdown_mcp_servers
 
     stable = {k: v for k, v in setup.items() if k not in {"standby_seconds", "turn_id"}}
     schemas = copy.deepcopy(agent.tools)
@@ -167,48 +166,30 @@ def resident_loop(agent, setup, *, profile, config_text, key, provider, protocol
                 )
                 if fresh["api_key"] != key:
                     raise ValueError("Resident authentication changed; create a new instance.")
-            if used:
-                # The prior transport was shut down before its terminal result.
-                if any(
-                    row["connected"] or row["status"] == "connecting" for row in get_mcp_status()
-                ):
-                    raise RuntimeError("The previous MCP transport is still active.")
-                params[-1] = turn_id
-                config_text = json.dumps(config)
-                pending = profile / "config.next.json"
-                pending.write_text(config_text, encoding="utf-8")
-                pending.replace(profile / "config.yaml")
-            try:
-                with elapsed(measured, "mcp_rebind_seconds"):
-                    refresh_resident_agent(
-                        agent,
-                        settings=stable,
-                        provider=provider,
-                        api_key=key,
-                        schemas=schemas,
-                        memory_enabled="--vault" in params,
-                    )
-                used.add(turn_id)
-                with elapsed(measured, "run_conversation_seconds"):
-                    result = agent.run_conversation(
-                        request["message"],
-                        conversation_history=request["history"],
-                        task_id=turn_id,
-                        **(
-                            {"system_message": request["system_message"]}
-                            if "system_message" in request
-                            else {}
-                        ),
-                    )
-                if agent.session_id != stable["session_id"]:
-                    raise ValueError("Native session changed during the resident turn.")
-            finally:
-                with elapsed(measured, "mcp_shutdown_seconds"):
-                    shutdown_mcp_servers(names={"promethee"})
-                if any(
-                    row["connected"] or row["status"] == "connecting" for row in get_mcp_status()
-                ):
-                    raise RuntimeError("MCP teardown did not complete.")
+            with elapsed(measured, "mcp_rebind_seconds"):
+                refresh_resident_agent(
+                    agent,
+                    settings=stable,
+                    provider=provider,
+                    api_key=key,
+                    schemas=schemas,
+                    memory_enabled="--vault" in params,
+                    call_authority=True,
+                )
+            used.add(turn_id)
+            with elapsed(measured, "run_conversation_seconds"):
+                result = agent.run_conversation(
+                    request["message"],
+                    conversation_history=request["history"],
+                    task_id=turn_id,
+                    **(
+                        {"system_message": request["system_message"]}
+                        if "system_message" in request
+                        else {}
+                    ),
+                )
+            if agent.session_id != stable["session_id"]:
+                raise ValueError("Native session changed during the resident turn.")
             if not isinstance(result, dict) or not isinstance(result.get("messages"), list):
                 raise ValueError("Hermes returned an unexpected resident result.")
             response = {
@@ -280,7 +261,10 @@ def main():
         config_text = (profile / "config.yaml").read_text(encoding="utf-8")
         config = json.loads(config_text)
         params = config["mcp_servers"]["promethee"]["args"]
-        if params[-2:] != ["--turn-id", request["turn_id"]]:
+        call_authority = params[-1:] == ["--call-authority"] and "--turn-id" not in params
+        if call_authority != args.resident:
+            raise ValueError("Per-call MCP authority and resident mode must be enabled together.")
+        if not call_authority and params[-2:] != ["--turn-id", request["turn_id"]]:
             raise ValueError("The MCP profile is not bound to this conversation turn.")
         if args.prewarm or args.resident:
             verify_prepared_session(params, request)
@@ -324,6 +308,7 @@ def main():
                         session_id=request["session_id"],
                         memory_enabled="--vault" in params,
                         provider=provider,
+                        call_authority=call_authority,
                         **(
                             {"reasoning_effort": reasoning_effort}
                             if reasoning_effort is not None

@@ -114,3 +114,8 @@ Une [session de scène ultérieure](11-short-dialogue.md#scène-livrée-avec-her
 Les réglages 3 et 4 sont réellement lus par le constructeur natif dans [`_apply_agent_section`](https://github.com/NousResearch/hermes-agent/blob/2179a279ae04bfadf8efbc49a01ca0abfb738000/agent/agent_init.py#L1299) ; ils ne nécessitent pas de reconstruire un framework d'outils. Le réglage `max_iterations=8` reste inchangé dans ces propositions.
 
 La mémoire durable et la recherche de souvenirs sont utiles pour une future session personnelle autorisée, mais elles ne remplacent ni le contexte conversationnel courant ni le résultat observé du corps. Aucun souvenir de test, SOUL personnel ou fournisseur de mémoire n'a été chargé ou ajouté pendant cette enquête.
+
+La priorité 2 a ensuite évolué : le résident conserve aussi MCP, avec une
+autorité distincte par appel. Le [rapport dédié](15-hermes-persistent-tools.md)
+documente le raccord, les vérifications et ses limites ; les chiffres de
+reconnexion ci-dessus restent ceux de la version antérieure.

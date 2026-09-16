@@ -25,6 +25,24 @@ leurs limites décrivent la version de chaque essai, pas nécessairement la dern
 
 Les journaux de test et données locales restent dans `.local/` et ne sont pas publiés.
 
+## Connexion Hermes conservée — 16 septembre 2026
+
+Le résident conserve désormais MCP entre deux réponses réussies. Chaque appel
+porte l'identité native immuable de son tour ; les commandes tardives restent
+refusées par SQLite, y compris après remplacement du tour pendant une attente.
+Les schémas publics sont inchangés. La mémoire, l'idempotence, les interruptions
+et les reconnexions sont couvertes ; le raccord privé est limité à Hermes
+`2179a279` et impose un redémarrage avant mise à jour des outils.
+
+722 tests du socle passent, 2 sont ignorés ; 331 tests et 7 sous-tests de la
+scène passent. Ruff, format et construction réussissent. Une comparaison native
+de quatre tours mesure au second tour **1,695 → 0,012 s** d'actualisation MCP,
+et **9,820 → 7,909 s** jusqu'au résultat complet. Même processus réellement
+conservé, une seule action acceptée dans chaque monde CPU, aucune exécution
+inventée. Le [rapport](research/15-hermes-persistent-tools.md) conserve aussi
+l'essai initial arrêté par une erreur de contrôle des PID Windows. Pas de
+voix dans cette comparaison, ni garantie de latence générale ; T11 reste ouvert.
+
 ## Outils Hermes et latence — 16 septembre 2026
 
 Les lectures MCP disposent d'une vue synthétique par défaut, sans modifier les

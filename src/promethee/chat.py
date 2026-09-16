@@ -48,7 +48,9 @@ def exclusive_host(data_dir):
                 fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
 
 
-def prepare_profile(profile, data_dir, turn_id, *, vault=None):
+def prepare_profile(profile, data_dir, turn_id, *, vault=None, call_authority=False):
+    if type(call_authority) is not bool:
+        raise ValueError("Call authority must be explicitly enabled or disabled.")
     profile.mkdir(parents=True, exist_ok=False)
     (profile / "vault").mkdir()
     config = {
@@ -85,6 +87,8 @@ def prepare_profile(profile, data_dir, turn_id, *, vault=None):
         server["tools"]["include"].extend(
             ["search_memory", "read_memory_note", "read_memory_source", "write_memory_note"]
         )
+    if call_authority:
+        config["mcp_servers"]["promethee"]["args"][-2:] = ["--call-authority"]
     (profile / "config.yaml").write_text(json.dumps(config), encoding="utf-8")
 
 
@@ -696,7 +700,7 @@ def open_text_host(args):
         profile = data_dir / "conversation-profiles" / request["turn_id"]
         if auth == "hermes-codex":
             profile = auth_root.resolve() / "profiles" / ("promethee-" + request["turn_id"])
-        prepare_profile(profile, data_dir, request["turn_id"], vault=vault)
+        prepare_profile(profile, data_dir, request["turn_id"], vault=vault, call_authority=resident)
         command = [
             str(args.hermes_python.resolve()),
             "-X",

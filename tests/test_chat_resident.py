@@ -68,9 +68,13 @@ def shutdown_mcp_servers(*,names=None):
   proc.stdin.close();proc.wait(timeout=5);proc.stdout.close()
   log('shutdown',turn_id=bound,pid=pid,returncode=proc.returncode)
   proc=None;definitions=[]
-def call(name,args=None):
+def call(name,args=None,*,task_id):
+ from tools import mcp_tool_handlers
+ return mcp_tool_handlers._make_tool_handler('promethee',name,10)(args or {},task_id=task_id)
+
+def dispatch(name,args):
  result=rpc('tools/call',{'name':name,'arguments':args or {}})
- log('tool',name=name,turn_id=bound,is_error=result.get('isError',False))
+ log('tool',name=name,turn_id=args.get('_promethee_turn_id'),is_error=result.get('isError',False))
  if result.get('isError'):raise RuntimeError('Actual world tool rejected fixture')
  return result.get('structuredContent') or json.loads(result['content'][0]['text'])
 """
@@ -92,9 +96,9 @@ class AIAgent:
    child=subprocess.Popen([sys.executable,'-c','import time;time.sleep(60)'])
    (ROOT/'wait-child.pid').write_text(str(child.pid));time.sleep(60)
   if message.startswith('submit'):
-   world=mcp_tool.call('read_world')
+   world=mcp_tool.call('read_world',task_id=task_id)
    action=mcp_tool.call('submit_action',{'request_id':'resident-'+task_id[-12:],
-    'expected_revision':world['revision'],'action':{'kind':'move','args':{'position':[0.1,0.0]}}})
+    'expected_revision':world['revision'],'action':{'kind':'move','args':{'position':[0.1,0.0]}}},task_id=task_id)
    mcp_tool.log('accepted',turn_id=task_id,request_id=action['request_id'],status=action['status'])
   messages=[*conversation_history,{'role':'user','content':message},{'role':'assistant','content':'Fixture'}]
   if message=='bad-history':messages=[messages[-1]]
@@ -114,6 +118,15 @@ def resident_args(tmp_path):
     (root / "tools").mkdir()
     (root / "tools/__init__.py").write_text("")
     (root / "tools/mcp_tool.py").write_text(MCP_FIXTURE, encoding="utf-8")
+    (root / "tools/mcp_tool_handlers.py").write_text(
+        "from tools import mcp_tool\n"
+        "def _make_tool_handler(server_name,tool_name,tool_timeout):\n"
+        " def handler(args,**kw):return mcp_tool.dispatch(tool_name,args)\n"
+        " return handler\n"
+    )
+    (root / "tools/mcp_tool_registration.py").write_text(
+        "from tools import mcp_tool_handlers as _handlers\n"
+    )
     (root / "tools/mcp_tool_agent.py").write_text(
         "from tools import mcp_tool\n"
         "def refresh_agent_mcp_tools(agent,**kw):\n"
@@ -159,7 +172,7 @@ def events(args):
     )
 
 
-def test_two_turns_reuse_agent_but_reconnect_actual_mcp_with_distinct_authority(
+def test_two_turns_reuse_agent_and_actual_mcp_with_distinct_authority(
     resident_args, articulated_pose
 ):
     args = resident_args
@@ -199,23 +212,25 @@ def test_two_turns_reuse_agent_but_reconnect_actual_mcp_with_distinct_authority(
             log = events(args)
             assert len([item for item in log if item["event"] == "construct"]) == 1
             connections = [item for item in log if item["event"] == "connect"]
-            assert [item["turn_id"] for item in connections] == [first, second]
-            assert all(not alive(item["pid"]) for item in connections)
+            assert len(connections) == 1
+            assert alive(connections[0]["pid"])
+            assert connections[0]["turn_id"] == "--call-authority"
+            assert [item["turn_id"] for item in log if item["event"] == "tool"] == [
+                first,
+                first,
+                second,
+                second,
+            ]
             models = [item for item in log if item["event"] == "model"]
             assert models[1]["history"][0]["content"] == "submit first"
             assert "Fresh context" in json.dumps(models[1]["history"])
             assert models[1]["system_message"] == args.system_message
             assert len([item for item in log if item["event"] == "accepted"]) == 2
-            shutdown_index = next(i for i, item in enumerate(log) if item["event"] == "shutdown")
-            second_connect = next(
-                i
-                for i, item in enumerate(log)
-                if item["event"] == "connect" and item["turn_id"] == second
-            )
-            assert shutdown_index < second_connect
+            assert not [item for item in log if item["event"] == "shutdown"]
             host.cancel()
             assert alive(pid)  # Idle cancellation does not discard a completed resident.
         until(lambda: not alive(pid))
+        until(lambda: not alive(connections[0]["pid"]))
     finally:
         handle.release()
 

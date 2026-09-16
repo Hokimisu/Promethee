@@ -400,3 +400,7 @@ qualification de toutes les interruptions dans une conversation vocale réelle.
 La recherche confirme donc des capacités sous-exploitées, surtout les
 callbacks et la durée de vie de l'agent. Elle ne justifie ni la suppression
 de la clôture des tours ni l'attribution de toute la latence restante à Hermes.
+
+Suite : la [recherche sur MCP persistant](15-hermes-persistent-tools.md)
+remplace ensuite la reconnexion systématique par une autorité immuable par
+appel. Les mesures ci-dessus décrivent la première livraison du résident.

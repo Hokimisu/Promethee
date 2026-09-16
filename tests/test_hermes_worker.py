@@ -70,6 +70,28 @@ def test_worker_refuses_a_profile_bound_to_another_turn(tmp_path):
     assert result["type"] == "error" and result["exception"] == "ValueError"
 
 
+def test_nonresident_worker_cannot_use_per_call_authority(tmp_path):
+    prepare_profile(tmp_path / "profile", tmp_path, "turn-unused", call_authority=True)
+    result = call(
+        tmp_path / "profile",
+        json.dumps(fixture_request()),
+        key="diagnostic-secret-key",
+    )
+    assert result == {"type": "error", "code": "conversation_failed", "exception": "ValueError"}
+
+
+@pytest.mark.parametrize("memory", [False, True])
+def test_per_call_profile_preserves_scope_and_has_no_mutable_turn(tmp_path, memory):
+    profile = tmp_path / "profile"
+    vault = tmp_path / "memory" if memory else None
+    prepare_profile(profile, tmp_path, "turn-unused", vault=vault, call_authority=True)
+    server = json.loads((profile / "config.yaml").read_text())["mcp_servers"]["promethee"]
+    assert server["args"][-1] == "--call-authority"
+    assert "--turn-id" not in server["args"] and "turn-unused" not in server["args"]
+    assert ("--vault" in server["args"]) == memory
+    assert len(server["tools"]["include"]) == (9 if memory else 5)
+
+
 def test_redaction_preserves_json_structure():
     value = {"type": "type secret", "messages": [{"content": "secret"}]}
     assert redact(value, "secret") == {
