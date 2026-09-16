@@ -3,7 +3,7 @@
 # SDK and dependency versions read from installed metadata on 2026-09-16.
 # Includes the SDK's declared dependencies and extras; no model files or reference voice.
 # The worker does not start Gradio or download models.
-# Fresh installation from these pins still needs separate qualification.
+# Fresh installation and one live session qualified; see README.md for scope.
 addict==2.4.0
 aiohappyeyeballs==2.7.1
 aiohttp==3.14.3

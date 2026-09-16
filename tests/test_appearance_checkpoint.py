@@ -7,6 +7,7 @@ import subprocess
 import sys
 
 import pytest
+from conftest import Clock
 
 from promethee.appearance_checkpoint import appearance_checkpoint
 from promethee.avatar_reach import load_profile
@@ -48,7 +49,9 @@ def observed(pose):
 
 @pytest.fixture
 def prepared_body(tmp_path, articulated_pose):
-    service = ExecutionService(Runtime(tmp_path / "world.sqlite3", data_origin="session"))
+    service = ExecutionService(
+        Runtime(tmp_path / "world.sqlite3", data_origin="session"), clock=Clock()
+    )
     driver = service.acquire_controller(source="kinematic", supported_actions=["move"])
     observation = observed(articulated_pose)
     assert driver.reconcile(observation, stopped=True)
@@ -99,7 +102,7 @@ def test_cancel_and_reopen_preserve_the_exact_visible_checkpoint(prepared_body):
     assert service.get("move")["observation"] == progress
     assert service.events()[-1]["execution"]["observation"] == progress
     driver.release()
-    reopened = ExecutionService(Runtime(service.runtime.path))
+    reopened = ExecutionService(Runtime(service.runtime.path), clock=service.clock)
     world = reopened.get_world()
     assert {key: world[key] for key in progress} == progress
     replacement = reopened.acquire_controller(source="kinematic", supported_actions=["move"])
